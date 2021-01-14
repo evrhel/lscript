@@ -1,0 +1,863 @@
+#include "vm.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "mem_debug.h"
+#include "cast.h"
+
+static class_t *class_load_ext(const char *classname, vm_t *vm);
+
+static int env_run(env_t *env, void *location);
+static int env_cleanup_call(env_t *env);
+
+static void *stack_push(env_t *env, value_t *value);
+static int stack_pop(env_t *env, signed long long type);
+
+static int is_varname_avaliable(env_t *env, const char *name);
+static int resolve_variable(env_t *env, const char *name, data_t **data, signed long long *flags);
+static int resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, signed long long *flags);
+static int resolve_function_name(env_t *env, const char *name, function_t **function);
+
+static int static_set(data_t *dst, signed long long dstFlags, data_t *src, signed long long srcFlags);
+
+static inline void store_return(env_t *env, data_t *dst, signed long long dstFlags)
+{
+	unsigned char type = value_typeof((value_t *)&dstFlags);
+	switch (type)
+	{
+	case lb_char:
+	case lb_uchar:
+	case lb_bool:
+		dst->ucvalue = env->bret;
+		break;
+	case lb_short:
+	case lb_ushort:
+		dst->usvalue = env->wret;
+		break;
+	case lb_int:
+	case lb_uint:
+	case lb_float:
+		dst->uivalue = env->lret;
+		break;
+	case lb_long:
+	case lb_ulong:
+	case lb_double:
+	case lb_object:
+	case lb_chararray:
+	case lb_uchararray:
+	case lb_shortarray:
+	case lb_ushortarray:
+	case lb_intarray:
+	case lb_uintarray:
+	case lb_longarray:
+	case lb_ulongarray:
+	case lb_boolarray:
+	case lb_floatarray:
+	case lb_doublearray:
+	case lb_objectarray:
+		dst->ulvalue = env->qret;
+		break;
+	}
+}
+
+static inline int is_numeric(const char *string)
+{
+	while (*string)
+	{
+		if (*string > '9' || *string < '0')
+			return 0;
+		string++;
+	}
+	return 1;
+}
+
+vm_t *vm_create(size_t heapSize, size_t stackSize)
+{
+	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
+	if (!vm)
+		return NULL;
+
+	vm->classes = map_create(16, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
+	if (!vm->classes)
+	{
+		FREE(vm);
+		return NULL;
+	}
+
+	vm->envs = list_create();
+	if (!vm->envs)
+	{
+		map_free(vm->classes, 0);
+		FREE(vm);
+		return NULL;
+	}
+
+	vm->envs->data = NULL;
+
+	vm->manager = manager_create(heapSize);
+	if (!vm->manager)
+	{
+		list_free(vm->envs, 0);
+		map_free(vm->classes, 0);
+		FREE(vm);
+		return NULL;
+	}
+
+	vm->stackSize = stackSize;
+
+	return vm;
+}
+
+class_t *vm_get_class(vm_t *vm, const char *classname)
+{
+	return (class_t *)map_at(vm->classes, classname);
+}
+
+class_t *vm_load_class(vm_t *vm, const char *filename)
+{
+	FILE *file;
+
+	fopen_s(&file, filename, "r");
+	if (!file)
+		return NULL;
+
+	fseek(file, 0, SEEK_END);
+	long size = ftell(file);
+
+	fseek(file, 0, SEEK_SET);
+
+	char *binary = (char *)MALLOC(size);
+	if (!binary)
+	{
+		fclose(file);
+		return NULL;
+	}
+	fread_s(binary, size, sizeof(char), size, file);
+
+	fclose(file);
+
+	return vm_load_class_binary(vm, binary, size);
+}
+
+class_t *vm_load_class_binary(vm_t *vm, const char *binary, size_t size)
+{
+	class_t *clazz = class_load(binary, size, (classloadproc_t)class_load_ext, vm);
+	if (clazz)
+		map_insert(vm->classes, clazz->name, clazz);
+	return clazz;
+}
+
+void vm_free(vm_t *vm)
+{
+	list_iterator_t *lit = list_create_iterator(vm->envs);
+	while (lit)
+	{
+		env_free((env_t * )lit->data);
+
+		lit = list_iterator_next(lit);
+	}
+
+	list_free(vm->envs, 0);
+
+
+	map_iterator_t *mit = map_create_iterator(vm->classes);
+
+	while (mit->node)
+	{
+		class_t *clazz = (class_t *)mit->value;
+		class_free(clazz, 1);
+		mit = map_iterator_next(mit);
+	}
+
+	map_free(vm->classes, 0);
+
+	manager_free(vm->manager);
+
+	FREE(vm);
+}
+
+env_t *env_create(vm_t *vm)
+{
+	env_t *env = (env_t *)MALLOC(sizeof(env_t));
+	if (!env)
+		return NULL;
+
+	env->stack = MALLOC(vm->stackSize);
+	if (!env->stack)
+	{
+		FREE(env);
+		return NULL;
+	}
+	env->rsp = env->stack;
+	env->rbp = env->rsp;
+
+	env->variables = list_create();
+	env->variables->data = NULL;
+
+
+	env->variables->data = 0xdeadcafedeadcafe;
+
+	env->rip = NULL;
+	env->vm = vm;
+	env->exception = exception_none;
+	env->exceptionDesc = 0;
+	env->qret = 0;
+
+	value_t val;
+	val.flags = 0;
+	val.ovalue = (lobject)0xdeadbeefdeadbeef;
+	value_set_type(&val, lb_object);
+	stack_push(env, &val);
+
+	return env;
+}
+
+int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
+{
+	// push the arg list to the stack
+	
+	if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
+		return env->exception = exception_stack_overflow;
+
+	*((size_t *)env->rsp) = (size_t)env->rbp;
+	*((size_t *)env->rsp + 1) = (size_t)env->rip;
+	*((size_t *)env->rsp + 2) = (size_t)function->parentClass;
+
+	env->rbp = env->rsp;
+	env->rsp = ((size_t *)env->rsp) + 3;
+
+	env->variables->next = list_create();
+	env->variables->next->prev = env->variables;
+	env->variables = env->variables->next;
+	env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
+
+	for (size_t i = 0; i < function->numargs; i++)
+	{
+		const char *argname = function->args[i];
+		unsigned char type = map_at(function->argTypes, argname);
+		size_t size = sizeof_type(type);
+		value_t val;
+		val.flags = 0;
+		value_set_type(&val, type);
+		MEMCPY(&val.ovalue, ls, size);
+		ls += size;
+
+		void *loc;
+		if (!(loc = stack_push(env, &val)))
+			return env->exception;
+
+		map_insert((map_t *)env->variables->data, argname, loc);
+	}
+
+	return env_run(env, function->location);
+}
+
+int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls)
+{
+	return 0;
+}
+
+void env_free(env_t *env)
+{
+	FREE(env);
+}
+
+class_t *class_load_ext(const char *classname, vm_t *vm)
+{
+	return vm_load_class(vm, classname);
+}
+
+int env_run(env_t *env, void *location)
+{
+	env->rip = location;
+	unsigned char *counter = env->rip;
+
+	const char *name;
+	data_t *data;
+	signed long long flags;
+	const char *name2;
+	data_t *data2;
+	signed long long flags2;
+	value_t val;
+	value_t *valPtr;
+	void *stackAllocLoc;
+	function_t *callFunc;
+	char *callArgPtr;
+	char *callFuncArgs;
+	size_t callFuncArgSize;
+	list_iterator_t *lit;
+	map_iterator_t *mip;
+	unsigned char callArgType;
+	char *cursor;
+	unsigned char valueType;
+
+	while (1)
+	{
+		switch (*counter)
+		{
+		case lb_noop:
+			break;
+
+		case lb_char:
+			break;
+		case lb_uchar:
+			break;
+		case lb_short:
+			break;
+		case lb_ushort:
+			break;
+		case lb_int:
+			counter++;
+			name = counter;
+			if (!is_varname_avaliable(env, name))
+				return env->exception = exception_bad_variable_name;
+			counter += strlen(name) + 1;
+			val.flags = 0;
+			val.ivalue = 0;
+			value_set_type(&val, lb_int);
+			stackAllocLoc = stack_push(env, &val);
+			if (!stackAllocLoc)
+				return env->exception;
+			map_insert((map_t *)env->variables->data, name, stackAllocLoc);
+			break;
+		case lb_uint:
+			break;
+		case lb_ulong:
+			break;
+		case lb_bool:
+			break;
+		case lb_float:
+			break;
+		case lb_object:
+			break;
+		case lb_chararray:
+			break;
+		case lb_uchararray:
+			break;
+		case lb_shortarray:
+			break;
+		case lb_ushortarray:
+			break;
+		case lb_intarray:
+			break;
+		case lb_uintarray:
+			break;
+		case lb_longarray:
+			break;
+		case lb_ulongarray:
+			break;
+		case lb_boolarray:
+			break;
+		case lb_floatarray:
+			break;
+		case lb_doublearray:
+			break;
+		case lb_objectarray:
+			break;
+
+		case lb_setb:
+			break;
+		case lb_setw:
+			break;
+		case lb_setl:
+			counter++;
+			name = counter;
+			if (!resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			MEMCPY(data, counter, sizeof(lint));
+			counter += sizeof(lint);
+			break;
+		case lb_setq:
+			break;
+		case lb_setf:
+			break;
+		case lb_setd:
+			break;
+		case lb_setv:
+			counter++;
+			name = counter;
+			if (!resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			name2 = counter;
+			if (!resolve_variable(env, name2, &data2, &flags2))
+				return env->exception;
+			counter += strlen(name2) + 1;
+			static_set(data, flags, data2, flags2);
+			break;
+		case lb_setr:
+			counter++;
+			name = counter;
+			if (!resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			store_return(env, data, flags);
+			break;
+
+		case lb_ret:
+			return env_cleanup_call(env);
+			break;
+		case lb_retb:
+			break;
+		case lb_retw:
+			break;
+		case lb_retl:
+			counter++;
+			env->lret = *(unsigned int *)counter;
+			return env_cleanup_call(env);
+			break;
+		case lb_retq:
+			break;
+		case lb_retf:
+			break;
+		case lb_retd:
+			break;
+		case lb_retv:
+			counter++;
+			name = counter;
+			if (!resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			MEMCPY(&env->vret, data, value_sizeof((value_t *)&flags));
+			return env_cleanup_call(env);
+			break;
+		case lb_retr:
+			return env_cleanup_call(env);
+			break;
+
+		case lb_static_call:
+			counter++;
+			name = counter;
+			if (!resolve_function_name(env, name, &callFunc))
+				return env->exception;
+			counter += strlen(name) + 1;
+			
+			callFuncArgs = NULL;
+			callFuncArgSize = 0;
+
+			mip = map_create_iterator(callFunc->argTypes);
+			while (mip->node)
+			{
+				callFuncArgSize += sizeof_type((unsigned char)mip->value);
+				mip = map_iterator_next(mip);
+			}
+			map_iterator_free(mip);
+
+			callFuncArgs = (char *)MALLOC(callFuncArgSize);
+			if (!callFuncArgs)
+				return env->exception = exception_vm_error;
+			cursor = callFuncArgs;
+
+			callArgPtr = callFuncArgs;
+
+			mip = map_create_iterator(callFunc->argTypes);
+			while (mip->node)
+			{
+				callArgType = (unsigned char)mip->value;
+
+				switch (*counter)
+				{
+				case lb_byte:
+					counter++;
+					*cursor = *counter;
+					cursor += 1;
+					counter += 1;
+					break;
+				case lb_word:
+					counter++;
+					*((short *)cursor) = *((short *)counter);
+					cursor += 2;
+					counter += 2;
+					break;
+				case lb_lword:
+					counter++;
+					*((int *)cursor) = *((int *)counter);
+					cursor += 4;
+					counter += 4;
+					break;
+				case lb_qword:
+					counter++;
+					*((long long *)cursor) = *((long long *)counter);
+					cursor += 8;
+					counter += 8;
+					break;
+				case lb_value:
+					counter++;
+					if (!resolve_variable(env, counter, &data, &flags))
+					{
+						FREE(callFuncArgs);
+						return env->exception;
+					}
+					valueType = value_typeof((value_t *)flags);
+					switch (valueType)
+					{
+					case lb_char:
+					case lb_uchar:
+						*cursor = data->cvalue;
+						cursor += 1;
+						counter += 1;
+						break;
+					case lb_short:
+					case lb_ushort:
+						*((short *)cursor) = data->svalue;
+						cursor += 2;
+						counter += 2;
+						break;
+					case lb_int:
+					case lb_uint:
+						*((int *)cursor) = data->ivalue;
+						cursor += 4;
+						counter += 4;
+						break;
+					case lb_long:
+					case lb_ulong:
+						*((long long *)cursor) = data->lvalue;
+						cursor += 8;
+						counter += 8;
+						break;
+					case lb_bool:
+						*((char *)cursor) = data->bvalue;
+						cursor += 1;
+						counter += 1;
+						break;
+					case lb_float:
+						*((float *)cursor) = data->fvalue;
+						cursor += 4;
+						counter += 4;
+						break;
+					case lb_double:
+						*((double *)cursor) = data->dvalue;
+						cursor += 8;
+						counter += 8;
+						break;
+					case lb_object:
+					case lb_chararray:
+					case lb_uchararray:
+					case lb_shortarray:
+					case lb_ushortarray:
+					case lb_intarray:
+					case lb_uintarray:
+					case lb_longarray:
+					case lb_ulongarray:
+					case lb_boolarray:
+					case lb_floatarray:
+					case lb_doublearray:
+					case lb_objectarray:
+						*((void **)cursor) = data->ovalue;
+						cursor += 8;
+						counter += 8;
+						break;
+					}
+					counter += strlen(counter) + 1;
+					break;
+				default:
+					FREE(callFuncArgs);
+					return env->exception = exception_bad_command;
+					break;
+				}
+
+				callArgPtr += sizeof_type(callArgType);
+			}
+			map_iterator_free(mip);
+
+			env_run_func_staticv(env, callFunc, callFuncArgs);
+
+			FREE(callFuncArgs);
+
+			break;
+		case lb_dynamic_call:
+			break;
+
+		default:
+			env->exception = exception_bad_command;
+			env->exceptionDesc = *counter;
+			return env->exception;
+		}
+	}
+}
+
+int env_cleanup_call(env_t *env)
+{
+	map_t *vars = (map_t *)env->variables->data;
+	if (!vars)
+		return env->exception = exception_illegal_state;
+
+	map_free(vars, 0);
+
+	// Remove the map from the list
+	list_t *prev = env->variables->prev;
+	env->variables->prev = NULL;
+	list_free(env->variables, 0);
+	env->variables = prev;
+	env->variables->next = NULL;
+
+	// Restore the fake registers from the previous call
+	env->rsp = env->rbp;
+	env->rbp = *((void **)env->rbp);
+	env->rip = ((char *)env->rbp) + sizeof(void *);
+
+	return exception_none;
+}
+
+void *stack_push(env_t *env, value_t *value)
+{
+	char *stack, *stackPtr;
+	stack = (char *)env->stack;
+	stackPtr = (char *)env->rsp;
+	size_t size = value_sizeof(value) + sizeof(value->flags);
+	char *end = stackPtr + size;
+	if (end - stack >= env->vm->stackSize)
+	{
+		env->exception = exception_stack_overflow;
+		return NULL;
+	}
+	MEMCPY(stackPtr, value, size);
+	env->rsp = end;
+	return stackPtr;
+}
+
+int stack_pop(env_t *env, signed long long type)
+{
+	return exception_none;
+}
+
+int is_varname_avaliable(env_t *env, const char *name)
+{
+	map_node_t *mapNode = map_find((map_t *)env->variables->data, name);
+	if (mapNode)
+		return 0;
+	return 1;
+}
+
+int resolve_variable(env_t *env, const char *name, data_t **data, signed long long *flags)
+{
+	map_node_t *mapNode;
+	char *beg = strchr(name, '.');
+	if (beg)
+	{
+		*beg = 0;
+		mapNode = map_find((map_t *)env->variables->data, name);
+		*beg = '.';
+
+		if (!mapNode)
+		{
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+
+		return resolve_object_field(env, (object_t *)mapNode->value, beg, data, flags);
+	}
+	size_t valsize;
+
+	beg = strchr(name, '[');
+	if (beg)
+	{
+		*beg = 0;
+		mapNode = map_find((map_t *)env->variables->data, name);
+		if (!mapNode)
+		{
+			*beg = '[';
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+		*beg = '[';
+
+		char *num = beg + 1;
+		char *numEnd = strchr(num, ']');
+		luint index;
+		if (!numEnd)
+		{
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+
+		*numEnd = 0;
+		if (!is_numeric(numEnd))
+		{
+			*numEnd = ']';
+			env->exception = exception_bad_array_index;
+			return 0;
+		}
+
+		index = (luint)atoll(num);
+		*numEnd = ']';
+
+		array_t *arr = (array_t *)(((value_t *)mapNode->value)->ovalue);
+		if (index >= arr->length)
+		{
+			env->exception = exception_bad_array_index;
+			return 0;
+		}
+
+		unsigned char elemType = value_typeof((value_t *)arr) - lb_object + lb_char - 1;
+		valsize = sizeof_type(elemType);
+		*flags = 0;
+		value_set_type((value_t *)flags, elemType);
+		*data = (data_t *)((char *)&arr->data + (valsize * index));
+		return 1;
+	}
+
+	mapNode = map_find((map_t *)env->variables->data, name);
+	if (!mapNode)
+	{
+		env->exception = exception_bad_variable_name;
+		return 0;
+	}
+	
+	value_t *val = (value_t *)mapNode->value;
+	*flags = val->flags;
+	*data = (data_t *)&val->ovalue;
+	
+	return 1;
+}
+
+int resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, signed long long *flags)
+{
+	if (!object)
+	{
+		env->exception = exception_null_dereference;
+		return 0;
+	}
+
+	field_t *fieldData;
+	char *beg = strchr(name, '.');
+	if (beg)
+	{
+		*beg = 0;
+		fieldData = object_get_field_data(object, name);
+		*beg = '.';
+
+		if (!fieldData)
+		{
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+
+		size_t off = (size_t )fieldData->offset;
+		void *data = (char *)object->data + off;
+
+		return resolve_object_field(env, (object_t *)data, beg, data, flags);
+	}
+
+	fieldData = object_get_field_data(object, name);
+
+	*flags = object->buffer;
+	*data = (data_t *)((char *)object->data + (size_t)fieldData->offset);
+	return 1;
+}
+
+int resolve_function_name(env_t *env, const char *name, function_t **function)
+{
+	if (!name)
+	{
+		env->exception = exception_function_not_found;
+		return 0;
+	}
+
+	const char *funcname;
+	function_t *result;
+	char *end = strrchr(name, '.');
+	if (end)
+	{
+		*end = 0;
+		data_t *data;
+		signed long long flags;
+		if (resolve_variable(env, name, &data, &flags))
+		{
+			*end = '.';
+			funcname = end + 1;
+			unsigned char type = value_typeof((value_t *)&flags);
+			if (type != lb_object)
+			{
+				env->exception = exception_function_not_found;
+				return 0;
+			}
+			object_t *obj = (object_t *)data->ovalue;
+			class_t *parent = obj->clazz;
+			result = class_get_function(parent, funcname);
+			*function = result;
+			return 1;
+		}
+		else
+		{
+			funcname = end + 1;
+			class_t *clazz = vm_get_class(env->vm, name);
+			if (!clazz)
+			{
+				env->exception = exception_class_not_found;
+				return 0;
+			}
+			*end = '.';
+			result = class_get_function(clazz, funcname);
+			if (!result)
+			{
+				env->exception = exception_function_not_found;
+				return 0;
+			}
+			*function = result;
+			return 1;
+		}
+	}
+	else
+	{
+		class_t *clazz = *((class_t **)env->rbp + 2);
+		result = class_get_function(clazz, name);
+		if (!result)
+		{
+			env->exception = exception_function_not_found;
+			return 0;
+		}
+		*function = result;
+		return 1;
+	}
+
+	env->exception = exception_function_not_found;
+	return 0;
+}
+
+int static_set(data_t *dst, signed long long dstFlags, data_t *src, signed long long srcFlags)
+{
+	unsigned char dstType, srcType;
+	dstType = value_typeof((value_t *)&dstFlags);
+	srcType = value_typeof((value_t *)&srcFlags);
+
+	switch (srcType)
+	{
+	case lb_char:
+		return cast_char(&src->cvalue, dstType, dst);
+		break;
+	case lb_uchar:
+		return cast_uchar(&src->cvalue, dstType, dst);
+		break;
+	case lb_short:
+		return cast_short(&src->cvalue, dstType, dst);
+		break;
+	case lb_ushort:
+		return cast_ushort(&src->cvalue, dstType, dst);
+		break;
+	case lb_int:
+		return cast_int(&src->cvalue, dstType, dst);
+		break;
+	case lb_uint:
+		return cast_uint(&src->cvalue, dstType, dst);
+		break;
+	case lb_long:
+		return cast_long(&src->cvalue, dstType, dst);
+		break;
+	case lb_ulong:
+		return cast_ulong(&src->cvalue, dstType, dst);
+		break;
+	case lb_bool:
+		return cast_bool(&src->cvalue, dstType, dst);
+		break;
+	case lb_float:
+		return cast_float(&src->cvalue, dstType, dst);
+		break;
+	case lb_double:
+		return cast_double(&src->cvalue, dstType, dst);
+		break;
+	default:
+		return 0;
+	}
+}
