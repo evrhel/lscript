@@ -216,6 +216,8 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 {
 	map_node_t *mapNode;
 	char *beg = strchr(name, '.');
+
+	// If we have a '.', we need to access the variable as an object fetching its field(s)
 	if (beg)
 	{
 		*beg = 0;
@@ -227,11 +229,13 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 			env->exception = exception_bad_variable_name;
 			return 0;
 		}
-
-		return env_resolve_object_field(env, (object_t *)mapNode->value, beg, data, flags);
+		
+		beg++;
+		return env_resolve_object_field(env, (object_t *)((value_t *)mapNode->value)->ovalue, beg, data, flags);
 	}
 	size_t valsize;
 
+	// If we have a '[', we have an array we need to access
 	beg = strchr(name, '[');
 	if (beg)
 	{
@@ -280,6 +284,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		return 1;
 	}
 
+	// If all the other checks didn't pass, this variable is just normal
 	mapNode = map_find((map_t *)env->variables->data, name);
 	if (!mapNode)
 	{
@@ -304,6 +309,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 
 	field_t *fieldData;
 	char *beg = strchr(name, '.');
+	// We might need to go into another object's fields if there is a '.'
 	if (beg)
 	{
 		*beg = 0;
@@ -317,15 +323,16 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 		}
 
 		size_t off = (size_t)fieldData->offset;
-		void *data = (char *)object->data + off;
+		void *data = (byte_t *)&object->data + off;
 
-		return env_resolve_object_field(env, (object_t *)data, beg, data, flags);
+		beg++;
+		return env_resolve_object_field(env, *((object_t **)data), beg, data, flags);
 	}
 
 	fieldData = object_get_field_data(object, name);
 
-	*flags = object->buffer;
-	*data = (data_t *)((byte_t *)object->data + (size_t)fieldData->offset);
+	*flags = fieldData->flags;
+	*data = (data_t *)((byte_t *)&object->data + (size_t)fieldData->offset);
 	return 1;
 }
 
@@ -398,6 +405,42 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 	return 0;
 }
 
+int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t **function, data_t **data, flags_t *flags)
+{
+	char *last = strrchr(name, '.');
+	*last = 0;
+	if (!env_resolve_variable(env, name, data, flags))
+	{
+		*last = '.';
+		return 0;
+	}
+	*last = '.';
+
+	byte_t type = TYPEOF(*flags);
+	if (type != lb_object)
+	{
+		env->exception = exception_function_not_found;
+		return 0;
+	}
+
+	object_t *object = (object_t *)(*data)->ovalue;
+	if (!object)
+	{
+		env->exception = exception_null_dereference;
+		return 0;
+	}
+
+	const char *funcName = last + 1;
+	*function = class_get_function(object->clazz, funcName);
+	if (!(*function))
+	{
+		env->exception = exception_function_not_found;
+		return 0;
+	}
+
+	return 1;
+}
+
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
 	// push the arg list to the stack
@@ -440,7 +483,62 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls)
 {
-	return 0;
+	// push the arg list to the stack
+
+	if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
+		return env->exception = exception_stack_overflow;
+
+	*((size_t *)env->rsp) = (size_t)env->rbp;
+	*((size_t *)env->rsp + 1) = (size_t)env->rip;
+	*((size_t *)env->rsp + 2) = (size_t)function->parentClass;
+
+	env->rbp = env->rsp;
+	env->rsp = ((size_t *)env->rsp) + 3;
+
+	env->variables->next = list_create();
+	env->variables->next->prev = env->variables;
+	env->variables = env->variables->next;
+	env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
+
+	for (size_t i = 0; i < function->numargs; i++)
+	{
+		const char *argname = function->args[i];
+		flags_t type = map_at(function->argTypes, argname);
+		size_t size = sizeof_type(type);
+		value_t val;
+		val.flags = 0;
+		value_set_type(&val, type);
+		MEMCPY(&val.ovalue, ls, size);
+		ls += size;
+
+		void *loc;
+		if (!(loc = stack_push(env, &val)))
+			return env->exception;
+
+		map_insert((map_t *)env->variables->data, argname, loc);
+	}
+
+	// Register "this" variable
+	void *thisLoc;
+	value_t thisVal;
+	thisVal.flags = 0;
+	value_set_type(&thisVal, lb_object);
+	thisVal.ovalue = object;
+	if (!(thisLoc = stack_push(env, &thisVal)))
+		return env->exception;
+	map_insert((map_t *)env->variables->data, "this", thisLoc);
+
+	// At some point, add the fields to possible variables to reference, but for now
+	// just require this.<field>
+	/*map_iterator_t *mit = map_create_iterator(object->clazz->fields);
+	while (mit->node)
+	{
+		const char *fieldName = (const char *)mit->key;
+		map_insert((map_t *)env->variables->data, fieldName, mit->value);
+	}
+	map_iterator_free(mit);*/
+
+	return env_run(env, function->location);
 }
 
 void env_free(env_t *env)
@@ -476,6 +574,8 @@ int env_run(env_t *env, void *location)
 	byte_t callArgType;			// A byte to store the type of a call argument
 	byte_t *cursor;				// A cursor into an array of bytes
 	byte_t valueType;			// A byte to store the type of some value
+	object_t *object;			// A pointer to an object_t used for holding some object
+	class_t *clazz;				// A pointer to a class_t used for holding some class
 
 	while (1)
 	{
@@ -515,6 +615,18 @@ int env_run(env_t *env, void *location)
 		case lb_float:
 			break;
 		case lb_object:
+			counter++;
+			name = counter;
+			if (!is_varname_avaliable(env, name))
+				return env->exception = exception_bad_variable_name;
+			counter += strlen(name) + 1;
+			val.flags = 0;
+			val.ovalue = NULL;
+			value_set_type(&val, lb_object);
+			stackAllocLoc = stack_push(env, &val);
+			if (!stackAllocLoc)
+				return env->exception;
+			map_insert((map_t *)env->variables->data, name, stackAllocLoc);
 			break;
 		case lb_chararray:
 			break;
@@ -560,6 +672,33 @@ int env_run(env_t *env, void *location)
 			break;
 		case lb_setd:
 			break;
+		case lb_seto:
+			counter++;
+			name = (const char *)counter;
+			if (!env_resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			switch (*counter)
+			{
+			case lb_new:
+				counter++;
+				name2 = (const char *)counter;
+				clazz = vm_get_class(env->vm, name2);
+				if (!clazz)
+					return env->exception = exception_class_not_found;
+				counter += strlen(name2) + 1;
+				object = manager_alloc_object(env->vm->manager, clazz);
+				if (!object)
+					return env->exception = exception_out_of_memory;
+				data->ovalue = object;
+				break;
+			case lb_value:
+				break;
+			default:
+				return env->exception = exception_bad_command;
+				break;
+			}
+			break;
 		case lb_setv:
 			counter++;
 			name = counter;
@@ -598,6 +737,8 @@ int env_run(env_t *env, void *location)
 		case lb_retf:
 			break;
 		case lb_retd:
+			break;
+		case lb_reto:
 			break;
 		case lb_retv:
 			counter++;
@@ -752,6 +893,145 @@ int env_run(env_t *env, void *location)
 
 			break;
 		case lb_dynamic_call:
+			counter++;
+			name = counter;
+			if (!env_resolve_dynamic_function_name(env, name, &callFunc, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+
+			object = data->ovalue;
+
+			callFuncArgs = NULL;
+			callFuncArgSize = 0;
+
+			mip = map_create_iterator(callFunc->argTypes);
+			while (mip->node)
+			{
+				callFuncArgSize += sizeof_type((byte_t)mip->value);
+				mip = map_iterator_next(mip);
+			}
+			map_iterator_free(mip);
+
+			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
+			if (!callFuncArgs)
+				return env->exception = exception_vm_error;
+			cursor = callFuncArgs;
+
+			callArgPtr = callFuncArgs;
+
+			mip = map_create_iterator(callFunc->argTypes);
+			while (mip->node)
+			{
+				callArgType = (flags_t)mip->value;
+
+				switch (*counter)
+				{
+				case lb_byte:
+					counter++;
+					*cursor = *counter;
+					cursor += 1;
+					counter += 1;
+					break;
+				case lb_word:
+					counter++;
+					*((word_t *)cursor) = *((word_t *)counter);
+					cursor += 2;
+					counter += 2;
+					break;
+				case lb_lword:
+					counter++;
+					*((lword_t *)cursor) = *((lword_t *)counter);
+					cursor += 4;
+					counter += 4;
+					break;
+				case lb_qword:
+					counter++;
+					*((qword_t *)cursor) = *((qword_t *)counter);
+					cursor += 8;
+					counter += 8;
+					break;
+				case lb_value:
+					counter++;
+					if (!env_resolve_variable(env, counter, &data, &flags))
+					{
+						FREE(callFuncArgs);
+						return env->exception;
+					}
+					valueType = TYPEOF(flags);
+					switch (valueType)
+					{
+					case lb_char:
+					case lb_uchar:
+						*cursor = data->cvalue;
+						cursor += 1;
+						counter += 1;
+						break;
+					case lb_short:
+					case lb_ushort:
+						*((lshort *)cursor) = data->svalue;
+						cursor += 2;
+						counter += 2;
+						break;
+					case lb_int:
+					case lb_uint:
+						*((lint *)cursor) = data->ivalue;
+						cursor += 4;
+						counter += 4;
+						break;
+					case lb_long:
+					case lb_ulong:
+						*((llong *)cursor) = data->lvalue;
+						cursor += 8;
+						counter += 8;
+						break;
+					case lb_bool:
+						*((lbool *)cursor) = data->bvalue;
+						cursor += 1;
+						counter += 1;
+						break;
+					case lb_float:
+						*((lfloat *)cursor) = data->fvalue;
+						cursor += 4;
+						counter += 4;
+						break;
+					case lb_double:
+						*((ldouble *)cursor) = data->dvalue;
+						cursor += 8;
+						counter += 8;
+						break;
+					case lb_object:
+					case lb_chararray:
+					case lb_uchararray:
+					case lb_shortarray:
+					case lb_ushortarray:
+					case lb_intarray:
+					case lb_uintarray:
+					case lb_longarray:
+					case lb_ulongarray:
+					case lb_boolarray:
+					case lb_floatarray:
+					case lb_doublearray:
+					case lb_objectarray:
+						*((lobject *)cursor) = data->ovalue;
+						cursor += 8;
+						counter += 8;
+						break;
+					}
+					counter += strlen(counter) + 1;
+					break;
+				default:
+					FREE(callFuncArgs);
+					return env->exception = exception_bad_command;
+					break;
+				}
+
+				callArgPtr += sizeof_type(callArgType);
+			}
+			map_iterator_free(mip);
+
+			env_run_funcv(env, callFunc, object, callFuncArgs);
+
+			FREE(callFuncArgs);
 			break;
 
 		case lb_add:

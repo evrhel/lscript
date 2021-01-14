@@ -375,6 +375,21 @@ int register_functions(class_t *clazz, const char *dataStart, const char *dataEn
 		case lb_setd:
 			curr += 9;
 			break;
+		case lb_add:
+		case lb_sub:
+		case lb_mul:
+		case lb_div:
+		case lb_mod:
+			curr++;
+			curr += strlen(curr) + 1;
+			curr += strlen(curr) + 1;
+			if (*curr == lb_value)
+			{
+				curr += strlen(curr) + 2;
+			}
+			else
+				curr += sizeof_type(*curr) + 1;
+			break;
 			
 		default:
 			curr++;

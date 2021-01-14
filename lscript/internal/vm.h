@@ -65,6 +65,7 @@ env_t *env_create(vm_t *vm);
 int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags);
 int env_resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, flags_t *flags);
 int env_resolve_function_name(env_t *env, const char *name, function_t **function);
+int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t **function, data_t **data, flags_t *flags);
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls);
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls);
 
@@ -77,7 +78,7 @@ inline int env_run_func_static(env_t *env, function_t *function, ...)
 	return result;
 }
 
-inline int env_fun_func(env_t *env, function_t *function, object_t *object, ...)
+inline int env_run_func(env_t *env, function_t *function, object_t *object, ...)
 {
 	va_list ls;
 	va_start(ls, object);

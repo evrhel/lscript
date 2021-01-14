@@ -24,14 +24,26 @@ byte_t data[] =
 		lb_function, lb_static, 'm', 'a', 'i', 'n', 0x00, 0x01, lb_intarray, 'a', 'r', 'g', 's', 0x00,
 			lb_int, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00,
 			lb_setl, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 0x0a, 0x00, 0x00, 0x00,
+
+			lb_object, 'm', 'y', 'O', 'b', 'j', 0x00,
+			lb_seto, 'm', 'y', 'O', 'b', 'j', 0x00, lb_new, 'M', 'a', 'i', 'n', 0x00,
+			lb_dynamic_call, 'm', 'y', 'O', 'b', 'j', '.', 'd', 'F', 'u', 'n', 'c', '(', 0x00,
+			lb_setr, 'a', 'r', 'g', 's', '[', '3', ']', 0x00,
+
 			lb_static_call, 'm', 'y', 'F', 'u', 'n', 'c', '(', 0x00,
 			lb_setr, 'a', 'r', 'g', 's', '[', '0', ']', 0x00,
+
 			lb_setv, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 'a', 'r', 'g', 's', '[', '0', ']', 0x00,
-			lb_add, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, lb_int, 0x02, 0x00, 0x00, 0x00,
+
+			lb_add, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, lb_int, 0x10, 0x00, 0x00, 0x00,
 			lb_retv, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00,
 
 		lb_function, lb_static, 'm', 'y', 'F', 'u', 'n', 'c', 0x00, 0x00,
-			lb_retl, 0x11, 0x00, 0x00, 0x00
+			lb_retl, 0x11, 0x00, 0x00, 0x00,
+
+		lb_function, lb_dynamic, 'd', 'F', 'u', 'n', 'c', 0x00, 0x00,
+			lb_setl, 't', 'h', 'i', 's', '.', 'm', 'y', 'F', 'i', 'e', 'l', 'd', 0x00, 0x20, 0x00, 0x00, 0x00,
+			lb_retv, 't', 'h', 'i', 's', '.', 'm', 'y', 'F', 'i', 'e', 'l', 'd', 0x00
 };
 
 int main(int argc, char *argv[])
@@ -76,6 +88,9 @@ int main(int argc, char *argv[])
 	{
 		printf("Function returned: %d\n", env->lret);
 	}
+
+	for (int i = 0; i < arr->length; i++)
+		printf("array[%d] = %d\n", i,  array_get_int(arr, i));
 
 	vm_free(vm);
 

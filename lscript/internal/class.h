@@ -35,14 +35,14 @@ struct function_s
 
 struct class_s
 {
-	const char *name;
-	class_t *super;
-	class_flags_t flags;
-	const byte_t *data;
-	map_t *functions;
-	map_t *staticFields;
-	map_t *fields;
-	size_t size;
+	const char *name;		// The class's name
+	class_t *super;			// The class's superclass
+	class_flags_t flags;	// The class's flags
+	const byte_t *data;		// The raw data of the class
+	map_t *functions;		// Maps the function names to its location in memory
+	map_t *staticFields;	// Maps the static field name to its value in memory
+	map_t *fields;			// Maps the field name to its offset
+	size_t size;			// Stores the total size this object will allocate
 };
 
 typedef class_t *(*classloadproc_t)(const char *classname, void *more);

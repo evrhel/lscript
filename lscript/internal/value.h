@@ -10,8 +10,8 @@
 #define VALUE_MANAGER_FLAGS_OFFSET 6
 #define VALUE_TYPE_OFFSET 7
 
-#define TYPEOF(F) value_typeof((value_t*)&F)
-#define SET_TYPE(F, T) value_set_type((value_t*)&F,T)
+#define TYPEOF(F) value_typeof((value_t*)&(F))
+#define SET_TYPE(F, T) value_set_type((value_t*)&(F),(T))
 
 typedef struct value_s value_t;
 struct value_s

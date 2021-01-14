@@ -49,7 +49,33 @@ object_t *manager_alloc_object(manager_t *manager, class_t *clazz)
 
 array_t *manager_alloc_array(manager_t *manager, unsigned int type, unsigned int length)
 {
-	unsigned int elemSize = (unsigned int)sizeof_type(type - lb_object);
+	unsigned int elemSize;
+	switch (type)
+	{
+	case lb_chararray:
+	case lb_uchararray:
+	case lb_boolarray:
+		elemSize = sizeof(lchar);
+		break;
+	case lb_shortarray:
+	case lb_ushortarray:
+		elemSize = sizeof(lshort);
+		break;
+	case lb_intarray:
+	case lb_uintarray:
+	case lb_floatarray:
+		elemSize = sizeof(lint);
+		break;
+	case lb_longarray:
+	case lb_ulongarray:
+	case lb_doublearray:
+	case lb_objectarray:
+		elemSize = sizeof(llong);
+		break;
+	default:
+		return NULL;
+		break;
+	}
 	unsigned int payloadSize = length * elemSize;
 
 	// sizeof(value_t) accounts for flags, length, and dummy fields in array_t
