@@ -38,7 +38,7 @@ struct class_s
 	const char *name;
 	class_t *super;
 	class_flags_t flags;
-	const char *data;
+	const byte_t *data;
 	map_t *functions;
 	map_t *staticFields;
 	map_t *fields;
@@ -47,7 +47,7 @@ struct class_s
 
 typedef class_t *(*classloadproc_t)(const char *classname, void *more);
 
-class_t *class_load(const char *binary, size_t length, classloadproc_t loadproc, void *more);
+class_t *class_load(const byte_t *binary, size_t length, classloadproc_t loadproc, void *more);
 
 inline function_t *class_get_function(class_t *clazz, const char *qualifiedName)
 {

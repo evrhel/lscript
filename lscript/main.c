@@ -6,7 +6,7 @@
 
 #define HEAP_SIZE 64
 
-char data[] =
+byte_t data[] =
 {
 	// Header info
 	0x01,
@@ -27,6 +27,7 @@ char data[] =
 			lb_static_call, 'm', 'y', 'F', 'u', 'n', 'c', '(', 0x00,
 			lb_setr, 'a', 'r', 'g', 's', '[', '0', ']', 0x00,
 			lb_setv, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 'a', 'r', 'g', 's', '[', '0', ']', 0x00,
+			lb_add, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, lb_int, 0x02, 0x00, 0x00, 0x00,
 			lb_retv, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00,
 
 		lb_function, lb_static, 'm', 'y', 'F', 'u', 'n', 'c', 0x00, 0x00,
@@ -39,7 +40,7 @@ int main(int argc, char *argv[])
 
 	vm_t *vm = vm_create(1024, 512);
 
-	char *heapData = MALLOC(sizeof(data));
+	byte_t *heapData = MALLOC(sizeof(data));
 	if (!heapData)
 	{
 		vm_free(vm);

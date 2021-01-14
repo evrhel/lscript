@@ -66,6 +66,12 @@ enum
 	lb_lword,
 	lb_qword,
 	lb_value,
+
+	lb_add = 0xb8,
+	lb_sub,
+	lb_mul,
+	lb_div,
+	lb_mod
 };
 
 #endif

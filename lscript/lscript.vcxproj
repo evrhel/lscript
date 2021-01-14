@@ -150,9 +150,11 @@
     <ClInclude Include="internal\heap.h" />
     <ClInclude Include="internal\collection.h" />
     <ClInclude Include="internal\lb.h" />
+    <ClInclude Include="internal\vm_math.h" />
     <ClInclude Include="internal\mem.h" />
     <ClInclude Include="internal\mem_debug.h" />
     <ClInclude Include="internal\object.h" />
+    <ClInclude Include="internal\types.h" />
     <ClInclude Include="internal\value.h" />
     <ClInclude Include="internal\vm.h" />
     <ClInclude Include="lscript.h" />
@@ -162,6 +164,7 @@
     <ClCompile Include="internal\class.c" />
     <ClCompile Include="internal\collection.c" />
     <ClCompile Include="internal\heap.c" />
+    <ClCompile Include="internal\vm_math.c" />
     <ClCompile Include="internal\mem.c" />
     <ClCompile Include="internal\mem_debug.c" />
     <ClCompile Include="internal\object.c" />

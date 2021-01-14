@@ -3,7 +3,7 @@
 #define CAST(src, castType, dst) (dst=(castType)src)
 
 /*
-This macro is kinda gross, but whatever it saves typing
+Generically casts some value into a destination data_t
 */
 #define CAST_GENERIC(src, castType, dst) \
 switch (castType) \
@@ -44,7 +44,7 @@ switch (castType) \
     default:\
         return 0;\
 }\
-return 1;\
+return 1;
 
 int cast_char(lchar *src, unsigned char castType, data_t *dst)
 {

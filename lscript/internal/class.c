@@ -9,11 +9,11 @@
 
 #define BUFLEN(ptr, start_arr) (sizeof(start_arr)-(ptr-start_arr))
 
-static int register_functions(class_t *clazz, const char *dataStart, const char *dataEnd);
-static int register_static_fields(class_t *clazz, const char *dataStart, const char *dataEnd);
-static int register_field_offests(class_t *clazz, const char *dataStart, const char *dataEnd);
+static int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd);
+static int register_static_fields(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd);
+static int register_field_offests(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd);
 
-class_t *class_load(const char *binary, size_t length, classloadproc_t loadproc, void *more)
+class_t *class_load(const byte_t *binary, size_t length, classloadproc_t loadproc, void *more)
 {
 	class_t *result;
 
@@ -25,8 +25,8 @@ class_t *class_load(const char *binary, size_t length, classloadproc_t loadproc,
 		return NULL;
 	result->data = binary;
 
-	const char *end = binary + length;
-	const char *curr = binary;
+	const byte_t *end = binary + length;
+	const byte_t *curr = binary;
 
 	char compressed;
 	unsigned int version;
@@ -146,7 +146,7 @@ void class_free(class_t *clazz, int freedata)
 	map_free(clazz->fields, 1);
 
 	if (freedata)
-		FREE((char *)clazz->data);
+		FREE((byte_t *)clazz->data);
 
 	FREE(clazz);
 }
@@ -171,7 +171,7 @@ int register_functions(class_t *clazz, const char *dataStart, const char *dataEn
 	list_iterator_t *it;
 	size_t i;
 
-	const unsigned char *curr = dataStart;
+	const byte_t *curr = dataStart;
 	while (curr < dataEnd)
 	{
 		switch (*curr)
@@ -414,7 +414,7 @@ int register_static_fields(class_t *clazz, const char *dataStart, const char *da
 	return 1;
 }
 
-int register_field_offests(class_t *clazz, const char *dataStart, const char *dataEnd)
+int register_field_offests(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd)
 {
 	if (!clazz->fields)
 		clazz->fields = map_create(CLASS_HASHTABLE_ENTRIES, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
@@ -423,7 +423,7 @@ int register_field_offests(class_t *clazz, const char *dataStart, const char *da
 	size_t valueSize;
 	size_t currentOffset = 0;
 
-	const char *curr = dataStart;
+	const byte_t *curr = dataStart;
 	while (curr < dataEnd)
 	{
 		switch (*curr)
@@ -442,7 +442,7 @@ int register_field_offests(class_t *clazz, const char *dataStart, const char *da
 					clazz->fields = NULL;
 					return 0;
 				}
-				field->flags = *((signed long long *)curr);
+				field->flags = *((flags_t *)curr);
 				field->offset = (void *)currentOffset;
 				map_insert(clazz->fields, fieldName, field);
 				currentOffset += valueSize;

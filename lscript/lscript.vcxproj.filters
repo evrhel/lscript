@@ -60,6 +60,12 @@
     <ClInclude Include="internal\datau.h">
       <Filter>Header Files\internal</Filter>
     </ClInclude>
+    <ClInclude Include="internal\types.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="internal\vm_math.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="internal\heap.c">
@@ -87,6 +93,9 @@
       <Filter>Source Files\internal</Filter>
     </ClCompile>
     <ClCompile Include="internal\cast.c">
+      <Filter>Source Files\internal</Filter>
+    </ClCompile>
+    <ClCompile Include="internal\vm_math.c">
       <Filter>Source Files\internal</Filter>
     </ClCompile>
   </ItemGroup>

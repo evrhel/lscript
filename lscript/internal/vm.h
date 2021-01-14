@@ -2,6 +2,8 @@
 #define VM_H
 
 #include "mem.h"
+#include "types.h"
+#include "datau.h"
 #include <stdarg.h>
 
 typedef struct vm_s vm_t;
@@ -45,10 +47,10 @@ struct env_s
 
 	union
 	{
-		unsigned char bret;
-		unsigned short wret;
-		unsigned int lret;
-		unsigned long long qret;
+		byte_t bret;
+		word_t wret;
+		lword_t lret;
+		qword_t qret;
 		void *vret;
 	};
 };
@@ -60,6 +62,9 @@ class_t *vm_load_class_binary(vm_t *vm, const char *binary, size_t size);
 void vm_free(vm_t *vm);
 
 env_t *env_create(vm_t *vm);
+int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags);
+int env_resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, flags_t *flags);
+int env_resolve_function_name(env_t *env, const char *name, function_t **function);
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls);
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls);
 

@@ -5,6 +5,8 @@
 
 #include "mem_debug.h"
 #include "cast.h"
+#include "value.h"
+#include "vm_math.h"
 
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
@@ -12,18 +14,15 @@ static int env_run(env_t *env, void *location);
 static int env_cleanup_call(env_t *env);
 
 static void *stack_push(env_t *env, value_t *value);
-static int stack_pop(env_t *env, signed long long type);
+static int stack_pop(env_t *env, flags_t type);
 
 static int is_varname_avaliable(env_t *env, const char *name);
-static int resolve_variable(env_t *env, const char *name, data_t **data, signed long long *flags);
-static int resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, signed long long *flags);
-static int resolve_function_name(env_t *env, const char *name, function_t **function);
 
-static int static_set(data_t *dst, signed long long dstFlags, data_t *src, signed long long srcFlags);
+static int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags);
 
-static inline void store_return(env_t *env, data_t *dst, signed long long dstFlags)
+static inline void store_return(env_t *env, data_t *dst, flags_t dstFlags)
 {
-	unsigned char type = value_typeof((value_t *)&dstFlags);
+	byte_t type = value_typeof((value_t *)&dstFlags);
 	switch (type)
 	{
 	case lb_char:
@@ -127,20 +126,20 @@ class_t *vm_load_class(vm_t *vm, const char *filename)
 
 	fseek(file, 0, SEEK_SET);
 
-	char *binary = (char *)MALLOC(size);
+	byte_t *binary = (byte_t *)MALLOC(size);
 	if (!binary)
 	{
 		fclose(file);
 		return NULL;
 	}
-	fread_s(binary, size, sizeof(char), size, file);
+	fread_s(binary, size, sizeof(byte_t), size, file);
 
 	fclose(file);
 
 	return vm_load_class_binary(vm, binary, size);
 }
 
-class_t *vm_load_class_binary(vm_t *vm, const char *binary, size_t size)
+class_t *vm_load_class_binary(vm_t *vm, const byte_t *binary, size_t size)
 {
 	class_t *clazz = class_load(binary, size, (classloadproc_t)class_load_ext, vm);
 	if (clazz)
@@ -213,6 +212,192 @@ env_t *env_create(vm_t *vm)
 	return env;
 }
 
+int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags)
+{
+	map_node_t *mapNode;
+	char *beg = strchr(name, '.');
+	if (beg)
+	{
+		*beg = 0;
+		mapNode = map_find((map_t *)env->variables->data, name);
+		*beg = '.';
+
+		if (!mapNode)
+		{
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+
+		return env_resolve_object_field(env, (object_t *)mapNode->value, beg, data, flags);
+	}
+	size_t valsize;
+
+	beg = strchr(name, '[');
+	if (beg)
+	{
+		*beg = 0;
+		mapNode = map_find((map_t *)env->variables->data, name);
+		if (!mapNode)
+		{
+			*beg = '[';
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+		*beg = '[';
+
+		char *num = beg + 1;
+		char *numEnd = strchr(num, ']');
+		luint index;
+		if (!numEnd)
+		{
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+
+		*numEnd = 0;
+		if (!is_numeric(numEnd))
+		{
+			*numEnd = ']';
+			env->exception = exception_bad_array_index;
+			return 0;
+		}
+
+		index = (luint)atoll(num);
+		*numEnd = ']';
+
+		array_t *arr = (array_t *)(((value_t *)mapNode->value)->ovalue);
+		if (index >= arr->length)
+		{
+			env->exception = exception_bad_array_index;
+			return 0;
+		}
+
+		byte_t elemType = value_typeof((value_t *)arr) - lb_object + lb_char - 1;
+		valsize = sizeof_type(elemType);
+		*flags = 0;
+		value_set_type((value_t *)flags, elemType);
+		*data = (data_t *)((byte_t *)&arr->data + (valsize * index));
+		return 1;
+	}
+
+	mapNode = map_find((map_t *)env->variables->data, name);
+	if (!mapNode)
+	{
+		env->exception = exception_bad_variable_name;
+		return 0;
+	}
+
+	value_t *val = (value_t *)mapNode->value;
+	*flags = val->flags;
+	*data = (data_t *)&val->ovalue;
+
+	return 1;
+}
+
+int env_resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, flags_t *flags)
+{
+	if (!object)
+	{
+		env->exception = exception_null_dereference;
+		return 0;
+	}
+
+	field_t *fieldData;
+	char *beg = strchr(name, '.');
+	if (beg)
+	{
+		*beg = 0;
+		fieldData = object_get_field_data(object, name);
+		*beg = '.';
+
+		if (!fieldData)
+		{
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+
+		size_t off = (size_t)fieldData->offset;
+		void *data = (char *)object->data + off;
+
+		return env_resolve_object_field(env, (object_t *)data, beg, data, flags);
+	}
+
+	fieldData = object_get_field_data(object, name);
+
+	*flags = object->buffer;
+	*data = (data_t *)((byte_t *)object->data + (size_t)fieldData->offset);
+	return 1;
+}
+
+int env_resolve_function_name(env_t *env, const char *name, function_t **function)
+{
+	if (!name)
+	{
+		env->exception = exception_function_not_found;
+		return 0;
+	}
+
+	const char *funcname;
+	function_t *result;
+	char *end = strrchr(name, '.');
+	if (end)
+	{
+		*end = 0;
+		data_t *data;
+		signed long long flags;
+		if (env_resolve_variable(env, name, &data, &flags))
+		{
+			*end = '.';
+			funcname = end + 1;
+			byte_t type = TYPEOF(flags);
+			if (type != lb_object)
+			{
+				env->exception = exception_function_not_found;
+				return 0;
+			}
+			object_t *obj = (object_t *)data->ovalue;
+			class_t *parent = obj->clazz;
+			result = class_get_function(parent, funcname);
+			*function = result;
+			return 1;
+		}
+		else
+		{
+			funcname = end + 1;
+			class_t *clazz = vm_get_class(env->vm, name);
+			if (!clazz)
+			{
+				env->exception = exception_class_not_found;
+				return 0;
+			}
+			*end = '.';
+			result = class_get_function(clazz, funcname);
+			if (!result)
+			{
+				env->exception = exception_function_not_found;
+				return 0;
+			}
+			*function = result;
+			return 1;
+		}
+	}
+	else
+	{
+		class_t *clazz = *((class_t **)env->rbp + 2);
+		result = class_get_function(clazz, name);
+		if (!result)
+		{
+			env->exception = exception_function_not_found;
+			return 0;
+		}
+		*function = result;
+		return 1;
+	}
+
+	env->exception = exception_function_not_found;
+	return 0;
+}
+
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
 	// push the arg list to the stack
@@ -235,7 +420,7 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 	for (size_t i = 0; i < function->numargs; i++)
 	{
 		const char *argname = function->args[i];
-		unsigned char type = map_at(function->argTypes, argname);
+		flags_t type = map_at(function->argTypes, argname);
 		size_t size = sizeof_type(type);
 		value_t val;
 		val.flags = 0;
@@ -271,26 +456,26 @@ class_t *class_load_ext(const char *classname, vm_t *vm)
 int env_run(env_t *env, void *location)
 {
 	env->rip = location;
-	unsigned char *counter = env->rip;
+	byte_t *counter = env->rip;	// A counter on where we are currently executing
 
-	const char *name;
-	data_t *data;
-	signed long long flags;
-	const char *name2;
-	data_t *data2;
-	signed long long flags2;
-	value_t val;
-	value_t *valPtr;
-	void *stackAllocLoc;
-	function_t *callFunc;
-	char *callArgPtr;
-	char *callFuncArgs;
-	size_t callFuncArgSize;
-	list_iterator_t *lit;
-	map_iterator_t *mip;
-	unsigned char callArgType;
-	char *cursor;
-	unsigned char valueType;
+	const char *name;			// An arbitrary string to store a name
+	data_t *data;				// An arbitrary data_t pointer
+	flags_t flags;				// An arbitrary flags_t
+	const char *name2;			// An arbitrary string to store a name
+	data_t *data2;				// An arbitrary data_t pointer
+	flags_t flags2;				// An arbitrary flags_t
+	value_t val;				// An arbitrary value
+	value_t *valPtr;			// An arbitrary value pointer
+	void *stackAllocLoc;		// A pointer to where a value on the stack was allocated
+	function_t *callFunc;		// A pointer to a function which will be called
+	byte_t *callArgPtr;			// A pointer to some bytes which will be the function arguments
+	byte_t *callFuncArgs;		// A pointer to some bytes which will be the function arguments
+	size_t callFuncArgSize;		// The size of the call arguments
+	list_iterator_t *lit;		// An arbitrary list iterator
+	map_iterator_t *mip;		// An arbitrary map iterator
+	byte_t callArgType;			// A byte to store the type of a call argument
+	byte_t *cursor;				// A cursor into an array of bytes
+	byte_t valueType;			// A byte to store the type of some value
 
 	while (1)
 	{
@@ -363,7 +548,7 @@ int env_run(env_t *env, void *location)
 		case lb_setl:
 			counter++;
 			name = counter;
-			if (!resolve_variable(env, name, &data, &flags))
+			if (!env_resolve_variable(env, name, &data, &flags))
 				return env->exception;
 			counter += strlen(name) + 1;
 			MEMCPY(data, counter, sizeof(lint));
@@ -378,11 +563,11 @@ int env_run(env_t *env, void *location)
 		case lb_setv:
 			counter++;
 			name = counter;
-			if (!resolve_variable(env, name, &data, &flags))
+			if (!env_resolve_variable(env, name, &data, &flags))
 				return env->exception;
 			counter += strlen(name) + 1;
 			name2 = counter;
-			if (!resolve_variable(env, name2, &data2, &flags2))
+			if (!env_resolve_variable(env, name2, &data2, &flags2))
 				return env->exception;
 			counter += strlen(name2) + 1;
 			static_set(data, flags, data2, flags2);
@@ -390,7 +575,7 @@ int env_run(env_t *env, void *location)
 		case lb_setr:
 			counter++;
 			name = counter;
-			if (!resolve_variable(env, name, &data, &flags))
+			if (!env_resolve_variable(env, name, &data, &flags))
 				return env->exception;
 			counter += strlen(name) + 1;
 			store_return(env, data, flags);
@@ -405,7 +590,7 @@ int env_run(env_t *env, void *location)
 			break;
 		case lb_retl:
 			counter++;
-			env->lret = *(unsigned int *)counter;
+			env->lret = *(lword_t *)counter;
 			return env_cleanup_call(env);
 			break;
 		case lb_retq:
@@ -417,7 +602,7 @@ int env_run(env_t *env, void *location)
 		case lb_retv:
 			counter++;
 			name = counter;
-			if (!resolve_variable(env, name, &data, &flags))
+			if (!env_resolve_variable(env, name, &data, &flags))
 				return env->exception;
 			MEMCPY(&env->vret, data, value_sizeof((value_t *)&flags));
 			return env_cleanup_call(env);
@@ -429,7 +614,7 @@ int env_run(env_t *env, void *location)
 		case lb_static_call:
 			counter++;
 			name = counter;
-			if (!resolve_function_name(env, name, &callFunc))
+			if (!env_resolve_function_name(env, name, &callFunc))
 				return env->exception;
 			counter += strlen(name) + 1;
 			
@@ -439,12 +624,12 @@ int env_run(env_t *env, void *location)
 			mip = map_create_iterator(callFunc->argTypes);
 			while (mip->node)
 			{
-				callFuncArgSize += sizeof_type((unsigned char)mip->value);
+				callFuncArgSize += sizeof_type((byte_t)mip->value);
 				mip = map_iterator_next(mip);
 			}
 			map_iterator_free(mip);
 
-			callFuncArgs = (char *)MALLOC(callFuncArgSize);
+			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
 			if (!callFuncArgs)
 				return env->exception = exception_vm_error;
 			cursor = callFuncArgs;
@@ -454,7 +639,7 @@ int env_run(env_t *env, void *location)
 			mip = map_create_iterator(callFunc->argTypes);
 			while (mip->node)
 			{
-				callArgType = (unsigned char)mip->value;
+				callArgType = (flags_t)mip->value;
 
 				switch (*counter)
 				{
@@ -466,30 +651,30 @@ int env_run(env_t *env, void *location)
 					break;
 				case lb_word:
 					counter++;
-					*((short *)cursor) = *((short *)counter);
+					*((word_t *)cursor) = *((word_t *)counter);
 					cursor += 2;
 					counter += 2;
 					break;
 				case lb_lword:
 					counter++;
-					*((int *)cursor) = *((int *)counter);
+					*((lword_t *)cursor) = *((lword_t *)counter);
 					cursor += 4;
 					counter += 4;
 					break;
 				case lb_qword:
 					counter++;
-					*((long long *)cursor) = *((long long *)counter);
+					*((qword_t *)cursor) = *((qword_t *)counter);
 					cursor += 8;
 					counter += 8;
 					break;
 				case lb_value:
 					counter++;
-					if (!resolve_variable(env, counter, &data, &flags))
+					if (!env_resolve_variable(env, counter, &data, &flags))
 					{
 						FREE(callFuncArgs);
 						return env->exception;
 					}
-					valueType = value_typeof((value_t *)flags);
+					valueType = TYPEOF(flags);
 					switch (valueType)
 					{
 					case lb_char:
@@ -500,34 +685,34 @@ int env_run(env_t *env, void *location)
 						break;
 					case lb_short:
 					case lb_ushort:
-						*((short *)cursor) = data->svalue;
+						*((lshort *)cursor) = data->svalue;
 						cursor += 2;
 						counter += 2;
 						break;
 					case lb_int:
 					case lb_uint:
-						*((int *)cursor) = data->ivalue;
+						*((lint *)cursor) = data->ivalue;
 						cursor += 4;
 						counter += 4;
 						break;
 					case lb_long:
 					case lb_ulong:
-						*((long long *)cursor) = data->lvalue;
+						*((llong *)cursor) = data->lvalue;
 						cursor += 8;
 						counter += 8;
 						break;
 					case lb_bool:
-						*((char *)cursor) = data->bvalue;
+						*((lbool *)cursor) = data->bvalue;
 						cursor += 1;
 						counter += 1;
 						break;
 					case lb_float:
-						*((float *)cursor) = data->fvalue;
+						*((lfloat *)cursor) = data->fvalue;
 						cursor += 4;
 						counter += 4;
 						break;
 					case lb_double:
-						*((double *)cursor) = data->dvalue;
+						*((ldouble *)cursor) = data->dvalue;
 						cursor += 8;
 						counter += 8;
 						break;
@@ -544,7 +729,7 @@ int env_run(env_t *env, void *location)
 					case lb_floatarray:
 					case lb_doublearray:
 					case lb_objectarray:
-						*((void **)cursor) = data->ovalue;
+						*((lobject *)cursor) = data->ovalue;
 						cursor += 8;
 						counter += 8;
 						break;
@@ -567,6 +752,32 @@ int env_run(env_t *env, void *location)
 
 			break;
 		case lb_dynamic_call:
+			break;
+
+		case lb_add:
+			counter++;
+			if (!vmm_add(env, &counter))
+				return env->exception;
+			break;
+		case lb_sub:
+			counter++;
+			if (!vmm_sub(env, &counter))
+				return env->exception;
+			break;
+		case lb_mul:
+			counter++;
+			if (!vmm_mul(env, &counter))
+				return env->exception;
+			break;
+		case lb_div:
+			counter++;
+			if (!vmm_div(env, &counter))
+				return env->exception;
+			break;
+		case lb_mod:
+			counter++;
+			if (!vmm_mod(env, &counter))
+				return env->exception;
 			break;
 
 		default:
@@ -595,18 +806,18 @@ int env_cleanup_call(env_t *env)
 	// Restore the fake registers from the previous call
 	env->rsp = env->rbp;
 	env->rbp = *((void **)env->rbp);
-	env->rip = ((char *)env->rbp) + sizeof(void *);
+	env->rip = ((byte_t *)env->rbp) + sizeof(void *);
 
 	return exception_none;
 }
 
 void *stack_push(env_t *env, value_t *value)
 {
-	char *stack, *stackPtr;
-	stack = (char *)env->stack;
-	stackPtr = (char *)env->rsp;
+	byte_t *stack, *stackPtr;
+	stack = (byte_t *)env->stack;
+	stackPtr = (byte_t *)env->rsp;
 	size_t size = value_sizeof(value) + sizeof(value->flags);
-	char *end = stackPtr + size;
+	byte_t *end = stackPtr + size;
 	if (end - stack >= env->vm->stackSize)
 	{
 		env->exception = exception_stack_overflow;
@@ -617,7 +828,7 @@ void *stack_push(env_t *env, value_t *value)
 	return stackPtr;
 }
 
-int stack_pop(env_t *env, signed long long type)
+int stack_pop(env_t *env, flags_t type)
 {
 	return exception_none;
 }
@@ -630,195 +841,9 @@ int is_varname_avaliable(env_t *env, const char *name)
 	return 1;
 }
 
-int resolve_variable(env_t *env, const char *name, data_t **data, signed long long *flags)
+int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 {
-	map_node_t *mapNode;
-	char *beg = strchr(name, '.');
-	if (beg)
-	{
-		*beg = 0;
-		mapNode = map_find((map_t *)env->variables->data, name);
-		*beg = '.';
-
-		if (!mapNode)
-		{
-			env->exception = exception_bad_variable_name;
-			return 0;
-		}
-
-		return resolve_object_field(env, (object_t *)mapNode->value, beg, data, flags);
-	}
-	size_t valsize;
-
-	beg = strchr(name, '[');
-	if (beg)
-	{
-		*beg = 0;
-		mapNode = map_find((map_t *)env->variables->data, name);
-		if (!mapNode)
-		{
-			*beg = '[';
-			env->exception = exception_bad_variable_name;
-			return 0;
-		}
-		*beg = '[';
-
-		char *num = beg + 1;
-		char *numEnd = strchr(num, ']');
-		luint index;
-		if (!numEnd)
-		{
-			env->exception = exception_bad_variable_name;
-			return 0;
-		}
-
-		*numEnd = 0;
-		if (!is_numeric(numEnd))
-		{
-			*numEnd = ']';
-			env->exception = exception_bad_array_index;
-			return 0;
-		}
-
-		index = (luint)atoll(num);
-		*numEnd = ']';
-
-		array_t *arr = (array_t *)(((value_t *)mapNode->value)->ovalue);
-		if (index >= arr->length)
-		{
-			env->exception = exception_bad_array_index;
-			return 0;
-		}
-
-		unsigned char elemType = value_typeof((value_t *)arr) - lb_object + lb_char - 1;
-		valsize = sizeof_type(elemType);
-		*flags = 0;
-		value_set_type((value_t *)flags, elemType);
-		*data = (data_t *)((char *)&arr->data + (valsize * index));
-		return 1;
-	}
-
-	mapNode = map_find((map_t *)env->variables->data, name);
-	if (!mapNode)
-	{
-		env->exception = exception_bad_variable_name;
-		return 0;
-	}
-	
-	value_t *val = (value_t *)mapNode->value;
-	*flags = val->flags;
-	*data = (data_t *)&val->ovalue;
-	
-	return 1;
-}
-
-int resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, signed long long *flags)
-{
-	if (!object)
-	{
-		env->exception = exception_null_dereference;
-		return 0;
-	}
-
-	field_t *fieldData;
-	char *beg = strchr(name, '.');
-	if (beg)
-	{
-		*beg = 0;
-		fieldData = object_get_field_data(object, name);
-		*beg = '.';
-
-		if (!fieldData)
-		{
-			env->exception = exception_bad_variable_name;
-			return 0;
-		}
-
-		size_t off = (size_t )fieldData->offset;
-		void *data = (char *)object->data + off;
-
-		return resolve_object_field(env, (object_t *)data, beg, data, flags);
-	}
-
-	fieldData = object_get_field_data(object, name);
-
-	*flags = object->buffer;
-	*data = (data_t *)((char *)object->data + (size_t)fieldData->offset);
-	return 1;
-}
-
-int resolve_function_name(env_t *env, const char *name, function_t **function)
-{
-	if (!name)
-	{
-		env->exception = exception_function_not_found;
-		return 0;
-	}
-
-	const char *funcname;
-	function_t *result;
-	char *end = strrchr(name, '.');
-	if (end)
-	{
-		*end = 0;
-		data_t *data;
-		signed long long flags;
-		if (resolve_variable(env, name, &data, &flags))
-		{
-			*end = '.';
-			funcname = end + 1;
-			unsigned char type = value_typeof((value_t *)&flags);
-			if (type != lb_object)
-			{
-				env->exception = exception_function_not_found;
-				return 0;
-			}
-			object_t *obj = (object_t *)data->ovalue;
-			class_t *parent = obj->clazz;
-			result = class_get_function(parent, funcname);
-			*function = result;
-			return 1;
-		}
-		else
-		{
-			funcname = end + 1;
-			class_t *clazz = vm_get_class(env->vm, name);
-			if (!clazz)
-			{
-				env->exception = exception_class_not_found;
-				return 0;
-			}
-			*end = '.';
-			result = class_get_function(clazz, funcname);
-			if (!result)
-			{
-				env->exception = exception_function_not_found;
-				return 0;
-			}
-			*function = result;
-			return 1;
-		}
-	}
-	else
-	{
-		class_t *clazz = *((class_t **)env->rbp + 2);
-		result = class_get_function(clazz, name);
-		if (!result)
-		{
-			env->exception = exception_function_not_found;
-			return 0;
-		}
-		*function = result;
-		return 1;
-	}
-
-	env->exception = exception_function_not_found;
-	return 0;
-}
-
-int static_set(data_t *dst, signed long long dstFlags, data_t *src, signed long long srcFlags)
-{
-	unsigned char dstType, srcType;
+	byte_t dstType, srcType;
 	dstType = value_typeof((value_t *)&dstFlags);
 	srcType = value_typeof((value_t *)&srcFlags);
 
