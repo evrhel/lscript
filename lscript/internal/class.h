@@ -16,7 +16,8 @@ enum
 
 enum
 {
-	FUNCTION_FLAG_STATIC = 0x1
+	FUNCTION_FLAG_STATIC = 0x1,
+	FUNCTION_FLAG_NATIVE = 0x2
 };
 
 typedef struct function_s function_t;

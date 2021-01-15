@@ -11,6 +11,8 @@ enum
 	lb_function = 0x10,
 	lb_static,
 	lb_dynamic,
+	lb_interp,
+	lb_native,
 	lb_global,
 	lb_const,
 	lb_varying,
@@ -74,7 +76,11 @@ enum
 	lb_sub,
 	lb_mul,
 	lb_div,
-	lb_mod
+	lb_mod,
+
+	lb_if = 0xc0,
+	lb_elif,
+	lb_else
 };
 
 #endif

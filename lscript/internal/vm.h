@@ -6,6 +6,12 @@
 #include "datau.h"
 #include <stdarg.h>
 
+#if defined(_WIN32)
+#include <Windows.h>
+#else
+#error Unsupported platform
+#endif
+
 typedef struct vm_s vm_t;
 typedef struct env_s env_t;
 
@@ -31,6 +37,12 @@ struct vm_s
 	map_t *classes;
 	manager_t *manager;
 	size_t stackSize;
+
+#if defined(WIN32)
+	HMODULE *hLibraries;
+#else
+#endif
+	size_t libraryCount;
 };
 
 struct env_s
@@ -58,7 +70,8 @@ struct env_s
 vm_t *vm_create(size_t heapSize, size_t stackSize);
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *filename);
-class_t *vm_load_class_binary(vm_t *vm, const char *binary, size_t size);
+class_t *vm_load_class_binary(vm_t *vm, const byte_t *binary, size_t size);
+int vm_load_library(vm_t *vm, const char *libpath);
 void vm_free(vm_t *vm);
 
 env_t *env_create(vm_t *vm);

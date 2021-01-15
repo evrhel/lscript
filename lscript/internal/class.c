@@ -151,7 +151,7 @@ void class_free(class_t *clazz, int freedata)
 	FREE(clazz);
 }
 
-int register_functions(class_t *clazz, const char *dataStart, const char *dataEnd)
+int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd)
 {
 	if (!clazz->functions)
 		clazz->functions = map_create(CLASS_HASHTABLE_ENTRIES, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
@@ -163,6 +163,7 @@ int register_functions(class_t *clazz, const char *dataStart, const char *dataEn
 	unsigned char argtype;
 	const char *argname;
 	unsigned char isStatic;
+	unsigned char isNative;
 
 	map_t *argTypes;
 	function_t *func;
@@ -189,6 +190,18 @@ int register_functions(class_t *clazz, const char *dataStart, const char *dataEn
 				return 0;
 			}
 			curr++;
+
+			if (*curr == lb_interp)
+				isNative = 0;
+			else if (*curr == lb_native)
+				isNative = 1;
+			else
+			{
+				map_free(clazz->functions, 0);
+				return 0;
+			}
+			curr++;
+
 			funcName = curr;
 			sprintf_s(qualnamePtr, MAX_QUALIFIED_FUNCTION_NAME_LENGTH, "%s(", funcName);
 			qualnamePtr += strlen(qualnamePtr);
@@ -318,13 +331,17 @@ int register_functions(class_t *clazz, const char *dataStart, const char *dataEn
 			if (func)
 			{
 				func->name = funcName;
-				func->location = curr;
+				func->location = isNative ? NULL : curr;
 				func->argTypes = argTypes;
 				func->numargs = numArgs;
 				func->parentClass = clazz;
 				func->flags = 0;
 
-				func->flags |= FUNCTION_FLAG_STATIC * isStatic;
+				if (isStatic)
+					func->flags |= FUNCTION_FLAG_STATIC;
+
+				if (isNative)
+					func->flags |= FUNCTION_FLAG_NATIVE;
 
 				func->args = MALLOC(numArgs * sizeof(const char *));
 				if (!func->args)
@@ -399,7 +416,7 @@ int register_functions(class_t *clazz, const char *dataStart, const char *dataEn
 	return 1;
 }
 
-int register_static_fields(class_t *clazz, const char *dataStart, const char *dataEnd)
+int register_static_fields(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd)
 {
 	if (!clazz->staticFields)
 		clazz->staticFields = map_create(CLASS_HASHTABLE_ENTRIES, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);

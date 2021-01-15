@@ -105,6 +105,21 @@ vm_t *vm_create(size_t heapSize, size_t stackSize)
 
 	vm->stackSize = stackSize;
 
+	vm->libraryCount = 4;
+#if defined(_WIN32)
+	vm->hLibraries = (HMODULE *)CALLOC(vm->libraryCount, sizeof(HMODULE));
+	if (!vm->hLibraries)
+	{
+		manager_free(vm->manager);
+		list_free(vm->envs, 0);
+		map_free(vm->classes, 0);
+		FREE(vm);
+		return NULL;
+	}
+	vm->hLibraries[0] = GetModuleHandleA(NULL);
+#else
+#endif
+
 	return vm;
 }
 
@@ -147,6 +162,22 @@ class_t *vm_load_class_binary(vm_t *vm, const byte_t *binary, size_t size)
 	return clazz;
 }
 
+int vm_load_library(vm_t *vm, const char *libpath)
+{
+#if defined(_WIN32)
+	for (size_t i = 0; i < vm->libraryCount; i++)
+	{
+		if (!vm->hLibraries[i])
+		{
+			HINSTANCE hinstLib;
+			
+		}
+	}
+#else
+#endif
+	return 0;
+}
+
 void vm_free(vm_t *vm)
 {
 	list_iterator_t *lit = list_create_iterator(vm->envs);
@@ -172,6 +203,19 @@ void vm_free(vm_t *vm)
 	map_free(vm->classes, 0);
 
 	manager_free(vm->manager);
+
+#if defined(_WIN32)
+	for (size_t i = 0; i < vm->libraryCount; i++)
+	{
+		if (vm->hLibraries[i])
+		{
+			FreeLibrary(vm->hLibraries[i]);
+			vm->hLibraries[i] = NULL;
+		}
+	}
+#else
+#endif
+
 
 	FREE(vm);
 }
