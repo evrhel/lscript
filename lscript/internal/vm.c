@@ -25,7 +25,7 @@ static int try_link_function(vm_t *vm, function_t *func);
 /*
 Implemented in hooks.asm
 */
-extern int vm_call_extern_asm(env_t *env, size_t argSize, void *args, void *proc);
+extern int vm_call_extern_asm(size_t argCount, const byte_t *argTypes, const void *args, void *proc);
 
 static inline void store_return(env_t *env, data_t *dst, flags_t dstFlags)
 {
@@ -492,25 +492,50 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 	return 1;
 }
 
-static __cdecl test_func_void(env_t *env)
+void __stdcall test_func_void(env_t *env)
 {
 	printf("Void func\n");
 }
 
-static __cdecl test_func_args(env_t *env, const char *string)
+void __stdcall test_func_args(env_t *env, const char *string, float fl, double d)
 {
 	printf("Hello World! %s\n", string);
 }
+
+void __stdcall test_func_args2(env_t *env, class_t *clazz, const char *string)
+{
+
+}
+
+// byte_t arr
 
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
 	// push the arg list to the stack
 	//hello_from_asm();
 
-	char *string = "Test";
-	void *args = &string;
+	struct
+	{
+		env_t *env;
+		char *string;
+		float num;       int padding;
+		double num2;
+	} s;
 
-	vm_call_extern_asm(env, 8, args, test_func_args);
+	byte_t types[4] =
+	{
+		0,	// integer type
+		0,	// integer type
+		1,	// float type
+		2	// double type
+	};
+
+	s.env = env;
+	s.string = "Test";
+	s.num = 23.0f;
+	s.num2 = 55.25;
+
+	vm_call_extern_asm(4, types, &s, test_func_args);
 	if (function->flags & FUNCTION_FLAG_NATIVE)
 	{
 		//vm_call_extern_asm(0, ls, function->location, env);
