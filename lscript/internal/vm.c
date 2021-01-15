@@ -20,6 +20,13 @@ static int is_varname_avaliable(env_t *env, const char *name);
 
 static int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags);
 
+static int try_link_function(vm_t *vm, function_t *func);
+
+/*
+Implemented in hooks.asm
+*/
+extern int vm_call_extern_asm(env_t *env, size_t argSize, void *args, void *proc);
+
 static inline void store_return(env_t *env, data_t *dst, flags_t dstFlags)
 {
 	byte_t type = value_typeof((value_t *)&dstFlags);
@@ -485,44 +492,66 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 	return 1;
 }
 
+static __cdecl test_func_void(env_t *env)
+{
+	printf("Void func\n");
+}
+
+static __cdecl test_func_args(env_t *env, const char *string)
+{
+	printf("Hello World! %s\n", string);
+}
+
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
 	// push the arg list to the stack
-	
-	if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
-		return env->exception = exception_stack_overflow;
+	//hello_from_asm();
 
-	*((size_t *)env->rsp) = (size_t)env->rbp;
-	*((size_t *)env->rsp + 1) = (size_t)env->rip;
-	*((size_t *)env->rsp + 2) = (size_t)function->parentClass;
+	char *string = "Test";
+	void *args = &string;
 
-	env->rbp = env->rsp;
-	env->rsp = ((size_t *)env->rsp) + 3;
-
-	env->variables->next = list_create();
-	env->variables->next->prev = env->variables;
-	env->variables = env->variables->next;
-	env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
-
-	for (size_t i = 0; i < function->numargs; i++)
+	vm_call_extern_asm(env, 8, args, test_func_args);
+	if (function->flags & FUNCTION_FLAG_NATIVE)
 	{
-		const char *argname = function->args[i];
-		flags_t type = map_at(function->argTypes, argname);
-		size_t size = sizeof_type(type);
-		value_t val;
-		val.flags = 0;
-		value_set_type(&val, type);
-		MEMCPY(&val.ovalue, ls, size);
-		ls += size;
-
-		void *loc;
-		if (!(loc = stack_push(env, &val)))
-			return env->exception;
-
-		map_insert((map_t *)env->variables->data, argname, loc);
+		//vm_call_extern_asm(0, ls, function->location, env);
 	}
+	else
+	{
+		if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
+			return env->exception = exception_stack_overflow;
 
-	return env_run(env, function->location);
+		*((size_t *)env->rsp) = (size_t)env->rbp;
+		*((size_t *)env->rsp + 1) = (size_t)env->rip;
+		*((size_t *)env->rsp + 2) = (size_t)function->parentClass;
+
+		env->rbp = env->rsp;
+		env->rsp = ((size_t *)env->rsp) + 3;
+
+		env->variables->next = list_create();
+		env->variables->next->prev = env->variables;
+		env->variables = env->variables->next;
+		env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
+
+		for (size_t i = 0; i < function->numargs; i++)
+		{
+			const char *argname = function->args[i];
+			flags_t type = map_at(function->argTypes, argname);
+			size_t size = sizeof_type(type);
+			value_t val;
+			val.flags = 0;
+			value_set_type(&val, type);
+			MEMCPY(&val.ovalue, ls, size);
+			ls += size;
+
+			void *loc;
+			if (!(loc = stack_push(env, &val)))
+				return env->exception;
+
+			map_insert((map_t *)env->variables->data, argname, loc);
+		}
+
+		return env_run(env, function->location);
+	}
 }
 
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls)
@@ -1209,4 +1238,38 @@ int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 	default:
 		return 0;
 	}
+}
+
+int try_link_function(vm_t *vm, function_t *func)
+{
+#if defined(_WIN32)
+	char *temp = strchr(func->name, '(');
+	*temp = 0;
+	for (size_t i = 0; i < vm->libraryCount; i++)
+	{
+		HMODULE hModule = vm->hLibraries[i];
+		if (hModule)
+		{
+			func->location = GetProcAddress(hModule, func->name);
+			if (func->location)
+			{
+				*temp = '(';
+				return 1;
+			}
+		}
+	}
+	*temp = '(';
+#else
+#endif
+	return 0;
+}
+
+int call_native(env_t *env, function_t *function, va_list ls)
+{
+#if defined(_WIN32)
+
+
+#else
+#endif
+	return 0;
 }
