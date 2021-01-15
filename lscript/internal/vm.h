@@ -61,7 +61,7 @@ struct env_s
 	{
 		byte_t bret;
 		word_t wret;
-		lword_t lret;
+		dword_t dret;
 		qword_t qret;
 		void *vret;
 	};

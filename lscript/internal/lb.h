@@ -67,18 +67,20 @@ enum
 	lb_dynamic_call,
 	lb_byte,
 	lb_word,
-	lb_lword,
+	lb_dword,
 	lb_qword,
+	lb_real4,
+	lb_real8,
 	lb_value,
 	lb_new,
 
-	lb_add = 0xbb,
+	lb_add = 0xbd,
 	lb_sub,
 	lb_mul,
 	lb_div,
 	lb_mod,
 
-	lb_if = 0xc0,
+	lb_if = 0xc2,
 	lb_elif,
 	lb_else
 };

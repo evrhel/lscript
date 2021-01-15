@@ -1,5 +1,18 @@
 PUBLIC vm_call_extern_asm
 
+LB_BYTE equ B5h
+LB_WORD equ B6h
+LB_DWORD equ B7h
+LB_QWORD equ B8h
+LB_REAL4 equ B9h
+LB_REAL8 equ BAh
+
+.data
+	table0 dq byte0, word0, dword0, qword0, real40, real80
+	table1 dq byte1, word1, dword1, qword1, real41, real81
+	table2 dq byte2, word2, dword2, qword2, real42, real82
+	table3 dq byte3, word3, dword3, qword3, real43, real83
+
 .code
 
 ;
@@ -23,31 +36,52 @@ vm_call_extern_asm PROC
 	mov r11, r9
 
 
-	; Save the arg types in r12
+	; Save needed registers
 	push r12
 	mov r12, rdx
 	push r13
+	push r14
 	
 	test rax, rax
 	je startCall
 
 	; Begin preparing arguments for calling, starting with the registers
+	; space must be allocated on the stack for the callee
 	
 	; First integer argument goes in rcx and floating point in xmm0
 		mov r13b, byte ptr[r12]
 		cmp r13b, 0
 
-		jne rcxFloat
+		; Set the register and push the correct size onto the stack
+
+		; Get r13 to contain the offset into the jump table
+		sub r13b, 0B5h
+		jmp table0[8 * r13]
+
+		byte0::
 			mov rcx, qword ptr[r10]
-			jmp rcxDone
-		rcxFloat:
-			cmp r13b, 2
-			jne rcxDouble
-				movsd xmm0, real8 ptr[r10]
-				jmp rcxDone
-			rcxDouble:
-				movss xmm0, real4 ptr[r10]
-		rcxDone:
+			sub rsp, 1
+			jmp table0Done
+		word0::
+			mov rcx, qword ptr[r10]
+			sub rsp, 2
+			jmp table0Done
+		dword0::
+			mov rcx, qword ptr[r10]
+			sub rsp, 4
+			jmp table0Done
+		qword0::
+			mov rcx, qword ptr[r10]
+			sub rsp, 8
+			jmp table0Done
+		real40::
+			movss xmm0, real4 ptr[r10]
+			sub rsp, 4
+			jmp table0Done
+		real80::
+			movsd xmm0, real8 ptr[r10]
+			sub rsp, 8
+		table0Done:
 
 		add r10, 8
 		add r12, 1
@@ -60,18 +94,34 @@ vm_call_extern_asm PROC
 		mov r13b, byte ptr[r12]
 		cmp r13b, 0
 
-		jne rdxFloat
-			mov rdx, qword ptr[r10]
-			jmp rdxDone
-		rdxFloat:
-			cmp r13b, 2
-			jne rdxDouble
-				movsd xmm1, real8 ptr[r10]
-				jmp rdxDone
-			rdxDouble:
-				movss xmm1, real4 ptr[r10]
-		rdxDone:
+		sub r13b, 0B5h
+		jmp table1[8 * r13]
 
+		byte1::
+			mov rdx, qword ptr[r10]
+			sub rsp, 1
+			jmp table1Done
+		word1::
+			mov rdx, qword ptr[r10]
+			sub rsp, 2
+			jmp table1Done
+		dword1::
+			mov rdx, qword ptr[r10]
+			sub rsp, 4
+			jmp table1Done
+		qword1::
+			mov rdx, qword ptr[r10]
+			sub rsp, 8
+			jmp table1Done
+		real41::
+			movss xmm1, real4 ptr[r10]
+			sub rsp, 4
+			jmp table1Done
+		real81::
+			movsd xmm1, real8 ptr[r10]
+			sub rsp, 8
+		table1Done:
+		
 		add r10, 8
 		add r12, 1
 		sub rax, 1
@@ -83,17 +133,33 @@ vm_call_extern_asm PROC
 		mov r13b, byte ptr[r12]
 		cmp r13b, 0
 
-		jne r8Float
+		sub r13b, 0B5h
+		jmp table2[8 * r13]
+
+		byte2::
 			mov r8, qword ptr[r10]
-			jmp r8Done
-		r8Float:
-			cmp r13b, 2
-			jne r8Double
-				movsd xmm2, real8 ptr[r10]
-				jmp r8Done
-			r8Double:
-				movss xmm2, real4 ptr[r10]
-		r8Done:
+			sub rsp, 1
+			jmp table2Done
+		word2::
+			mov r8, qword ptr[r10]
+			sub rsp, 2
+			jmp table2Done
+		dword2::
+			mov r8, qword ptr[r10]
+			sub rsp, 4
+			jmp table2Done
+		qword2::
+			mov r8, qword ptr[r10]
+			sub rsp, 8
+			jmp table2Done
+		real42::
+			movss xmm2, real4 ptr[r10]
+			sub rsp, 4
+			jmp table2Done
+		real82::
+			movsd xmm2, real8 ptr[r10]
+			sub rsp, 8
+		table2Done:
 
 		add r10, 8
 		add r12, 1
@@ -108,17 +174,33 @@ vm_call_extern_asm PROC
 		mov r13b, byte ptr[r12]
 		cmp r13b, 0
 
-		jne r9Float
+		sub r13b, 0B5h
+		jmp table3[8 * r13]
+
+		byte3::
 			mov r9, qword ptr[r10]
-			jmp r9Done
-		r9Float:
-			cmp r13b, 2
-			jne r9Double
-				movsd xmm3, real8 ptr[r10]
-				jmp r9Done
-			r9Double:
-				movss xmm3, real4 ptr[r10]
-		r9Done:
+			sub rsp, 1
+			jmp table3Done
+		word3::
+			mov r9, qword ptr[r10]
+			sub rsp, 2
+			jmp table3Done
+		dword3::
+			mov r9, qword ptr[r10]
+			sub rsp, 4
+			jmp table3Done
+		qword3::
+			mov r9, qword ptr[r10]
+			sub rsp, 8
+			jmp table3Done
+		real43::
+			movss xmm3, real4 ptr[r10]
+			sub rsp, 4
+			jmp table3Done
+		real83::
+			movsd xmm3, real8 ptr[r10]
+			sub rsp, 8
+		table3Done:
 
 		add r10, 8
 		add r12, 1
@@ -138,15 +220,14 @@ vm_call_extern_asm PROC
 
 	startCall:
 	call r11
-	; Something here is stomping on where r12 and r13 were pushed to the stack
 
-	; Restore the stack
+	; Clean up the stack
+	add rsp, 28
+
+	; Restore the pushed registers
+	pop r14
 	pop r13
 	pop r12
-
-	; No need to clean up the stack of the called function - all procedures
-	; passed to this function should be declared __stdcall - i.e. the callee
-	; cleans the stack
 
 	leave
 	ret

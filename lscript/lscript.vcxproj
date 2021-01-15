@@ -124,7 +124,10 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalOptions>/LARGEADDRESSAWARE:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <MASM />
+    <MASM />
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -141,7 +144,9 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalOptions>/LARGEADDRESSAWARE:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <MASM />
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="internal\array.h" />

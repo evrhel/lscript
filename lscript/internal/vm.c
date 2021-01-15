@@ -44,7 +44,7 @@ static inline void store_return(env_t *env, data_t *dst, flags_t dstFlags)
 	case lb_int:
 	case lb_uint:
 	case lb_float:
-		dst->uivalue = env->lret;
+		dst->uivalue = env->dret;
 		break;
 	case lb_long:
 	case lb_ulong:
@@ -524,10 +524,10 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 
 	byte_t types[4] =
 	{
-		0,	// integer type
-		0,	// integer type
-		1,	// float type
-		2	// double type
+		lb_qword,
+		lb_qword,
+		lb_real4,
+		lb_real8
 	};
 
 	s.env = env;
@@ -827,7 +827,7 @@ int env_run(env_t *env, void *location)
 			break;
 		case lb_retl:
 			counter++;
-			env->lret = *(lword_t *)counter;
+			env->dret = *(dword_t *)counter;
 			return env_cleanup_call(env);
 			break;
 		case lb_retq:
@@ -894,9 +894,9 @@ int env_run(env_t *env, void *location)
 					cursor += 2;
 					counter += 2;
 					break;
-				case lb_lword:
+				case lb_dword:
 					counter++;
-					*((lword_t *)cursor) = *((lword_t *)counter);
+					*((dword_t *)cursor) = *((dword_t *)counter);
 					cursor += 4;
 					counter += 4;
 					break;
@@ -1036,9 +1036,9 @@ int env_run(env_t *env, void *location)
 					cursor += 2;
 					counter += 2;
 					break;
-				case lb_lword:
+				case lb_dword:
 					counter++;
-					*((lword_t *)cursor) = *((lword_t *)counter);
+					*((dword_t *)cursor) = *((dword_t *)counter);
 					cursor += 4;
 					counter += 4;
 					break;

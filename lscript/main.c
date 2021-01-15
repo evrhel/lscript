@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		printf("Function returned: %d\n", env->lret);
+		printf("Function returned: %d\n", env->dret);
 	}
 
 	for (int i = 0; i < arr->length; i++)
