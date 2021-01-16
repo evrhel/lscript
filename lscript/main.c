@@ -35,6 +35,9 @@ byte_t data[] =
 
 			lb_setv, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 'a', 'r', 'g', 's', '[', '0', ']', 0x00,
 
+			lb_static_call, 't', 'e', 's', 't', 'F', 'u', 'n', 'c', '(', 0x00,
+			lb_setr, 'a', 'r', 'g', 's', '[', '1', ']', 0x00,
+
 			lb_add, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00, lb_int, 0x10, 0x00, 0x00, 0x00,
 			lb_retv, 'v', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 0x00,
 
@@ -43,9 +46,9 @@ byte_t data[] =
 
 		lb_function, lb_dynamic, lb_interp, 'd', 'F', 'u', 'n', 'c', 0x00, 0x00,
 			lb_setl, 't', 'h', 'i', 's', '.', 'm', 'y', 'F', 'i', 'e', 'l', 'd', 0x00, 0x20, 0x00, 0x00, 0x00,
-			lb_retv, 't', 'h', 'i', 's', '.', 'm', 'y', 'F', 'i', 'e', 'l', 'd', 0x00
+			lb_retv, 't', 'h', 'i', 's', '.', 'm', 'y', 'F', 'i', 'e', 'l', 'd', 0x00,
 
-		//lb_function, lb_static, lb_native, 't', 'e', 's', 't', 0x00, 0x00
+		lb_function, lb_static, lb_native, 't', 'e', 's', 't', 'F', 'u', 'n', 'c', 0x00, 0x00
 };
 
 int main(int argc, char *argv[])

@@ -4,7 +4,10 @@
 #include <varargs.h>
 
 #define LEXPORT __declspec(dllexport)
-#define LFUNC __cdecl
+#define LCALL __cdecl
+
+#define LNIFUNC __declspec(dllexport)
+#define LNICALL __stdcall
 
 typedef void lvoid;
 typedef char lchar;
@@ -41,23 +44,23 @@ typedef void *LEnv;
 typedef void *lfield;
 typedef void *lfunction;
 
-LEXPORT LVM LFUNC ls_create_vm(int argc, const char *const argv[]);
-LEXPORT void LFUNC ls_destroy_vm(LVM vm);
+LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[]);
+LEXPORT void LCALL ls_destroy_vm(LVM vm);
 
-LEXPORT void LFUNC ls_add_to_classpath(const char *path);
+LEXPORT void LCALL ls_add_to_classpath(const char *path);
 
-LEXPORT lbool LFUNC ls_load_class_file(const char *filepath);
-LEXPORT lbool LFUNC ls_load_class_data(const char *data, luint datalen);
-LEXPORT lbool LFUNC ls_load_class_name(const lchar *classname);
+LEXPORT lbool LCALL ls_load_class_file(const char *filepath);
+LEXPORT lbool LCALL ls_load_class_data(const char *data, luint datalen);
+LEXPORT lbool LCALL ls_load_class_name(const lchar *classname);
 
-LEXPORT lclass LFUNC ls_class_for_name(const lchar *classname);
-LEXPORT lfield LFUNC ls_get_field(lclass clazz, const lchar *name);
-LEXPORT lfunction LFUNC ls_get_function(lclass clazz, const lchar *name, const lchar *sig);
+LEXPORT lclass LCALL ls_class_for_name(const lchar *classname);
+LEXPORT lfield LCALL ls_get_field(lclass clazz, const lchar *name);
+LEXPORT lfunction LCALL ls_get_function(lclass clazz, const lchar *name, const lchar *sig);
 
-LEXPORT lvoid LFUNC ls_call_void_function(lfunction function, lobject object, ...);
-LEXPORT lvoid LFUNC ls_call_void_functionv(lfunction function, lobject object, va_list list);
+LEXPORT lvoid LCALL ls_call_void_function(lfunction function, lobject object, ...);
+LEXPORT lvoid LCALL ls_call_void_functionv(lfunction function, lobject object, va_list list);
 
-LEXPORT lvoid LFUNC ls_call_static_void_function(lfunction function, lclass clazz, ...);
-LEXPORT lvoid LFUNC ls_call_static_void_functionv(lfunction function, lclass clazz, va_list list);
+LEXPORT lvoid LCALL ls_call_static_void_function(lfunction function, lclass clazz, ...);
+LEXPORT lvoid LCALL ls_call_static_void_functionv(lfunction function, lclass clazz, va_list list);
 
 #endif

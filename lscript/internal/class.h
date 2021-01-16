@@ -32,6 +32,7 @@ struct function_s
 	const char **args;
 	map_t *argTypes;
 	class_t *parentClass;
+	size_t argSize;
 };
 
 struct class_s

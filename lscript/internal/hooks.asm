@@ -1,12 +1,5 @@
 PUBLIC vm_call_extern_asm
 
-LB_BYTE equ B5h
-LB_WORD equ B6h
-LB_DWORD equ B7h
-LB_QWORD equ B8h
-LB_REAL4 equ B9h
-LB_REAL8 equ BAh
-
 .data
 	table0 dq byte0, word0, dword0, qword0, real40, real80
 	table1 dq byte1, word1, dword1, qword1, real41, real81
@@ -61,29 +54,34 @@ vm_call_extern_asm PROC
 		byte0::
 			mov rcx, qword ptr[r10]
 			sub rsp, 1
+			add r10, 1
 			jmp table0Done
 		word0::
 			mov rcx, qword ptr[r10]
 			sub rsp, 2
+			add r10, 2
 			jmp table0Done
 		dword0::
 			mov rcx, qword ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table0Done
 		qword0::
 			mov rcx, qword ptr[r10]
 			sub rsp, 8
+			add r10, 8
 			jmp table0Done
 		real40::
 			movss xmm0, real4 ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table0Done
 		real80::
 			movsd xmm0, real8 ptr[r10]
 			sub rsp, 8
+			add r10,4
 		table0Done:
 
-		add r10, 8
 		add r12, 1
 		sub rax, 1
 		test rax, rax
@@ -100,29 +98,34 @@ vm_call_extern_asm PROC
 		byte1::
 			mov rdx, qword ptr[r10]
 			sub rsp, 1
+			add r10, 1
 			jmp table1Done
 		word1::
 			mov rdx, qword ptr[r10]
 			sub rsp, 2
+			add r10, 2
 			jmp table1Done
 		dword1::
 			mov rdx, qword ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table1Done
 		qword1::
 			mov rdx, qword ptr[r10]
 			sub rsp, 8
+			add r10, 8
 			jmp table1Done
 		real41::
 			movss xmm1, real4 ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table1Done
 		real81::
 			movsd xmm1, real8 ptr[r10]
 			sub rsp, 8
+			add r10, 8
 		table1Done:
-		
-		add r10, 8
+
 		add r12, 1
 		sub rax, 1
 		test rax, rax
@@ -139,29 +142,34 @@ vm_call_extern_asm PROC
 		byte2::
 			mov r8, qword ptr[r10]
 			sub rsp, 1
+			add r10, 1
 			jmp table2Done
 		word2::
 			mov r8, qword ptr[r10]
 			sub rsp, 2
+			add r10, 2
 			jmp table2Done
 		dword2::
 			mov r8, qword ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table2Done
 		qword2::
 			mov r8, qword ptr[r10]
 			sub rsp, 8
+			add r10, 8
 			jmp table2Done
 		real42::
 			movss xmm2, real4 ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table2Done
 		real82::
 			movsd xmm2, real8 ptr[r10]
 			sub rsp, 8
+			add r10, 8
 		table2Done:
 
-		add r10, 8
 		add r12, 1
 		sub rax, 1
 		test rax, rax
@@ -180,29 +188,34 @@ vm_call_extern_asm PROC
 		byte3::
 			mov r9, qword ptr[r10]
 			sub rsp, 1
+			add r10, 1
 			jmp table3Done
 		word3::
 			mov r9, qword ptr[r10]
 			sub rsp, 2
+			add r10, 2
 			jmp table3Done
 		dword3::
 			mov r9, qword ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table3Done
 		qword3::
 			mov r9, qword ptr[r10]
 			sub rsp, 8
+			add r10, 8
 			jmp table3Done
 		real43::
 			movss xmm3, real4 ptr[r10]
 			sub rsp, 4
+			add r10, 4
 			jmp table3Done
 		real83::
 			movsd xmm3, real8 ptr[r10]
 			sub rsp, 8
+			add r10, 8
 		table3Done:
 
-		add r10, 8
 		add r12, 1
 		sub rax, 1
 		test rax, rax
@@ -213,7 +226,6 @@ vm_call_extern_asm PROC
 		pushLoop:
 			push qword ptr[r10]
 
-			add r10, 8
 			sub rax, 1
 			test rax, rax
 			jnz pushLoop

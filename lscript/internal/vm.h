@@ -28,7 +28,8 @@ enum
 	exception_field_not_found,
 	exception_null_dereference,
 	exception_bad_variable_name,
-	exception_bad_array_index
+	exception_bad_array_index,
+	exception_link_error
 };
 
 struct vm_s

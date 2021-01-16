@@ -171,6 +171,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 	list_t *argorderLast;
 	list_iterator_t *it;
 	size_t i;
+	size_t argSize;
 
 	const byte_t *curr = dataStart;
 	while (curr < dataEnd)
@@ -214,6 +215,8 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 			argorder = list_create();
 			argorderLast = argorder;
 
+			argSize = 0;
+
 			for (unsigned char i = 0; i < numArgs; i++)
 			{
 				argtype = *curr;
@@ -223,98 +226,122 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				case lb_chararray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lchararray) - sizeof(lchar);
 				case lb_char:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "C");
 					qualnamePtr++;
+					argSize += sizeof(lchar);
 					break;
 
 				case lb_uchararray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(luchararray) - sizeof(luchar);
 				case lb_uchar:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "c");
 					qualnamePtr++;
+					argSize += sizeof(luchar);
 					break;
 
 				case lb_shortarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lshortarray) - sizeof(lshort);
 				case lb_short:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "S");
 					qualnamePtr++;
+					argSize += sizeof(lshort);
 					break;
 
 				case lb_ushortarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lushortarray) - sizeof(lushort);
 				case lb_ushort:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "s");
 					qualnamePtr++;
+					argSize += sizeof(lushort);
 					break;
 
 				case lb_intarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lintarray) - sizeof(lint);
 				case lb_int:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "I");
 					qualnamePtr++;
+					argSize += sizeof(lint);
 					break;
 
 				case lb_uintarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(luintarray) - sizeof(luint);
 				case lb_uint:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "i");
 					qualnamePtr++;
+					argSize += sizeof(luint);
 					break;
 
 				case lb_longarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(llongarray) - sizeof(llong);
 				case lb_long:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "Q");
 					qualnamePtr++;
+					argSize += sizeof(llong);
 					break;
 
 				case lb_ulongarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lulongarray) - sizeof(lulong);
 				case lb_ulong:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "q");
 					qualnamePtr++;
+					argSize += sizeof(lulong);
 					break;
 
 				case lb_boolarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lboolarray) - sizeof(lbool);
 				case lb_bool:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "B");
 					qualnamePtr++;
+					argSize += sizeof(lbool);
 					break;
 
 				case lb_floatarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lfloatarray) - sizeof(lfloat);
 				case lb_float:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "F");
 					qualnamePtr++;
+					argSize += sizeof(lfloat);
 					break;
 
 				case lb_doublearray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(ldoublearray) - sizeof(ldouble);
 				case lb_double:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "D");
 					qualnamePtr++;
+					argSize += sizeof(ldouble);
 					break;
 
 				case lb_objectarray:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "[");
 					qualnamePtr++;
+					argSize += sizeof(lobjectarray) - sizeof(lobject);
 				case lb_object:
 					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "L%s;", ++curr);
 					qualnamePtr += strlen(qualnamePtr);
 					curr += strlen(qualnamePtr);
+					argSize += sizeof(lobject);
 					break;
 				}
 				argname = curr;
@@ -336,6 +363,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				func->numargs = numArgs;
 				func->parentClass = clazz;
 				func->flags = 0;
+				func->argSize = argSize;
 
 				if (isStatic)
 					func->flags |= FUNCTION_FLAG_STATIC;

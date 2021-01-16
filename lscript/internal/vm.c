@@ -25,7 +25,7 @@ static int try_link_function(vm_t *vm, function_t *func);
 /*
 Implemented in hooks.asm
 */
-extern int vm_call_extern_asm(size_t argCount, const byte_t *argTypes, const void *args, void *proc);
+extern qword_t __cdecl vm_call_extern_asm(size_t argCount, const byte_t *argTypes, const void *args, void *proc);
 
 static inline void store_return(env_t *env, data_t *dst, flags_t dstFlags)
 {
@@ -511,34 +511,54 @@ void __stdcall test_func_args2(env_t *env, class_t *clazz, const char *string)
 
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
-	// push the arg list to the stack
-	//hello_from_asm();
-
-	struct
-	{
-		env_t *env;
-		char *string;
-		float num;       int padding;
-		double num2;
-	} s;
-
-	byte_t types[4] =
-	{
-		lb_qword,
-		lb_qword,
-		lb_real4,
-		lb_real8
-	};
-
-	s.env = env;
-	s.string = "Test";
-	s.num = 23.0f;
-	s.num2 = 55.25;
-
-	vm_call_extern_asm(4, types, &s, test_func_args);
 	if (function->flags & FUNCTION_FLAG_NATIVE)
 	{
-		//vm_call_extern_asm(0, ls, function->location, env);
+		if (!function->location)
+		{
+			if (!try_link_function(env->vm, function))
+				return env->exception = exception_link_error;
+		}
+
+		void *args = MALLOC(function->argSize + (2 * sizeof(qword_t)));
+		if (!args)
+			return env->exception = exception_vm_error;
+		
+		void **temp = (void **)args;
+		temp[0] = env;
+		temp[1] = function->parentClass;
+		MEMCPY(temp + 2, ls, function->argSize);
+
+		byte_t *types = (byte_t *)MALLOC(sizeof(byte_t) * function->numargs + 2);
+		if (!types)
+		{
+			FREE(args);
+			return env->exception = exception_vm_error;
+		}
+		
+		types[0] = lb_qword;
+		types[1] = lb_qword;
+
+		if (function->numargs > 0)
+		{
+			map_iterator_t *mit = map_create_iterator(function->argTypes);
+			size_t i = 2;
+			flags_t flags;
+			while (mit->node)
+			{
+				flags = (flags_t)mit->value;
+				types[i] = TYPEOF(flags);
+				mit = map_iterator_next(mit);
+				i++;
+			}
+			map_iterator_free(mit);
+		}
+
+		env->qret = vm_call_extern_asm(function->numargs + 2, types, args, function->location);
+
+		FREE(types);
+		FREE(args);
+
+		return 0;
 	}
 	else
 	{
@@ -1268,8 +1288,6 @@ int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 int try_link_function(vm_t *vm, function_t *func)
 {
 #if defined(_WIN32)
-	char *temp = strchr(func->name, '(');
-	*temp = 0;
 	for (size_t i = 0; i < vm->libraryCount; i++)
 	{
 		HMODULE hModule = vm->hLibraries[i];
@@ -1277,13 +1295,9 @@ int try_link_function(vm_t *vm, function_t *func)
 		{
 			func->location = GetProcAddress(hModule, func->name);
 			if (func->location)
-			{
-				*temp = '(';
 				return 1;
-			}
 		}
 	}
-	*temp = '(';
 #else
 #endif
 	return 0;
