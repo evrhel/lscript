@@ -72,21 +72,7 @@ int main(int argc, char *argv[])
 {
 	BEGIN_DEBUG();
 
-
-
-	heap_t *hp = create_heap(KB_TO_B(4));
-	void *first, *second, *third, *fourth;
-	first = halloc(hp, 16);
-	memset(first, 0x66, 16);
-	second = halloc(hp, 20);
-	memset(second, 0x77, 20);
-	third = halloc(hp, 30);
-	memset(third, 0x88, 30);
-	fourth = halloc(hp, 12);
-	memset(fourth, 0x99, 12);
-
-
-	vm_t *vm = vm_create(KB_TO_B(4), 512);
+	vm_t *vm = vm_create(KB_TO_B(4), 1024);
 
 	byte_t *stringHeapData = MALLOC(sizeof(string_class));
 	if (!stringHeapData)

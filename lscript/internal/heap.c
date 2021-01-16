@@ -1,19 +1,26 @@
 #include "heap.h"
 
+#if defined(_WIN32)
+#include <Windows.h>
+#endif
+
 #include <memory.h>
 
 #include "mem_debug.h"
 
-#define WORD_SIZE sizeof(size_t)
+#define WORD_SIZE sizeof(tag_t)
 #define HEADER_SIZE WORD_SIZE
 #define FOOTER_SIZE WORD_SIZE
 
 #define SHEAP(heap) ((sheap_t*)heap)
 
-#define ALLOCATED_MASK ((size_t)0x1)
-#define PREC_ALLOCATED_MASK ((size_t)0x2)
-#define SIZE_MASK (~((size_t)0x3))
-#define FIELD_MASK ((size_t)0x3)
+#define ALLOCATED_MASK ((tag_t)0x1)
+#define PREC_ALLOCATED_MASK ((tag_t)0x2)
+#define SIZE_MASK (~((tag_t)0x3))
+#define FIELD_MASK ((tag_t)0x3)
+
+#define GET_BLOCK_SIZE(tag) ((tag_t)((tag)>>2))
+#define SET_BLOCK_SIZE(tagPtr, size) (*tagPtr=(((*tagPtr)&FIELD_MASK)+((size)<<2)))
 
 /*
 
@@ -28,158 +35,170 @@ HEADER
 
 */
 
+static void coalesce_block(heap_p heap, tag_t *header);
 
-typedef struct sheap_s sheap_t;
-struct sheap_s
+heap_p create_heap(size_t size)
 {
-	size_t *block;
-	size_t *ptr;
-	size_t *end;
-};
-
-static void coalesce_block(sheap_t *heap, size_t *header);
-
-heap_t create_heap(size_t size)
-{
-	sheap_t *sheap = (sheap_t *)MALLOC(sizeof(sheap_t));
-	if (!sheap)
+	heap_t *heap = (heap_t *)MALLOC(sizeof(heap_t));
+	if (!heap)
 		return NULL;
 	size_t adjSize = size + (size % WORD_SIZE);
 	const size_t fullSize = adjSize + HEADER_SIZE + FOOTER_SIZE;
-	sheap->block = (size_t *)MALLOC(fullSize);
-	if (!sheap->block)
+	heap->block = (size_t *)MALLOC(fullSize);
+	if (!heap->block)
 	{
-		FREE(sheap);
+		FREE(heap);
 		return NULL;
 	}
 #if defined(_DEBUG)
-	MEMSET(sheap->block, 0xab, fullSize);
+	MEMSET(heap->block, 0xab, fullSize);
 #endif
-	sheap->block[0] = fullSize << 2;
-	sheap->ptr = sheap->block;
-	sheap->end = sheap->block + (fullSize / WORD_SIZE);
-	*(sheap->end - 1) = fullSize << 2;
-	return sheap;
+	heap->block[0] = fullSize << 2;
+	heap->ptr = heap->block;
+	heap->end = heap->block + (fullSize / WORD_SIZE);
+	*(heap->end - 1) = fullSize << 2;
+	return heap;
 }
 
-void free_heap(heap_t heap)
+void free_heap(heap_p heap)
 {
-	sheap_t *sheap = SHEAP(heap);
-	FREE(sheap->block);
+	FREE(heap->block);
 	FREE(heap);
 }
 
-void *halloc(heap_t heap, size_t size)
+void *halloc(heap_p heap, size_t size)
 {
-	sheap_t *sheap = SHEAP(heap);
-	if (size == 0 || size >= ((sheap->end - sheap->block) * WORD_SIZE + HEADER_SIZE + FOOTER_SIZE))
+	// Make the size 8-byte aligned
+	size_t desiredSize;
+	if (size % WORD_SIZE)
+		desiredSize = ((size / 8) * 8) + WORD_SIZE + HEADER_SIZE + FOOTER_SIZE;
+	else
+		desiredSize = size + HEADER_SIZE + FOOTER_SIZE;
+
+	if (size == 0 || size >= ((heap->end - heap->block) * WORD_SIZE))
 		return NULL;
 
-	size_t desiredSize = size + (size % WORD_SIZE) + HEADER_SIZE + FOOTER_SIZE;
-
-	size_t *start = sheap->ptr;
+	tag_t *start = heap->ptr;
 	do
 	{
 
-		if (!(*sheap->ptr & ALLOCATED_MASK)) // Check if isAllocated bit is 0
+		if (!(*heap->ptr & ALLOCATED_MASK)) // Check if isAllocated bit is 0
 		{
-			size_t blockSize = *sheap->ptr >> 2;
-			if (desiredSize <= blockSize)
+			size_t freeBlockSize = GET_BLOCK_SIZE(*heap->ptr); // The size of the free block
+			if (desiredSize <= freeBlockSize)
 			{
-				size_t *freeBlockFooter = sheap->ptr + (blockSize / WORD_SIZE) - 1;
+				size_t *freeBlockFooter = heap->ptr + (freeBlockSize / WORD_SIZE) - 1;
 
-				*sheap->ptr = desiredSize << 2;
-				*sheap->ptr |= ALLOCATED_MASK;
+				//*sheap->ptr = desiredSize << 2;
+				SET_BLOCK_SIZE(heap->ptr, desiredSize);
+				*heap->ptr |= ALLOCATED_MASK;
 
 				// If preceding block is allocated, set the allocated bit
-				if (sheap->ptr != sheap->block && *(sheap->ptr - 1) & ALLOCATED_MASK)
-					*sheap->ptr |= PREC_ALLOCATED_MASK;
+				if (heap->ptr != heap->block && *(heap->ptr - 1) & ALLOCATED_MASK)
+					*heap->ptr |= PREC_ALLOCATED_MASK;
 
-				size_t newFreeSize = blockSize - desiredSize;
+				size_t newFreeSize = freeBlockSize - desiredSize;
 
-				size_t *nextHeader = sheap->ptr + (desiredSize / WORD_SIZE);
+				tag_t *nextHeader = heap->ptr + (desiredSize / WORD_SIZE);
 
-				if (nextHeader <= sheap->end)
+				if (nextHeader <= heap->end)
 				{
-					size_t *nextFooter = nextHeader + ((*nextHeader >> 2) / WORD_SIZE - 1);
+					//tag_t *nextFooter = nextHeader + (newFreeSize / WORD_SIZE) - 1;
 
 					// If we took up the entirety of the free block, the next block must be allocated
 					if (newFreeSize > 0)
 					{
-						size_t flags = (*freeBlockFooter & FIELD_MASK) | PREC_ALLOCATED_MASK;
-						size_t newFreeSize = blockSize - desiredSize;
-						*freeBlockFooter = (newFreeSize << 2) + flags;
+						tag_t flags = (*freeBlockFooter & FIELD_MASK) | PREC_ALLOCATED_MASK;
+						size_t newFreeSize = freeBlockSize - desiredSize;
+						*freeBlockFooter = flags;
+						SET_BLOCK_SIZE(freeBlockFooter, newFreeSize);
+						//*freeBlockFooter = (newFreeSize << 2) + flags;
 
 						*nextHeader = *freeBlockFooter;
 					}
-					else if (nextFooter <= sheap->end)
+					else if (freeBlockFooter <= heap->end)
 					{
 						// Set the preceding allocated block bit
 						*nextHeader |= PREC_ALLOCATED_MASK;
-						*nextFooter |= PREC_ALLOCATED_MASK;
+						*freeBlockFooter |= PREC_ALLOCATED_MASK;
 					}
 				}
 
 				// Set the footer to the value of the header
-				*(nextHeader - 1) = *sheap->ptr;
+				*(nextHeader - 1) = *heap->ptr;
 
-				size_t *resultPtr = sheap->ptr + 1;
-				sheap->ptr += desiredSize / 8;
-				if (sheap->ptr - 1 == sheap->end)
-					sheap->ptr = sheap->block;
+				tag_t *resultPtr = heap->ptr + 1;
+				heap->ptr += desiredSize / 8;
+				if (heap->ptr - 1 == heap->end)
+					heap->ptr = heap->block;
 
 #if defined(_DEBUG)
-				MEMSET(resultPtr, 0xdd, desiredSize - HEADER_SIZE - FOOTER_SIZE);
+				MEMSET(resultPtr, 0xcd, size);
 #endif
 				return resultPtr;
 			}
 		}
 
 		
-	} while (start != sheap->ptr);
+	} while (start != heap->ptr);
 
 	return NULL;
 }
 
-void hfree(heap_t heap, void *block)
+void hfree(heap_p heap, void *block)
 {
+	if (!block)
+		return;
 
-	sheap_t *sheap = SHEAP(heap);
+	tag_t *sBlock = (tag_t *)block;
 
-	size_t *sBlock = (size_t *)block;
-
-	if (sBlock <= sheap->block || sBlock >= sheap->end - 1)
+	if (sBlock <= heap->block || sBlock >= heap->end - 1)
 	{
 		// Invalid free pointer
+#if defined(_DEBUG) && defined(_WIN32)
+		MessageBoxA(NULL, "Free pointer is outside of heap range!", "Invalid free pointer", MB_OK);
+		RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
+#endif
 		return;
 	}
 
-	size_t *blockHeader = sBlock - 1;
+	tag_t *blockHeader = sBlock - 1;
 
 	size_t blockSize = *blockHeader >> 2;
 
-	size_t *blockFooter = blockHeader + (blockSize / WORD_SIZE) - 1;
+	tag_t *blockFooter = blockHeader + (blockSize / WORD_SIZE) - 1;
+
+#if defined(_DEBUG) && defined(_WIN32)
+	if (*blockFooter != *blockHeader)
+	{
+		MessageBoxA(NULL, "Heap corruption detected:\nheader != footer!", "Heap corruption", MB_OK | MB_ICONERROR);
+		RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
+		return;
+	}
+#endif
+
 	*blockHeader &= ~ALLOCATED_MASK;
 	*blockFooter = *blockHeader;
 
-	size_t *nextHeader = blockFooter + 1;
-	if (nextHeader < sheap->end)
+	tag_t *nextHeader = blockFooter + 1;
+	if (nextHeader < heap->end)
 	{
 		size_t nextSize = *nextHeader >> 2;
 		*nextHeader &= ~PREC_ALLOCATED_MASK;
-		size_t *nextFooter = nextHeader + (nextSize / WORD_SIZE) - 1;
+		tag_t *nextFooter = nextHeader + (nextSize / WORD_SIZE) - 1;
 		*nextFooter = *nextHeader;
 	}
 
-	coalesce_block(sheap, blockHeader);
+	coalesce_block(heap, blockHeader);
 }
 
-void coalesce_block(sheap_t *heap, size_t *header)
+void coalesce_block(heap_p heap, tag_t *header)
 {
 	if (!(*header & PREC_ALLOCATED_MASK) && header != heap->block)
 	{
-		size_t *prevFooter = header - 1;
-		size_t *newHeader = prevFooter - ((*prevFooter >> 2) / WORD_SIZE);
+		tag_t *prevFooter = header - 1;
+		size_t prevBlockSize = GET_BLOCK_SIZE(*prevFooter);
+		tag_t *newHeader = prevFooter - (prevBlockSize / WORD_SIZE) + 1;
 		if (heap->ptr == header)
 			heap->ptr = newHeader;
 		coalesce_block(heap, newHeader);
@@ -187,15 +206,17 @@ void coalesce_block(sheap_t *heap, size_t *header)
 	}
 
 	// Find the next allocated header
-	size_t *nextHeader = header + ((*header >> 2) / WORD_SIZE);
+	size_t blockSize = GET_BLOCK_SIZE(*header);
+	tag_t *nextHeader = header + (blockSize / WORD_SIZE);
 	while (nextHeader < heap->end && !(*nextHeader & ALLOCATED_MASK))
-		nextHeader += ((*nextHeader >> 2) / WORD_SIZE);
+		nextHeader += (GET_BLOCK_SIZE(*nextHeader) / WORD_SIZE);
 
 	size_t freeSize = (nextHeader - header) * WORD_SIZE;
-	size_t *footer = nextHeader - 1;
+	tag_t *footer = nextHeader - 1;
 
 	*header &= FIELD_MASK;
-	*header += freeSize << 2;
+	SET_BLOCK_SIZE(header, freeSize);
+	//*header += freeSize << 2;
 	*footer = *header;
 
 #if defined(_DEBUG)

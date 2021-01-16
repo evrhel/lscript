@@ -3,12 +3,22 @@
 
 #include <stdlib.h>
 
-typedef void *heap_t;
+typedef unsigned long long tag_t;
 
-heap_t create_heap(size_t size);
-void free_heap(heap_t heap);
+typedef struct heap_s heap_t;
+struct heap_s
+{
+	tag_t *block;
+	tag_t *ptr;
+	tag_t *end;
+};
 
-void *halloc(heap_t heap, size_t size);
-void hfree(heap_t heap, void *block);
+typedef heap_t *heap_p;
+
+heap_p create_heap(size_t size);
+void free_heap(heap_p heap);
+
+void *halloc(heap_p heap, size_t size);
+void hfree(heap_p heap, void *block);
 
 #endif

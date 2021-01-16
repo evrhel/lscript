@@ -8,7 +8,7 @@
 typedef struct manager_s manager_t;
 struct manager_s
 {
-	heap_t heap;
+	heap_p heap;
 	list_t *refs;
 };
 
