@@ -63,4 +63,6 @@ LEXPORT lvoid LCALL ls_call_void_functionv(lfunction function, lobject object, v
 LEXPORT lvoid LCALL ls_call_static_void_function(lfunction function, lclass clazz, ...);
 LEXPORT lvoid LCALL ls_call_static_void_functionv(lfunction function, lclass clazz, va_list list);
 
+LEXPORT luint LCALL ls_get_array_length(lobject array);
+
 #endif

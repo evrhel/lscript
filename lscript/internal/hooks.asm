@@ -43,7 +43,6 @@ vm_call_extern_asm PROC
 	
 	; First integer argument goes in rcx and floating point in xmm0
 		mov r13b, byte ptr[r12]
-		cmp r13b, 0
 
 		; Set the register and push the correct size onto the stack
 
@@ -90,7 +89,6 @@ vm_call_extern_asm PROC
 	; Second integer argument goes in rdx and floating point in xmm1
 
 		mov r13b, byte ptr[r12]
-		cmp r13b, 0
 
 		sub r13b, 0B5h
 		jmp table1[8 * r13]
@@ -134,7 +132,6 @@ vm_call_extern_asm PROC
 	; Third integer argument goes in r8 and floating point in xmm2
 
 		mov r13b, byte ptr[r12]
-		cmp r13b, 0
 
 		sub r13b, 0B5h
 		jmp table2[8 * r13]
@@ -180,7 +177,6 @@ vm_call_extern_asm PROC
 		mov r9, qword ptr[r10]
 
 		mov r13b, byte ptr[r12]
-		cmp r13b, 0
 
 		sub r13b, 0B5h
 		jmp table3[8 * r13]

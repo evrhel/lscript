@@ -338,9 +338,9 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 					qualnamePtr++;
 					argSize += sizeof(lobjectarray) - sizeof(lobject);
 				case lb_object:
-					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "L%s;", ++curr);
+					sprintf_s(qualnamePtr, BUFLEN(qualnamePtr, qualifiedName), "L%s;", curr);
 					qualnamePtr += strlen(qualnamePtr);
-					curr += strlen(qualnamePtr);
+					curr += strlen(curr) + 1;
 					argSize += sizeof(lobject);
 					break;
 				}

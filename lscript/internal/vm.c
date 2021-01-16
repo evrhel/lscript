@@ -545,8 +545,45 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 			flags_t flags;
 			while (mit->node)
 			{
-				flags = (flags_t)mit->value;
-				types[i] = TYPEOF(flags);
+				switch ((byte_t)mit->value)
+				{
+				case lb_char:
+				case lb_uchar:
+				case lb_bool:
+					types[i] = lb_byte;
+					break;
+				case lb_short:
+				case lb_ushort:
+					types[i] = lb_word;
+					break;
+				case lb_int:
+				case lb_uint:
+					types[i] = lb_dword;
+					break;
+				case lb_long:
+				case lb_ulong:
+				case lb_object:
+				case lb_boolarray:
+				case lb_chararray:
+				case lb_uchararray:
+				case lb_shortarray:
+				case lb_ushortarray:
+				case lb_intarray:
+				case lb_uintarray:
+				case lb_longarray:
+				case lb_ulongarray:
+				case lb_floatarray:
+				case lb_doublearray:
+				case lb_objectarray:
+					types[i] = lb_qword;
+					break;
+				case lb_float:
+					types[i] = lb_real4;
+					break;
+				case lb_double:
+					types[i] = lb_real8;
+					break;
+				}
 				mit = map_iterator_next(mit);
 				i++;
 			}
@@ -878,15 +915,7 @@ int env_run(env_t *env, void *location)
 			counter += strlen(name) + 1;
 			
 			callFuncArgs = NULL;
-			callFuncArgSize = 0;
-
-			mip = map_create_iterator(callFunc->argTypes);
-			while (mip->node)
-			{
-				callFuncArgSize += sizeof_type((byte_t)mip->value);
-				mip = map_iterator_next(mip);
-			}
-			map_iterator_free(mip);
+			callFuncArgSize = callFunc->argSize;
 
 			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
 			if (!callFuncArgs)
@@ -989,11 +1018,10 @@ int env_run(env_t *env, void *location)
 					case lb_doublearray:
 					case lb_objectarray:
 						*((lobject *)cursor) = data->ovalue;
+						counter += strlen(counter) + 1;
 						cursor += 8;
-						counter += 8;
 						break;
 					}
-					counter += strlen(counter) + 1;
 					break;
 				default:
 					FREE(callFuncArgs);
@@ -1002,6 +1030,7 @@ int env_run(env_t *env, void *location)
 				}
 
 				callArgPtr += sizeof_type(callArgType);
+				mip = map_iterator_next(mip);
 			}
 			map_iterator_free(mip);
 
@@ -1020,15 +1049,7 @@ int env_run(env_t *env, void *location)
 			object = data->ovalue;
 
 			callFuncArgs = NULL;
-			callFuncArgSize = 0;
-
-			mip = map_create_iterator(callFunc->argTypes);
-			while (mip->node)
-			{
-				callFuncArgSize += sizeof_type((byte_t)mip->value);
-				mip = map_iterator_next(mip);
-			}
-			map_iterator_free(mip);
+			callFuncArgSize = callFunc->argSize;
 
 			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
 			if (!callFuncArgs)
