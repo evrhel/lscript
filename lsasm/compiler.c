@@ -20,10 +20,11 @@ static line_t *format_document(const char *data, size_t datalen);
 static void free_formatted(line_t *first);
 static byte_t get_command_byte(const char *string);
 static char **tokenize_string(const char *string, size_t *tokenCount);
-static void free_tokenized_data(char **data, size_t tokenCount);
+static void free_tokenized_data(const char *const *data, size_t tokenCount);
 static size_t evaluate_constant(const char *string, data_t *data, byte_t *type);
 static size_t get_type_properties(byte_t primType, byte_t *type);
 static int is_valid_identifier(const char *string);
+static char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTokenCount);
 
 static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
@@ -115,6 +116,17 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	fread_s(buf, length, sizeof(char), length, in);
 	fclose(in);
 
+	buffer_t *obuf = new_buffer(256);
+	back = compile_data(buf, length, obuf, file, back);
+
+	compile_error_t *curr = back->front;
+	while (curr)
+	{
+		if (curr->type == error_error)
+			return back->front;
+		curr = curr->next;
+	}
+
 	size_t filenameSize = strlen(file) + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
 	char *nstr = (char *)malloc(filenameSize);
 	if (!nstr)
@@ -142,10 +154,6 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		fname[len++] = 'b';
 		fname[len] = 0;
 	}
-
-
-	buffer_t *obuf = new_buffer(256);
-	back = compile_data(buf, length, obuf, file, back);
 
 	FILE *out;
 	fopen_s(&out, nstr, "wb");
@@ -545,12 +553,15 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 		switch (c)
 		{
 		case ' ':
-			currstring = put_char(currstring, 0);
-			list = put_ulong(list, (size_t)currstring->buf);
-			(*tokenCount)++;
+			if (currstring->cursor > currstring->buf)
+			{
+				currstring = put_char(currstring, 0);
+				list = put_ulong(list, (size_t)currstring->buf);
+				(*tokenCount)++;
 
-			free(currstring);
-			currstring = new_buffer(32);
+				free(currstring);
+				currstring = new_buffer(32);
+			}
 			break;
 		default:
 			currstring = put_char(currstring, c);
@@ -728,6 +739,42 @@ int is_valid_identifier(const char *string)
 	return 0;
 }
 
+char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTokenCount)
+{
+	buffer_t *temp = new_buffer(64);
+	for (size_t i = 0; i < tokenCount; i++)
+	{
+		put_string(temp, tokens[i]);
+		temp->cursor--;
+		*(temp->cursor) = ' ';
+		temp->cursor++;
+	}
+	*(temp->cursor) = 0;
+
+	char *cursor = temp->buf;
+	while (cursor < temp->cursor)
+	{
+		switch (*cursor)
+		{
+		case '(':
+		case ')':
+		case ',':
+			*cursor = ' ';
+			break;
+		default:
+			break;
+		}
+
+		cursor++;
+	}
+
+	char **result = tokenize_string(temp->buf, newTokenCount);
+
+	free_buffer(temp);
+
+	return result;
+}
+
 compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
 	if (tokenCount < 2)
@@ -871,5 +918,103 @@ compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *ou
 
 compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
+	if (tokenCount < 4)
+	{
+		switch (tokenCount)
+		{
+		case 1:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function execution mode specifier");
+			break;
+		case 2:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function linkage mode specifier");
+			break;
+		case 3:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function name declaration");
+			break;
+		}
+		return back;
+	}
+
+	int isStatic, isInterp;
+	if (!strcmp(tokens[1], "static"))
+		isStatic = 1;
+	else if (!strcmp(tokens[1], "dynamic"))
+		isStatic = 0;
+	else
+		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token, expected \"static\" or \"dynamic\"");
+
+	if (!strcmp(tokens[2], "interp"))
+		isInterp = 1;
+	else if (!strcmp(tokens[2], "native"))
+		isInterp = 0;
+	else
+		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token, expected \"interp\" or \"native\"");
+
+	size_t functionTokenCount;
+	char **functionData = tokenize_function(tokens + 3, tokenCount - 3, &functionTokenCount);
+	buffer_t *build = new_buffer(64);
+
+	const char *name = functionData[0];
+	byte_t argCount = 0;
+
+	for (size_t i = 1; i < functionTokenCount; i++, argCount++)
+	{
+		byte_t type = get_command_byte(functionData[i]);
+		if (type < lb_char || type > lb_objectarray)
+		{
+			free_buffer(build);
+			return add_compile_error(back, srcFile, srcLine, error_error, "Illegal argument type");
+		}
+
+		const char *argName;
+
+		i++;
+		if (type == lb_object || type == lb_objectarray)
+		{
+			if (i == functionTokenCount)
+			{
+				free_buffer(build);
+				return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument object classname");
+			}
+
+			const char *classname = functionData[i];
+
+			i++;
+			if (i == functionTokenCount)
+			{
+				free_buffer(build);
+				return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument name");
+			}
+
+			argName = functionData[i];
+
+			put_byte(build, type);
+			put_string(build, classname);
+			put_string(build, argName);
+		}
+		else if (i == functionTokenCount)
+		{
+			free_buffer(build);
+			return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument name");
+		}
+		else
+		{
+			argName = functionData[i];
+
+			put_byte(build, type);
+			put_string(build, argName);
+		}
+	}
+
+	put_byte(out, lb_function);
+	put_byte(out, isStatic ? lb_static : lb_dynamic);
+	put_byte(out, isInterp ? lb_interp : lb_native);
+	put_string(out, name);
+	put_byte(out, argCount);
+	put_buf(out, build);
+
+	free_buffer(build);
+	free_tokenized_data(functionData, functionTokenCount);
+
 	return back;
 }
