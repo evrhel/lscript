@@ -5,12 +5,23 @@
 #include <internal/lb.h>
 #include <stdio.h>
 
+typedef struct line_s line_t;
+struct line_s
+{
+	char *line;
+	line_t *next;
+	int linenum;
+};
+
 static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *front);
-static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, compile_error_t *front);
-static char *format_document(const char *data, size_t datalen, size_t *newlen);
+static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *front);
+static line_t *format_document(const char *data, size_t datalen);
+static void free_formatted(line_t *first);
 static byte_t get_command_byte(const char *string);
 static char **tokenize_string(const char *string, size_t *tokenCount);
 static void free_tokenized_data(char **data, size_t tokenCount);
+
+static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *front);
 
 input_file_t *add_file(input_file_t *front, const char *filename)
 {
@@ -39,7 +50,7 @@ void free_file_list(input_file_t *front)
 	}
 }
 
-compile_error_t *add_compile_error(compile_error_t *front, const char *file, int line, int column, const char *desc, int type)
+compile_error_t *add_compile_error(compile_error_t *front, const char *file, int line, int type, const char *desc)
 {
 	compile_error_t *next = (compile_error_t *)malloc(sizeof(compile_error_t));
 	if (!next)
@@ -53,7 +64,6 @@ compile_error_t *add_compile_error(compile_error_t *front, const char *file, int
 		next->front = next;
 	next->file = file;
 	next->line = line;
-	next->column = column;
 	next->desc = desc;
 	next->type = type;
 	return next;
@@ -85,7 +95,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	FILE *in;
 	fopen_s(&in, file, "r");
 	if (!in)
-		return add_compile_error(front, file, 0, 0, "Failed to fopen for read", error_error);
+		return add_compile_error(front, file, 0, error_error, "Failed to fopen for read");
 	fseek(in, 0, SEEK_END);
 	long length = ftell(in);
 	fseek(in, 0, SEEK_SET);
@@ -93,7 +103,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	if (!buf)
 	{
 		fclose(in);
-		return add_compile_error(front, file, 0, 0, "Failed to allocate buffer", error_error);
+		return add_compile_error(front, file, 0, error_error, "Failed to allocate buffer");
 	}
 	fread_s(buf, length, sizeof(char), length, in);
 	fclose(in);
@@ -103,7 +113,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	if (!nstr)
 	{
 		free(buf);
-		return add_compile_error(front, file, 0, 0, "Failed to allocate buffer", error_error);
+		return add_compile_error(front, file, 0, error_error, "Failed to allocate buffer");
 	}
 	memcpy(nstr, file, filenameSize);
 	char *lastSep = strrchr(nstr, '\\');
@@ -147,24 +157,23 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	return front;
 }
 
-compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, compile_error_t *front)
+compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *front)
 {
-	size_t trimmedLength;
-	char *formmated = format_document(data, datalen, &trimmedLength);
+	line_t *formatted = format_document(data, datalen);
 
-	char *cursor = formmated;
-	const char *const end = formmated + trimmedLength;
-
-	while (cursor < end)
+	line_t *curr = formatted;
+	while (curr)
 	{
-		if (*cursor != ';')
+		char *line = curr->line;
+		if (*line != ';')
 		{
 			size_t tokenCount;
-			char **tokens = tokenize_string(cursor, &tokenCount);
+			char **tokens = tokenize_string(line, &tokenCount);
 			byte_t cmd = get_command_byte(tokens[0]);
 			switch (cmd)
 			{
 			case lb_class:
+				front = handle_class_def(tokens, tokenCount, out, srcFile, curr->linenum, front);
 				break;
 
 			case lb_global:
@@ -260,22 +269,27 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			free_tokenized_data(tokens, tokenCount);
 		}
 
-		cursor += strlen(cursor) + 1;
+		curr = curr->next;
 	}
 
-	free(formmated);
+	free_formatted(formatted);
 	return front;
 }
 
-char *format_document(const char *data, size_t datalen, size_t *newlen)
+line_t *format_document(const char *data, size_t datalen)
 {
 	const char *cursor = data;
 	const char *const end = data + datalen;
-	char *nbuf = (char *)malloc(datalen);
-	char *resultCursor = nbuf;
-	if (!nbuf)
+	line_t *front = (line_t *)malloc(sizeof(line_t));
+	if (!front)
 		return NULL;
+	line_t *prev = NULL;
+	line_t *curr = front;
+
+	buffer_t *linebuf = new_buffer(32);
+
 	int foundLineStart = 0;
+	int currline = 1;
 	while (cursor < end)
 	{
 		switch (*cursor)
@@ -286,9 +300,21 @@ char *format_document(const char *data, size_t datalen, size_t *newlen)
 		case '\n':
 			//cursor++; // for carriage return
 
+			currline++;
 			if (foundLineStart)
 			{
 				foundLineStart = 0;
+
+				put_char(linebuf, 0);
+				curr->line = linebuf->buf;
+				curr->linenum = currline;
+				curr->next = NULL;
+
+				if (prev)
+					prev->next = curr;
+				prev = curr;
+				curr = (line_t *)malloc(sizeof(line_t));
+
 				*resultCursor = 0;
 				resultCursor++;
 			}
@@ -311,7 +337,19 @@ char *format_document(const char *data, size_t datalen, size_t *newlen)
 		*resultCursor = 0;
 	}
 	*newlen = resultCursor - nbuf;
+
+	free(linebuf);
 	return nbuf;
+}
+
+void free_formatted(line_t *first)
+{
+	if (first)
+	{
+		free(first->line);
+		free_formatted(first);
+		free(first);
+	}
 }
 
 byte_t get_command_byte(const char *string)
@@ -486,4 +524,30 @@ void free_tokenized_data(char **data, size_t tokenCount)
 		}
 		free(data);
 	}
+}
+
+compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *front)
+{
+	if (tokenCount < 2)
+		return add_compile_error(front, srcFile, srcLine, error_error, "Expected token: [class name]");
+	
+	const char *classname = tokens[1];
+	put_byte(out, lb_class);
+	put_string(out, classname);
+	if (tokenCount > 2)
+	{
+		if (strcmp(tokens[2], "extends"))
+			return add_compile_error(front, srcFile, srcLine, error_error, "Unexpected token, \"extends\" expected.");
+
+		if (tokenCount == 3)
+			return add_compile_error(front, srcFile, srcLine, error_error, "Expected token: [superclass name]");
+		else if (tokenCount == 4)
+		{
+			put_byte(out, lb_extends);
+			put_string(out, tokens[3]);
+		}
+		else
+			return add_compile_error(front, srcFile, srcLine, error_warning, "")
+	}
+	return front;
 }

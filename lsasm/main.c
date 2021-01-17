@@ -129,7 +129,7 @@ void display_errors(compile_error_t *errors)
 			printf("[ERRO] ");
 			break;
 		}
-		printf("%s.%d.%d : %s\n", errors->file, errors->line, errors->column, errors->desc);
+		printf("%s.%d.%d : %s\n", errors->file, errors->line, errors->desc);
 		errors = errors->next;
 	}
 }

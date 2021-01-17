@@ -30,6 +30,11 @@ inline buffer_t *put_uchar(buffer_t *buf, unsigned char c)
 	return put_char(buf, (char)c);
 }
 
+inline buffer_t *put_byte(buffer_t *buf, byte_t b)
+{
+	return put_char(buf, (char)b);
+}
+
 inline buffer_t *put_ushort(buffer_t *buf, unsigned short s)
 {
 	return put_short(buf, (short)s);
