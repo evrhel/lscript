@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 	compile_error_t *errors = compile(files, outputDirectory);
 	if (errors)
 	{
-		display_errors(1);
+		display_errors(errors);
 		return RETURN_COMPILE_ERROR;
 	}
 
@@ -129,7 +129,7 @@ void display_errors(compile_error_t *errors)
 			printf("[ERRO] ");
 			break;
 		}
-		printf("%s.%d.%d : %s\n", errors->file, errors->line, errors->desc);
+		printf("%s.%d : %s\n", errors->file, errors->line, errors->desc);
 		errors = errors->next;
 	}
 }

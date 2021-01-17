@@ -2,14 +2,19 @@
 
 class Main extends Object
 	
-	global static varying int myGlobal
+	global static const int myNum dword[22]
+	global static varying uint myNum2 dword[19]
+
+	global dynamic varying int myField
+	global dynamic varying object myField2
+	global dynamic varying intarray array
 	
 	; main function
 	function static interp main(intarray args, object String str)
-		static_call putls(LString;) value(str)
+		static_call putls(LString;) str
 
 		int variable
-		setl variable dword[10]
+		setd variable dword[10]
 
 		object myObj
 		seto myObj new Main <init>()
@@ -23,7 +28,7 @@ class Main extends Object
 		retv variable
 
 	function static interp myFunc()
-		retl dword[17]
+		retd dword[17]
 
 	function dynamic interp <init>()
 		dynamic_call super.<init>()
@@ -31,3 +36,4 @@ class Main extends Object
 
 	function static native testFunc()
 	function static native putls(object String str)
+

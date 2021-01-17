@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
+#include <internal/types.h>
 
 typedef struct buffer_s buffer_t;
 struct buffer_s
