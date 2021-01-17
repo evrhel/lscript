@@ -5,6 +5,6 @@
 
 LNIFUNC lint LNICALL testFunc(LEnv, lclass);
 
-LNIFUNC void LNICALL _puts(LEnv, lclass, lobject);
+LNIFUNC void LNICALL putls(LEnv, lclass, lobject);
 
 #endif

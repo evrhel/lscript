@@ -44,10 +44,10 @@ enum
 
 	lb_setb = 0xa0,
 	lb_setw,
-	lb_setl,
-	lb_setq,
-	lb_setf,
 	lb_setd,
+	lb_setq,
+	lb_setr4,
+	lb_setr8,
 	lb_seto,
 	lb_setv,
 	lb_setr,
@@ -55,10 +55,10 @@ enum
 	lb_ret = 0xa9,
 	lb_retb,
 	lb_retw,
-	lb_retl,
-	lb_retq,
-	lb_retf,
 	lb_retd,
+	lb_retq,
+	lb_retr4,
+	lb_retr8,
 	lb_reto,
 	lb_retv,
 	lb_retr,
@@ -72,17 +72,19 @@ enum
 	lb_real4,
 	lb_real8,
 	lb_value,
+	lb_string,
 	lb_new,
 
-	lb_add = 0xbd,
+	lb_add = 0xbe,
 	lb_sub,
 	lb_mul,
 	lb_div,
 	lb_mod,
 
-	lb_if = 0xc2,
+	lb_if = 0xc3,
 	lb_elif,
-	lb_else
+	lb_else,
+	lb_end
 };
 
 #endif

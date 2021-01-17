@@ -406,18 +406,20 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 		case lb_retw:
 			curr += 3;
 			break;
-		case lb_setl:
-		case lb_retl:
+		case lb_setd:
+		case lb_retd:
 			curr += 5;
 			break;
 		case lb_setq:
 		case lb_retq:
 			curr += 9;
 			break;
-		case lb_setf:
+		case lb_setr4:
+		case lb_retr4:
 			curr += 5;
 			break;
-		case lb_setd:
+		case lb_setr8:
+		case lb_retr8:
 			curr += 9;
 			break;
 		case lb_add:

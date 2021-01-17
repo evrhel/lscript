@@ -1,0 +1,33 @@
+
+
+class Main extends Object
+	
+	global static varying int myGlobal
+	
+	; main function
+	function static interp main(intarray args, object String str)
+		static_call putls(LString;) value(str)
+
+		int variable
+		setl variable dword[10]
+
+		object myObj
+		seto myObj new Main <init>()
+		dynamic_call myObject.dFunc()
+		setr args[3]
+
+		static_call myFunc()
+		setr args[1]
+
+		add variable variable int[16]
+		retv variable
+
+	function static interp myFunc()
+		retl dword[17]
+
+	function dynamic interp <init>()
+		dynamic_call super.<init>()
+		ret
+
+	function static native testFunc()
+	function static native putls(object String str)
