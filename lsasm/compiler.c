@@ -34,6 +34,8 @@ static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffe
 static compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
 input_file_t *add_file(input_file_t *back, const char *filename)
 {
@@ -271,18 +273,14 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 				break;
 
 			case lb_static_call:
-				break;
 			case lb_dynamic_call:
+				back = handle_call_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 
 			case lb_add:
-				break;
 			case lb_sub:
-				break;
 			case lb_mul:
-				break;
 			case lb_div:
-				break;
 			case lb_mod:
 				break;
 			case lb_end:
@@ -1179,7 +1177,56 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 			for (size_t i = 0; i < argc; i++)
 			{
+				const char *argstr = tokens[4 + i];
 
+				byte_t reqArgType;
+				size_t reqArgSize = get_type_properties(sig[i], &reqArgType);
+
+				data_t argData;
+				byte_t argType;
+				size_t argSize = evaluate_constant(argstr, &argData, &argType);
+
+				if (argSize)
+				{
+					put_byte(argbuf, lb_value);
+					put_string(argbuf, argstr);
+				}
+				else
+				{
+					if (reqArgSize != argSize)
+					{
+						free_buffer(argbuf);
+						return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
+					}
+
+					if (reqArgType != argType)
+						back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
+
+					put_byte(argbuf, reqArgType);
+					switch (reqArgType)
+					{
+					case lb_byte:
+						put_char(argbuf, argData.cvalue);
+						break;
+					case lb_word:
+						put_short(argbuf, argData.svalue);
+						break;
+					case lb_dword:
+						put_short(argbuf, argData.ivalue);
+						break;
+					case lb_qword:
+						put_long(argbuf, argData.lvalue);
+						break;
+					case lb_real4:
+						put_float(argbuf, argData.fvalue);
+						break;
+					case lb_real8:
+						put_double(argbuf, argData.dvalue);
+						break;
+					default:
+						break;
+					}
+				}
 			}
 
 			free_derived_args(sig);
@@ -1239,5 +1286,31 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
+	switch (cmd)
+	{
+	case lb_ret:
+	case lb_retr:
+		break;
+	case lb_retv:
+		break;
+	case lb_retb:
+	case lb_retw:
+	case lb_retd:
+	case lb_retq:
+	case lb_retr4:
+	case lb_retr8:
+		break;
+	}
 	return back;
 }
+
+compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	return back;
+}
+
+compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	return back;
+}
+

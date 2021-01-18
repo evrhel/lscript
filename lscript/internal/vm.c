@@ -812,7 +812,7 @@ int env_run(env_t *env, void *location)
 			break;
 		case lb_setw:
 			break;
-		case lb_setl:
+		case lb_setd:
 			counter++;
 			name = counter;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -823,9 +823,9 @@ int env_run(env_t *env, void *location)
 			break;
 		case lb_setq:
 			break;
-		case lb_setf:
+		case lb_setr4:
 			break;
-		case lb_setd:
+		case lb_setr8:
 			break;
 		case lb_seto:
 			counter++;
@@ -882,16 +882,16 @@ int env_run(env_t *env, void *location)
 			break;
 		case lb_retw:
 			break;
-		case lb_retl:
+		case lb_retd:
 			counter++;
 			env->dret = *(dword_t *)counter;
 			return env_cleanup_call(env);
 			break;
 		case lb_retq:
 			break;
-		case lb_retf:
+		case lb_retr4:
 			break;
-		case lb_retd:
+		case lb_retr8:
 			break;
 		case lb_reto:
 			break;
