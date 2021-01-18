@@ -20,7 +20,7 @@ class Main extends Object
 		seto myObj new Main <init>()
 		dynamic_call myObject.dFunc()
 		setr args[3]
-
+		
 		static_call myFunc()
 		setr args[1]
 

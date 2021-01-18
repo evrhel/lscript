@@ -23,12 +23,17 @@ static char **tokenize_string(const char *string, size_t *tokenCount);
 static void free_tokenized_data(const char *const *data, size_t tokenCount);
 static size_t evaluate_constant(const char *string, data_t *data, byte_t *type);
 static size_t get_type_properties(byte_t primType, byte_t *type);
+static size_t get_type_width(byte_t type);
 static int is_valid_identifier(const char *string);
 static char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTokenCount);
+static byte_t *derive_function_args(const char *functionSig, size_t *argc);
+static void free_derived_args(byte_t *args);
 
 static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
 input_file_t *add_file(input_file_t *back, const char *filename)
 {
@@ -119,12 +124,15 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	buffer_t *obuf = new_buffer(256);
 	back = compile_data(buf, length, obuf, file, back);
 
-	compile_error_t *curr = back->front;
-	while (curr)
+	if (back)
 	{
-		if (curr->type == error_error)
-			return back->front;
-		curr = curr->next;
+		compile_error_t *curr = back->front;
+		while (curr)
+		{
+			if (curr->type == error_error)
+				return back->front;
+			curr = curr->next;
+		}
 	}
 
 	size_t filenameSize = strlen(file) + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
@@ -180,7 +188,7 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 	while (curr)
 	{
 		char *line = curr->line;
-		if (*line != ';')
+		if (*line != '#')
 		{
 			size_t tokenCount;
 			char **tokens = tokenize_string(line, &tokenCount);
@@ -238,43 +246,28 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 				break;
 
 			case lb_setb:
-				break;
 			case lb_setw:
-				break;
 			case lb_setd:
-				break;
 			case lb_setq:
-				break;
 			case lb_setr4:
-				break;
 			case lb_setr8:
-				break;
 			case lb_seto:
-				break;
 			case lb_setv:
-				break;
 			case lb_setr:
+				back = handle_set_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 
 			case lb_ret:
-				break;
 			case lb_retb:
-				break;
 			case lb_retw:
-				break;
 			case lb_retd:
-				break;
 			case lb_retq:
-				break;
 			case lb_retr4:
-				break;
 			case lb_retr8:
-				break;
 			case lb_reto:
-				break;
 			case lb_retv:
-				break;
 			case lb_retr:
+				back = handle_ret_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 
 			case lb_static_call:
@@ -612,20 +605,20 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type)
 		if (!strcmp(mString, "true"))
 		{
 			data->bvalue = 1;
-			*type = lb_word;
-			return 1;
+			*type = lb_byte;
+			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "false"))
 		{
 			data->bvalue = 0;
-			*type = lb_word;
-			return 1;
+			*type = lb_byte;
+			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "null"))
 		{
 			data->ovalue = NULL;
 			*type = lb_qword;
-			return 1;
+			return sizeof(qword_t);
 		}
 
 		return 0;
@@ -641,37 +634,37 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type)
 	{
 		*type = lb_byte;
 		data->cvalue = (lchar)atoll(dataStart);
-		size = 1;
+		size = sizeof(byte_t);
 	}
 	else if (!strcmp(mString, "word"))
 	{
 		*type = lb_word;
 		data->svalue = (lshort)atoll(dataStart);
-		size = 2;
+		size = sizeof(word_t);
 	}
 	else if (!strcmp(mString, "dword"))
 	{
 		*type = lb_dword;
 		data->ivalue = (lint)atoll(dataStart);
-		size = 4;
+		size = sizeof(dword_t);
 	}
 	else if (!strcmp(mString, "qword"))
 	{
 		*type = lb_qword;
 		data->lvalue = (llong)atoll(dataStart);
-		size = 8;
+		size = sizeof(qword_t);
 	}
 	else if (!strcmp(mString, "real4"))
 	{
 		*type = lb_real4;
 		data->fvalue = (lfloat)atof(dataStart);
-		size = 4;
+		size = sizeof(real4_t);
 	}
 	else if (!strcmp(mString, "real8"))
 	{
 		*type = lb_real8;
 		data->dvalue = (ldouble)atof(dataStart);
-		size = 8;
+		size = sizeof(real8_t);
 	}
 	else
 		return 0;
@@ -734,6 +727,34 @@ size_t get_type_properties(byte_t primType, byte_t *type)
 	return 0;
 }
 
+size_t get_type_width(byte_t type)
+{
+	switch (type)
+	{
+	case lb_byte:
+		return sizeof(byte_t);
+		break;
+	case lb_word:
+		return sizeof(word_t);
+		break;
+	case lb_dword:
+		return sizeof(dword_t);
+		break;
+	case lb_qword:
+		return sizeof(qword_t);
+		break;
+	case lb_real4:
+		return sizeof(real4_t);
+		break;
+	case lb_real8:
+		return sizeof(real8_t);
+		break;
+	default:
+		return 0;
+		break;
+	}
+}
+
 int is_valid_identifier(const char *string)
 {
 	return 0;
@@ -773,6 +794,97 @@ char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTokenCount
 	free_buffer(temp);
 
 	return result;
+}
+
+byte_t *derive_function_args(const char *functionSig, size_t *argc)
+{
+	buffer_t *buf = new_buffer(16);
+	*argc = 0;
+
+	while (*functionSig && *functionSig != '(')
+		functionSig++;
+
+	if (!(*functionSig))
+	{
+		free_buffer(buf);
+		return NULL;
+	}
+
+	int isArray = 0;
+	while (*functionSig && *functionSig != ')')
+	{
+		switch (*functionSig)
+		{
+		case 'C':
+			put_byte(buf, isArray ? lb_chararray : lb_char);
+			break;
+		case 'c':
+			put_byte(buf, isArray ? lb_uchararray : lb_uchar);
+			break;
+		case 'S':
+			put_byte(buf, isArray ? lb_shortarray : lb_short);
+			break;
+		case 's':
+			put_byte(buf, isArray ? lb_ushortarray : lb_ushort);
+			break;
+		case 'I':
+			put_byte(buf, isArray ? lb_intarray : lb_int);
+			break;
+		case 'i':
+			put_byte(buf, isArray ? lb_uintarray : lb_uint);
+			break;
+		case 'Q':
+			put_byte(buf, isArray ? lb_longarray : lb_long);
+			break;
+		case 'q':
+			put_byte(buf, isArray ? lb_ulongarray : lb_ulong);
+			break;
+		case 'B':
+			put_byte(buf, isArray ? lb_boolarray : lb_bool);
+			break;
+		case 'F':
+			put_byte(buf, isArray ? lb_floatarray : lb_float);
+			break;
+		case 'D':
+			put_byte(buf, isArray ? lb_doublearray : lb_double);
+			break;
+		case 'L':
+			put_byte(buf, isArray ? lb_objectarray : lb_object);
+			while (*functionSig && *functionSig != ';' && *functionSig != ')')
+				functionSig++;
+			if (!(*functionSig))
+			{
+				free_buffer(buf);
+				return NULL;
+			}
+			else if (*functionSig == ')')
+			{
+				free_buffer(buf);
+				return NULL;
+			}
+			break;
+		case '[':
+			isArray = 1;
+			functionSig++;
+			continue;
+			break;
+		default:
+			free_buffer(buf);
+			return NULL;
+			break;
+		}
+		isArray = 0;
+		functionSig++;
+	}
+
+	byte_t *result = (byte_t *)buf->buf;
+	free(buf);
+	return result;
+}
+
+void free_derived_args(byte_t *args)
+{
+	free(args);
 }
 
 compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
@@ -1016,5 +1128,116 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 	free_buffer(build);
 	free_tokenized_data(functionData, functionTokenCount);
 
+	return back;
+}
+
+compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	if (tokenCount < 3)
+	{
+		switch (tokenCount)
+		{
+		case 1:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
+			break;
+		case 2:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expeceted value");
+			break;
+		}
+		return back;
+	}
+
+	const char *varname = tokens[1];
+	int myWidth;
+	byte_t myType;
+	data_t setData;
+	byte_t setType;
+	size_t setWidth;
+
+	switch (cmd)
+	{
+	case lb_setv:
+		put_byte(out, lb_setv);
+		put_string(out, varname);
+		put_string(out, tokens[2]);
+		break;
+	case lb_seto:
+		if (!strcmp(tokens[2], "new"))
+		{
+			if (tokenCount < 4)
+				return add_compile_error(back, srcFile, srcLine, error_error, "Expected instantiated class name");
+			else if (tokenCount < 5)
+				return add_compile_error(back, srcFile, srcLine, error_error, "Expected constructor call");
+
+			const char *classname = tokens[3];
+			const char *constructorSig = tokens[4];
+
+			buffer_t *argbuf = new_buffer(16);
+
+			size_t argc;
+			byte_t *sig = derive_function_args(constructorSig, &argc);
+
+			for (size_t i = 0; i < argc; i++)
+			{
+
+			}
+
+			free_derived_args(sig);
+
+			free_buffer(argbuf);
+		}
+		else
+		{
+
+		}
+		break;
+	case lb_setr:
+		put_byte(out, lb_setr);
+		put_string(out, varname);
+		break;
+	default:
+		myType = cmd + (lb_byte - lb_setb);
+		myWidth = get_type_width(myType);
+		setWidth = evaluate_constant(tokens[2], &setData, &setType);
+
+		if (myWidth != setWidth)
+			return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
+
+		if (myType != setType)
+			back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
+
+		put_byte(out, cmd);
+		put_string(out, varname);
+
+		switch (myType)
+		{
+		case lb_byte:
+			put_byte(out, setData.cvalue);
+			break;
+		case lb_word:
+			put_byte(out, setData.svalue);
+			break;
+		case lb_dword:
+			put_byte(out, setData.ivalue);
+			break;
+		case lb_qword:
+			put_byte(out, setData.lvalue);
+			break;
+		case lb_real4:
+			put_byte(out, setData.fvalue);
+			break;
+		case lb_real8:
+			put_byte(out, setData.dvalue);
+			break;
+		}
+
+		break;
+	}
+
+	return back;
+}
+
+compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
 	return back;
 }
