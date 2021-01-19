@@ -21,7 +21,7 @@ static void free_formatted(line_t *first);
 static byte_t get_command_byte(const char *string);
 static char **tokenize_string(const char *string, size_t *tokenCount);
 static void free_tokenized_data(const char *const *data, size_t tokenCount);
-static size_t evaluate_constant(const char *string, data_t *data, byte_t *type);
+static size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *isAbsoluteType);
 static size_t get_type_properties(byte_t primType, byte_t *type);
 static size_t get_type_width(byte_t type);
 static int is_valid_identifier(const char *string);
@@ -282,6 +282,7 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_mul:
 			case lb_div:
 			case lb_mod:
+				back = handle_math_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 			case lb_end:
 				break;
@@ -594,7 +595,7 @@ void free_tokenized_data(char **data, size_t tokenCount)
 	}
 }
 
-size_t evaluate_constant(const char *string, data_t *data, byte_t *type)
+size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *isAbsoluteType)
 {
 	char *mString = (char *)string;
 	char *lBracket = strchr(mString, '[');
@@ -602,18 +603,21 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type)
 	{
 		if (!strcmp(mString, "true"))
 		{
+			*isAbsoluteType = 0;
 			data->bvalue = 1;
 			*type = lb_byte;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "false"))
 		{
+			*isAbsoluteType = 0;
 			data->bvalue = 0;
 			*type = lb_byte;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "null"))
 		{
+			*isAbsoluteType = 0;
 			data->ovalue = NULL;
 			*type = lb_qword;
 			return sizeof(qword_t);
@@ -630,39 +634,131 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type)
 	int size;
 	if (!strcmp(mString, "byte"))
 	{
+		*isAbsoluteType = 0;
 		*type = lb_byte;
 		data->cvalue = (lchar)atoll(dataStart);
 		size = sizeof(byte_t);
 	}
 	else if (!strcmp(mString, "word"))
 	{
+		*isAbsoluteType = 0;
 		*type = lb_word;
 		data->svalue = (lshort)atoll(dataStart);
 		size = sizeof(word_t);
 	}
 	else if (!strcmp(mString, "dword"))
 	{
+		*isAbsoluteType = 0;
 		*type = lb_dword;
 		data->ivalue = (lint)atoll(dataStart);
 		size = sizeof(dword_t);
 	}
 	else if (!strcmp(mString, "qword"))
 	{
+		*isAbsoluteType = 0;
 		*type = lb_qword;
 		data->lvalue = (llong)atoll(dataStart);
 		size = sizeof(qword_t);
 	}
 	else if (!strcmp(mString, "real4"))
 	{
+		*isAbsoluteType = 0;
 		*type = lb_real4;
 		data->fvalue = (lfloat)atof(dataStart);
 		size = sizeof(real4_t);
 	}
 	else if (!strcmp(mString, "real8"))
 	{
+		*isAbsoluteType = 0;
 		*type = lb_real8;
 		data->dvalue = (ldouble)atof(dataStart);
 		size = sizeof(real8_t);
+	}
+	else if (!strcmp(mString, "bool"))
+	{
+		if (!strcmp(dataStart, "true"))
+		{
+			data->cvalue = 1;
+		}
+		else if (!strcmp(dataStart, "false"))
+		{
+			data->cvalue = 0;
+		}
+		else
+			return 0;
+		*isAbsoluteType = 1;
+		*type = lb_bool;
+		size = sizeof(byte_t);
+	}
+	else if (!strcmp(mString, "char"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_char;
+		data->cvalue = (lchar)atoll(dataStart);
+		size = sizeof(lchar);
+	}
+	else if (!strcmp(mString, "uchar"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_uchar;
+		data->ucvalue = (luchar)atoll(dataStart);
+		size = sizeof(luchar);
+	}
+	else if (!strcmp(mString, "short"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_short;
+		data->svalue = (lshort)atoll(dataStart);
+		size = sizeof(lshort);
+	}
+	else if (!strcmp(mString, "ushort"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_ushort;
+		data->usvalue = (lushort)atoll(dataStart);
+		size = sizeof(lushort);
+	}
+	else if (!strcmp(mString, "int"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_int;
+		data->ivalue = (lushort)atoll(dataStart);
+		size = sizeof(lint);
+	}
+	else if (!strcmp(mString, "uint"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_uint;
+		data->uivalue = (luint)atoll(dataStart);
+		size = sizeof(luint);
+	}
+	else if (!strcmp(mString, "long"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_long;
+		data->lvalue = (llong)atoll(dataStart);
+		size = sizeof(llong);
+	}
+	else if (!strcmp(mString, "ulong"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_ulong;
+		data->ulvalue = (lulong)atoll(dataStart);
+		size = sizeof(lulong);
+	}
+	else if (!strcmp(mString, "float"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_float;
+		data->fvalue = (lfloat)atof(dataStart);
+		size = sizeof(lfloat);
+	}
+	else if (!strcmp(mString, "double"))
+	{
+		*isAbsoluteType = 1;
+		*type = lb_double;
+		data->dvalue = (ldouble)atof(dataStart);
+		size = sizeof(ldouble);
 	}
 	else
 		return 0;
@@ -965,7 +1061,8 @@ compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *ou
 	{
 		data_t data;
 		byte_t type;
-		int initSize = evaluate_constant(tokens[5], &data, &type);
+		int isAbsolute;
+		int initSize = evaluate_constant(tokens[5], &data, &type, &isAbsolute);
 
 		if (!initSize)
 			return add_compile_error(back, srcFile, srcLine, error_error, "Initialization of globals to variables is not supported");
@@ -1131,19 +1228,8 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 
 compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
-	if (tokenCount < 3)
-	{
-		switch (tokenCount)
-		{
-		case 1:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
-			break;
-		case 2:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expeceted value");
-			break;
-		}
-		return back;
-	}
+	if (tokenCount < 2)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
 
 	const char *varname = tokens[1];
 	int myWidth;
@@ -1151,6 +1237,10 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	data_t setData;
 	byte_t setType;
 	size_t setWidth;
+	int setIsAbsolute;
+
+	if (cmd != lb_setr && tokenCount < 3)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Expeceted value");
 
 	switch (cmd)
 	{
@@ -1184,7 +1274,8 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 				data_t argData;
 				byte_t argType;
-				size_t argSize = evaluate_constant(argstr, &argData, &argType);
+				int argIsAbsolute;
+				size_t argSize = evaluate_constant(argstr, &argData, &argType, &argIsAbsolute);
 
 				if (argSize)
 				{
@@ -1245,7 +1336,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	default:
 		myType = cmd + (lb_byte - lb_setb);
 		myWidth = get_type_width(myType);
-		setWidth = evaluate_constant(tokens[2], &setData, &setType);
+		setWidth = evaluate_constant(tokens[2], &setData, &setType, &setIsAbsolute);
 
 		if (myWidth != setWidth)
 			return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
@@ -1311,6 +1402,78 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 
 compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
+	if (tokenCount < 4)
+	{
+		switch (tokenCount)
+		{
+		case 1:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected destination variable name");
+			break;
+		case 2:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected source variable name");
+			break;
+		case 3:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected operation argument");
+			break;
+		}
+		return back;
+	}
+
+	const char *dstVar = tokens[1];
+	const char *srcVar = tokens[2];
+
+	data_t argData;
+	byte_t argType;
+	int argIsAbsolute;
+	size_t argSize = evaluate_constant(tokens[3], &argData, &argType, &argIsAbsolute);
+
+	if (!argIsAbsolute)
+	{
+		return add_compile_error(back, srcFile, srcLine, error_error, "Arithmetic operation requires absolute type");
+	}
+
+	put_byte(out, cmd);
+	put_string(out, dstVar);
+	put_string(out, srcVar);
+
+	if (argSize == 0)
+	{
+		const char *srcVar2 = tokens[3];
+		put_byte(out, lb_value);
+		put_string(out, srcVar2);
+	}
+	else
+	{
+		put_byte(out, argType);
+
+		byte_t type;
+		get_type_properties(argType, &type);
+		switch (type)
+		{
+		case lb_byte:
+			put_char(out, argData.cvalue);
+			break;
+		case lb_word:
+			put_short(out, argData.svalue);
+			break;
+		case lb_dword:
+			put_int(out, argData.ivalue);
+			break;
+		case lb_qword:
+			put_long(out, argData.lvalue);
+			break;
+		case lb_real4:
+			put_float(out, argData.fvalue);
+			break;
+		case lb_real8:
+			put_double(out, argData.dvalue);
+			break;
+		}
+	}
+
+	if (tokenCount > 4)
+		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following arithmetic operation");
+
 	return back;
 }
 
