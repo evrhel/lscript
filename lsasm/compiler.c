@@ -14,8 +14,8 @@ struct line_s
 	int linenum;
 };
 
-static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back);
-static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back);
+static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version);
+static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version);
 static line_t *format_document(const char *data, size_t datalen);
 static void free_formatted(line_t *first);
 static byte_t get_command_byte(const char *string);
@@ -94,18 +94,22 @@ void free_compile_error_list(compile_error_t *front)
 	}
 }
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory)
+compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version)
 {
 	compile_error_t *errors = NULL;
+
+	if (version != 1)
+		return add_compile_error(errors, "", 0, error_error, "Unsupported compile standard.");
+
 	while (files)
 	{
-		errors = compile_file(files->filename, outputDirectory, errors);
+		errors = compile_file(files->filename, outputDirectory, errors, version);
 		files = files->next;
 	}
 	return errors;
 }
 
-compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back)
+compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back, unsigned int version)
 {
 	FILE *in;
 	fopen_s(&in, file, "rb");
@@ -124,7 +128,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	fclose(in);
 
 	buffer_t *obuf = new_buffer(256);
-	back = compile_data(buf, length, obuf, file, back);
+	back = compile_data(buf, length, obuf, file, back, version);
 
 	if (back)
 	{
@@ -173,6 +177,8 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		free(nstr);
 		return add_compile_error(back, file, 0, 0, "Failed to fopen for write", error_error);
 	}
+	fputc(0, out);
+	fwrite(&version, sizeof(unsigned int), 1, out);
 	fwrite(obuf->buf, sizeof(char), (size_t)(obuf->cursor - obuf->buf), out);
 
 	fclose(out);
@@ -182,7 +188,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	return back ? back->front : NULL;
 }
 
-compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back)
+compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version)
 {
 	line_t *formatted = format_document(data, datalen);
 
@@ -1324,10 +1330,12 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 			free_buffer(argbuf);
 		}
-		else
+		else if (!strcmp(tokens[1], "null"))
 		{
-
+			put_byte(out, lb_null);
 		}
+		else
+			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token; expected \"new\" or \"null\"");
 		break;
 	case lb_setr:
 		put_byte(out, lb_setr);
@@ -1397,6 +1405,60 @@ compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
+	if (tokenCount < 2)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Expected function name");
+
+	const char *functionName = tokens[1];
+
+	buffer_t *argBuffer = new_buffer(32);
+	
+	for (size_t i = 2; i < tokenCount; i++)
+	{
+		data_t argData;
+		byte_t argType;
+		int isAbsoluteType;
+		size_t argSize = evaluate_constant(tokens[i], &argData, &argType, &isAbsoluteType);
+
+		if (argSize == 0)
+		{
+			put_byte(argBuffer, lb_value);
+			put_string(argBuffer, tokens[i]);
+			continue;
+		}
+
+		if (isAbsoluteType)
+			get_type_properties(argType, &argType);
+
+		put_byte(argBuffer, argType);
+		switch (argType)
+		{
+		case lb_byte:
+			put_char(argBuffer, argData.cvalue);
+			break;
+		case lb_word:
+			put_short(argBuffer, argData.svalue);
+			break;
+		case lb_dword:
+			put_int(argBuffer, argData.ivalue);
+			break;
+		case lb_qword:
+			put_long(argBuffer, argData.lvalue);
+			break;
+		case lb_real4:
+			put_float(argBuffer, argData.fvalue);
+			break;
+		case lb_real8:
+			put_double(argBuffer, argData.dvalue);
+			break;
+		}
+	}
+
+	put_byte(out, cmd);
+	put_string(out, functionName);
+	put_buf(out, argBuffer);
+
+	free_buffer(argBuffer);
+
 	return back;
 }
 

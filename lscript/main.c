@@ -22,11 +22,10 @@ byte_t string_class[] =
 	0x01,
 	0x01, 0x00, 0x00, 0x00,
 
-	lb_class, 'S', 't', 'r', 'i', 'n', 'g', 0x00, lb_extends, 'O', 'b', 'j', 'e', 'c', 't', 0x00,
+	lb_class, 'S', 't', 'r', 'i', 'n', 'g', 0x00,
 		lb_global, 'd', 'a', 't', 'a', 0x00, lb_dynamic, lb_varying, 0x00, 0x00, 0x00, 0x00, 0x00, lb_chararray,
 
 		lb_function, lb_dynamic, lb_interp, '<', 'i', 'n', 'i', 't', '>', 0x00, 0x00,
-			lb_dynamic_call, 's', 'u', 'p', 'e', 'r', '.', '<', 'i', 'n', 'i', 't', '>', '(', 0x00,
 			lb_ret
 };
 
@@ -37,7 +36,7 @@ byte_t data[] =
 	0x01, 0x00, 0x00, 0x00,
 
 	// Code
-	lb_class, 'M', 'a', 'i', 'n', 0x00, lb_extends, 'O', 'b', 'j', 'e', 'c', 't', 0x00,
+	lb_class, 'M', 'a', 'i', 'n', 0x00,
 		lb_global, 'm', 'y', 'N', 'u', 'm', 0x00, lb_static, lb_const, 0x00, 0x00, 0x00, 0x00, 0x00, lb_uint, 0x16, 0x00, 0x00, 0x00,
 		lb_global, 'm', 'y', 'N', 'u', 'm', '2', 0x00, lb_static, lb_varying, 0x00, 0x00, 0x00, 0x00, 0x00, lb_uint, 0x13, 0x00, 0x00, 0x00,
 
@@ -73,7 +72,6 @@ byte_t data[] =
 
 
 		lb_function, lb_dynamic, lb_interp, '<', 'i', 'n', 'i', 't', '>', 0x00, 0x00,
-			lb_dynamic_call, 's', 'u', 'p', 'e', 'r', '.', '<', 'i', 'n', 'i', 't', '>', '(', 0x00,
 			lb_ret,
 
 		lb_function, lb_dynamic, lb_interp, 'd', 'F', 'u', 'n', 'c', 0x00, 0x00,

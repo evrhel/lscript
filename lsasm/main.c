@@ -1,6 +1,8 @@
 #include <internal/lb.h>
 
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include "compiler.h"
 
@@ -19,6 +21,7 @@ int main(int argc, char *argv[])
 {
 	input_file_t *files = NULL;
 	const char *outputDirectory = ".";
+	unsigned int version = 1;
 	for (int i = 1; i < argc; i++)
 	{
 		if (equals_ignore_case(argv[i], "-h"))
@@ -51,13 +54,23 @@ int main(int argc, char *argv[])
 			}
 			outputDirectory = argv[i];
 		}
+		else if (equals_ignore_case(argv[i], "-s"))
+		{
+			i++;
+			if (i == argc)
+			{
+				display_help();
+				return RETURN_INVALID_ARGUMENT;
+			}
+			version = atoi(argv[i]);
+		}
 		else
 		{
 			printf("Invalid argument \"%s\"", argv[i]);
 		}
 	}
 
-	compile_error_t *errors = compile(files, outputDirectory);
+	compile_error_t *errors = compile(files, outputDirectory, version);
 	if (errors)
 	{
 		display_errors(errors);
@@ -98,7 +111,8 @@ void display_help()
 	printf("-f [filename]  Specifies a file to compile. More than one may be specified, but\n");
 	printf("               the files must be separated in different flags.\n");
 	printf("-o [directory] Optionally specifies an output directory. The default is the\n");
-	printf("               current working directory.\n\n");
+	printf("               current working directory.\n");
+	printf("-s [version]   Sets the bytecode version to compile to. Default is 1.\n\n");
 	printf("Application return codes:\n");
 	printf("0x00   Normal\n");
 	printf("0x01   Invalid command format\n");

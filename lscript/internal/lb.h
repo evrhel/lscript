@@ -4,6 +4,7 @@
 enum
 {
 	lb_noop = 0x00,
+	lb_null = 0x00,
 
 	lb_class = 0x01,
 	lb_extends,

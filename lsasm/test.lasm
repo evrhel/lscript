@@ -18,6 +18,7 @@ class Main extends Object
 
 		object myObj
 		seto myObj new Main <init>()
+		dynamic_call myObject.<init>()
 		dynamic_call myObject.dFunc()
 		setr args[3]
 		
@@ -31,7 +32,6 @@ class Main extends Object
 		retd dword[17]
 
 	function dynamic interp <init>()
-		dynamic_call super.<init>()
 		ret
 
 	function static native testFunc()

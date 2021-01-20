@@ -32,6 +32,6 @@ void free_file_list(input_file_t *list);
 compile_error_t *add_compile_error(compile_error_t *back, const char *file, int line, int type, const char *desc);
 void free_compile_error_list(compile_error_t *front);
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory);
+compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version);
 
 #endif
