@@ -1358,22 +1358,22 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 		switch (myType)
 		{
 		case lb_byte:
-			put_byte(out, setData.cvalue);
+			put_char(out, setData.cvalue);
 			break;
 		case lb_word:
-			put_byte(out, setData.svalue);
+			put_short(out, setData.svalue);
 			break;
 		case lb_dword:
-			put_byte(out, setData.ivalue);
+			put_int(out, setData.ivalue);
 			break;
 		case lb_qword:
-			put_byte(out, setData.lvalue);
+			put_long(out, setData.lvalue);
 			break;
 		case lb_real4:
-			put_byte(out, setData.fvalue);
+			put_float(out, setData.fvalue);
 			break;
 		case lb_real8:
-			put_byte(out, setData.dvalue);
+			put_double(out, setData.dvalue);
 			break;
 		}
 
@@ -1408,7 +1408,7 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	if (tokenCount < 2)
 		return add_compile_error(back, srcFile, srcLine, error_error, "Expected function name");
 
-	const char *functionName = tokens[1];
+	char *functionName = tokens[1];
 
 	buffer_t *argBuffer = new_buffer(32);
 	
@@ -1453,9 +1453,14 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 		}
 	}
 
+	size_t length = strlen(functionName);
+	functionName[length - 1] = 0;
+
 	put_byte(out, cmd);
 	put_string(out, functionName);
 	put_buf(out, argBuffer);
+
+	functionName[length - 1] = ')';
 
 	free_buffer(argBuffer);
 

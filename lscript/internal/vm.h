@@ -64,6 +64,8 @@ struct env_s
 		word_t wret;
 		dword_t dret;
 		qword_t qret;
+		real4_t r4ret;
+		real8_t r8ret;
 		void *vret;
 	};
 };

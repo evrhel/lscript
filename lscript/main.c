@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 	MEMCPY(&array->data, "hello", array->length);
 	object_set_object(object, "data", array);
 
-	byte_t *heapData = MALLOC(sizeof(data));
+	/*byte_t *heapData = MALLOC(sizeof(data));
 	if (!heapData)
 	{
 		vm_free(vm);
@@ -126,7 +126,9 @@ int main(int argc, char *argv[])
 	{
 		printf("Failed to load class!\n");
 		return 2;
-	}
+	}*/
+
+	class_t *clazz = vm_load_class(vm, "..\\lsasm\\test.lb");
 
 	env_t *env = env_create(vm);
 

@@ -139,7 +139,7 @@ class_t *vm_load_class(vm_t *vm, const char *filename)
 {
 	FILE *file;
 
-	fopen_s(&file, filename, "r");
+	fopen_s(&file, filename, "rb");
 	if (!file)
 		return NULL;
 
@@ -809,8 +809,22 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_setb:
+			counter++;
+			name = counter;
+			if (!env_resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			MEMCPY(data, counter, sizeof(byte_t));
+			counter += sizeof(byte_t);
 			break;
 		case lb_setw:
+			counter++;
+			name = counter;
+			if (!env_resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			MEMCPY(data, counter, sizeof(word_t));
+			counter += sizeof(word_t);
 			break;
 		case lb_setd:
 			counter++;
@@ -818,14 +832,35 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				return env->exception;
 			counter += strlen(name) + 1;
-			MEMCPY(data, counter, sizeof(lint));
-			counter += sizeof(lint);
+			MEMCPY(data, counter, sizeof(dword_t));
+			counter += sizeof(dword_t);
 			break;
 		case lb_setq:
+			counter++;
+			name = counter;
+			if (!env_resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			MEMCPY(data, counter, sizeof(qword_t));
+			counter += sizeof(qword_t);
 			break;
 		case lb_setr4:
+			counter++;
+			name = counter;
+			if (!env_resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			MEMCPY(data, counter, sizeof(real4_t));
+			counter += sizeof(real4_t);
 			break;
 		case lb_setr8:
+			counter++;
+			name = counter;
+			if (!env_resolve_variable(env, name, &data, &flags))
+				return env->exception;
+			counter += strlen(name) + 1;
+			MEMCPY(data, counter, sizeof(real8_t));
+			counter += sizeof(real8_t);
 			break;
 		case lb_seto:
 			counter++;
@@ -842,12 +877,26 @@ int env_run(env_t *env, void *location)
 				if (!clazz)
 					return env->exception = exception_class_not_found;
 				counter += strlen(name2) + 1;
+				if (!env_resolve_function_name(env, (const char *)counter, &callFunc))
+					return env->exception = exception_function_not_found;
+				counter += strlen((const char *)counter) + 1;
 				object = manager_alloc_object(env->vm->manager, clazz);
 				if (!object)
 					return env->exception = exception_out_of_memory;
+				if (env_run_func(env, callFunc, object))
+					return env->exception;
 				data->ovalue = object;
 				break;
 			case lb_value:
+				counter++;
+				name2 = (const char *)counter;
+				if (!env_resolve_variable(env, name2, &data2, &flags2))
+					return env->exception;
+				counter += strlen(name2);
+				data->ovalue = data2->ovalue;
+				break;
+			case lb_null:
+				data->ovalue = NULL;
 				break;
 			default:
 				return env->exception = exception_bad_command;
@@ -879,8 +928,14 @@ int env_run(env_t *env, void *location)
 			return env_cleanup_call(env);
 			break;
 		case lb_retb:
+			counter++;
+			env->bret = *(byte_t *)counter;
+			return env_cleanup_call(env);
 			break;
 		case lb_retw:
+			counter++;
+			env->wret = *(word_t *)counter;
+			return env_cleanup_call(env);
 			break;
 		case lb_retd:
 			counter++;
@@ -888,10 +943,19 @@ int env_run(env_t *env, void *location)
 			return env_cleanup_call(env);
 			break;
 		case lb_retq:
+			counter++;
+			env->qret = *(qword_t *)counter;
+			return env_cleanup_call(env);
 			break;
 		case lb_retr4:
+			counter++;
+			env->r4ret = *(real4_t *)counter;
+			return env_cleanup_call(env);
 			break;
 		case lb_retr8:
+			counter++;
+			env->r8ret = *(real8_t *)counter;
+			return env_cleanup_call(env);
 			break;
 		case lb_reto:
 			break;

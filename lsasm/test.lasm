@@ -1,6 +1,6 @@
 
 
-class Main extends Object
+class Main
 	
 	global static const int myNum dword[22]
 	global static varying uint myNum2 dword[19]
@@ -18,8 +18,7 @@ class Main extends Object
 
 		object myObj
 		seto myObj new Main <init>()
-		dynamic_call myObject.<init>()
-		dynamic_call myObject.dFunc()
+		dynamic_call myObj.myFunc()
 		setr args[3]
 		
 		static_call myFunc()
