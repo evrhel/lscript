@@ -30,7 +30,7 @@ class Main
 	function static interp myFunc()
 		retd dword[17]
 
-	function dynamic interp <init>()
+	function static interp <init>()
 		ret
 
 	function static native testFunc()

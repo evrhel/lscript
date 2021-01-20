@@ -1253,6 +1253,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	case lb_setv:
 		put_byte(out, lb_setv);
 		put_string(out, varname);
+		put_byte(out, lb_value);
 		put_string(out, tokens[2]);
 		break;
 	case lb_seto:
@@ -1263,8 +1264,8 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 			else if (tokenCount < 5)
 				return add_compile_error(back, srcFile, srcLine, error_error, "Expected constructor call");
 
-			const char *classname = tokens[3];
-			const char *constructorSig = tokens[4];
+			char *classname = tokens[3];
+			char *constructorSig = tokens[4];
 
 			buffer_t *argbuf = new_buffer(16);
 
@@ -1326,6 +1327,18 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 				}
 			}
 
+			size_t sigend = strlen(constructorSig) - 1;
+			constructorSig[sigend] = 0;
+
+			put_byte(out, lb_seto);
+			put_string(out, varname);
+			put_byte(out, lb_new);
+			put_string(out, classname);
+			put_string(out, constructorSig);
+			put_buf(out, argbuf);
+
+			constructorSig[sigend] = ')';
+
 			free_derived_args(sig);
 
 			free_buffer(argbuf);
@@ -1354,6 +1367,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 		put_byte(out, cmd);
 		put_string(out, varname);
+		//put_byte(out, myType);
 
 		switch (myType)
 		{
