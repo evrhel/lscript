@@ -895,6 +895,10 @@ int env_run(env_t *env, void *location)
 				counter += strlen(name2);
 				data->ovalue = data2->ovalue;
 				break;
+			case lb_string:
+				counter++;
+				
+				break;
 			case lb_null:
 				data->ovalue = NULL;
 				break;

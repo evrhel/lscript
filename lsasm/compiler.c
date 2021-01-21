@@ -1399,21 +1399,95 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
+	size_t valueRetDesSize;
+	byte_t valueRetDesType;
 	switch (cmd)
 	{
 	case lb_ret:
 	case lb_retr:
+		put_byte(out, cmd);
 		if (tokenCount > 1)
-			back = add_compile_error(back, srcFile, srcLine, error_warning, "");
+			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
 		break;
 	case lb_retv:
+		if (tokenCount < 2)
+			return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
+
+		put_byte(out, lb_retv);
+		put_string(out, tokens[1]);
+
+		if (tokenCount > 2)
+			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
 		break;
 	case lb_retb:
+		valueRetDesSize = sizeof(byte_t);
+		valueRetDesType = lb_byte;
+		goto handleValueRet;
 	case lb_retw:
+		valueRetDesSize = sizeof(word_t);
+		valueRetDesType = lb_word;
+		goto handleValueRet;
 	case lb_retd:
+		valueRetDesSize = sizeof(dword_t);
+		valueRetDesType = lb_dword;
+		goto handleValueRet;
 	case lb_retq:
+		valueRetDesSize = sizeof(qword_t);
+		valueRetDesType = lb_qword;
+		goto handleValueRet;
 	case lb_retr4:
+		valueRetDesSize = sizeof(real4_t);
+		valueRetDesType = lb_real4;
+		goto handleValueRet;
 	case lb_retr8:
+		valueRetDesSize = sizeof(real8_t);
+		valueRetDesType = lb_real8;
+
+		handleValueRet:
+		if (tokenCount < 2)
+			return add_compile_error(back, srcFile, srcLine, error_error, "Expected constant");
+		else
+		{
+			data_t retData;
+			byte_t retType;
+			int retIsAbsoluteType;
+			size_t retSize = evaluate_constant(tokens[1], &retData, &retType, &retIsAbsoluteType);
+			if (retIsAbsoluteType)
+				return add_compile_error(back, srcFile, srcLine, error_error, "Absolute type specifier not supported on return statement");
+
+			if (retSize != valueRetDesSize)
+				return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
+
+			if (retType != valueRetDesType)
+				back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
+
+			put_byte(out, cmd);
+			switch (retType)
+			{
+			case lb_byte:
+				put_char(out, retData.cvalue);
+				break;
+			case lb_word:
+				put_short(out, retData.svalue);
+				break;
+			case lb_dword:
+				put_int(out, retData.ivalue);
+				break;
+			case lb_qword:
+				put_long(out, retData.lvalue);
+				break;
+			case lb_real4:
+				put_float(out, retData.fvalue);
+				break;
+			case lb_real8:
+				put_double(out, retData.dvalue);
+				break;
+			}
+		}
+
+		if (tokenCount > 2)
+			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
+
 		break;
 	}
 	return back;
