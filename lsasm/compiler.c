@@ -1403,6 +1403,8 @@ compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	{
 	case lb_ret:
 	case lb_retr:
+		if (tokenCount > 1)
+			back = add_compile_error(back, srcFile, srcLine, error_warning, "");
 		break;
 	case lb_retv:
 		break;
