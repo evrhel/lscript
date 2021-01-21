@@ -14,7 +14,7 @@ class Main
 		static_call putls(LString;) str
 
 		object myString
-		seto myString string "Hello World\n"
+		seto myString "Hello World\n"
 		static_call putls(LString;) myString
 
 		int variable
@@ -34,7 +34,7 @@ class Main
 	function static interp myFunc()
 		retd dword[17]
 
-	function static interp <init>()
+	function dynamic interp <init>()
 		ret
 
 	function static native testFunc()

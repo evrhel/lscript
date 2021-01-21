@@ -595,7 +595,7 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		FREE(types);
 		FREE(args);
 
-		return 0;
+		return env->exception;
 	}
 	else
 	{
@@ -731,6 +731,8 @@ int env_run(env_t *env, void *location)
 	byte_t valueType;			// A byte to store the type of some value
 	object_t *object;			// A pointer to an object_t used for holding some object
 	class_t *clazz;				// A pointer to a class_t used for holding some class
+	array_t *array;				// A pointer to an array_t used for holding some array
+	size_t length;				// An arbitrary value for storing a length
 
 	while (1)
 	{
@@ -877,7 +879,8 @@ int env_run(env_t *env, void *location)
 				if (!clazz)
 					return env->exception = exception_class_not_found;
 				counter += strlen(name2) + 1;
-				if (!env_resolve_function_name(env, (const char *)counter, &callFunc))
+				callFunc = class_get_function(clazz, "<init>(");
+				if (!callFunc)
 					return env->exception = exception_function_not_found;
 				counter += strlen((const char *)counter) + 1;
 				object = manager_alloc_object(env->vm->manager, clazz);
@@ -892,12 +895,30 @@ int env_run(env_t *env, void *location)
 				name2 = (const char *)counter;
 				if (!env_resolve_variable(env, name2, &data2, &flags2))
 					return env->exception;
-				counter += strlen(name2);
+				counter += strlen(name2) + 1;
 				data->ovalue = data2->ovalue;
 				break;
 			case lb_string:
 				counter++;
-				
+				clazz = vm_get_class(env->vm, "String");
+				if (!clazz)
+					return env->exception = exception_class_not_found;
+				name2 = counter;
+				callFunc = class_get_function(clazz, "<init>([C");
+				if (!callFunc)
+					return env->exception = exception_function_not_found;
+				object = manager_alloc_object(env->vm->manager, clazz);
+				if (!object)
+					return env->exception = exception_out_of_memory;
+				length = strlen(counter);
+				array = manager_alloc_array(env->vm->manager, lb_chararray, length);
+				if (!array)
+					return env->exception = exception_out_of_memory;
+				MEMCPY(&array->data, counter, length);
+				counter += length + 1;
+				if (env_run_func(env, callFunc, object, array))
+					return env->exception;
+				data->ovalue = object;
 				break;
 			case lb_null:
 				data->ovalue = NULL;

@@ -28,7 +28,8 @@ byte_t string_class[] =
 		lb_function, lb_static, lb_interp, '<', 'i', 'n', 'i', 't', '>', 0x00, 0x00,
 			lb_ret,
 
-		lb_function, lb_static, lb_interp, '<', 'i', 'n', 'i', 't', '>', 0x00, 0x01, lb_chararray,
+		lb_function, lb_static, lb_interp, '<', 'i', 'n', 'i', 't', '>', 0x00, 0x01, lb_chararray, 'c', 'h', 'a', 'r', 's', 0x00,
+			lb_seto, 't', 'h', 'i', 's', '.', 'd', 'a', 't', 'a', 0x00, lb_value, 'c', 'h', 'a', 'r', 's', 0x00,
 			lb_ret
 };
 

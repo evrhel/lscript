@@ -6,6 +6,8 @@
 #include <internal/lb.h>
 #include <stdio.h>
 
+#define SIG_STRING_CHAR ((char)0x01)
+
 typedef struct line_s line_t;
 struct line_s
 {
@@ -545,20 +547,97 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 	*tokenCount = 0;
 
 	buffer_t *currstring = new_buffer(32);
+
+	int inDoubleQuotes = 0;
+	int inEscape = 0;
 	while (*string)
 	{
 		char c = *string;
 		switch (c)
 		{
-		case ' ':
-			if (currstring->cursor > currstring->buf)
+		case '\"':
+			if (inEscape)
 			{
-				currstring = put_char(currstring, 0);
-				list = put_ulong(list, (size_t)currstring->buf);
-				(*tokenCount)++;
+				inEscape = 0;
+				put_char(currstring, 0);
+			}
+			else
+			{
+				if (!inDoubleQuotes)
+					put_char(currstring, SIG_STRING_CHAR);
+				inDoubleQuotes = !inDoubleQuotes;
+			}
+			break;
+		case '\\':
+			if (inDoubleQuotes)
+			{
+				if (inEscape)
+					put_char(currstring, 0);
+				inEscape = !inEscape;
+			}
+			else
+				put_char(currstring, c);
+			break;
+		case 'n':
+			if (inDoubleQuotes)
+			{
+				if (inEscape)
+					put_char(currstring, '\n');
+				else
+					put_char(currstring, 'n');
+			}
+			else
+				put_char(currstring, 'n');
+			break;
+		case 'r':
+			if (inDoubleQuotes)
+			{
+				if (inEscape)
+					put_char(currstring, '\r');
+				else
+					put_char(currstring, 'r');
+			}
+			else
+				put_char(currstring, 'r');
+			break;
+		case 't':
+			if (inDoubleQuotes)
+			{
+				if (inEscape)
+					put_char(currstring, '\t');
+				else
+					put_char(currstring, 't');
+			}
+			else
+				put_char(currstring, 't');
+			break;
+		case '0':
+			if (inDoubleQuotes)
+			{
+				if (inEscape)
+					put_char(currstring, '\0');
+				else
+					put_char(currstring, '0');
+			}
+			else
+				put_char(currstring, '0');
+			break;
+		case ' ':
+			if (inDoubleQuotes)
+			{
+				put_char(currstring, ' ');
+			}
+			else
+			{
+				if (currstring->cursor > currstring->buf)
+				{
+					currstring = put_char(currstring, 0);
+					list = put_ulong(list, (size_t)currstring->buf);
+					(*tokenCount)++;
 
-				free(currstring);
-				currstring = new_buffer(32);
+					free(currstring);
+					currstring = new_buffer(32);
+				}
 			}
 			break;
 		default:
@@ -1343,12 +1422,28 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 			free_buffer(argbuf);
 		}
-		else if (!strcmp(tokens[1], "null"))
+		else if (!strcmp(tokens[2], "null"))
 		{
+			put_byte(out, lb_seto);
+			put_string(out, varname);
 			put_byte(out, lb_null);
 		}
+		else if (tokens[2][0] == SIG_STRING_CHAR)
+		{
+			put_byte(out, lb_seto);
+			put_string(out, varname);
+			put_byte(out, lb_string);
+			put_string(out, tokens[2] + 1);
+		}
 		else
-			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token; expected \"new\" or \"null\"");
+		{
+			put_byte(out, lb_seto);
+			put_string(out, varname);
+			put_byte(out, lb_value);
+			put_string(out, tokens[2]);
+		}
+		//else
+		//	return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token; expected \"new\" or \"null\"");
 		break;
 	case lb_setr:
 		put_byte(out, lb_setr);
