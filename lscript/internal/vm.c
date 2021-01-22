@@ -112,11 +112,34 @@ vm_t *vm_create(size_t heapSize, size_t stackSize)
 
 	vm->stackSize = stackSize;
 
+	vm->paths = list_create();
+	if (!vm->paths)
+	{
+		manager_free(vm->manager);
+		list_free(vm->envs, 0);
+		map_free(vm->classes, 0);
+		FREE(vm);
+		return NULL;
+	}
+	char current[] = ".\\";
+	vm->paths->data = MALLOC(sizeof(current));
+	if (!vm->paths->data)
+	{
+		list_free(vm->paths, 0);
+		manager_free(vm->manager);
+		list_free(vm->envs, 0);
+		map_free(vm->classes, 0);
+		FREE(vm);
+		return NULL;
+	}
+	MEMCPY(vm->paths->data, current, sizeof(current));
+
 	vm->libraryCount = 4;
 #if defined(_WIN32)
 	vm->hLibraries = (HMODULE *)CALLOC(vm->libraryCount, sizeof(HMODULE));
 	if (!vm->hLibraries)
 	{
+		list_free(vm->paths, 1);
 		manager_free(vm->manager);
 		list_free(vm->envs, 0);
 		map_free(vm->classes, 0);
@@ -135,7 +158,62 @@ class_t *vm_get_class(vm_t *vm, const char *classname)
 	return (class_t *)map_at(vm->classes, classname);
 }
 
-class_t *vm_load_class(vm_t *vm, const char *filename)
+class_t *vm_load_class(vm_t *vm, const char *classname)
+{
+	class_t *result;
+	if (result = vm_get_class(vm, classname))
+		return result;
+
+	size_t classnameSize = strlen(classname) + 1;
+	char *tempName = (char *)MALLOC(classnameSize);
+	if (!tempName)
+		return NULL;
+	MEMCPY(tempName, classname, classnameSize);
+
+	char *cursor = tempName;
+	while (*cursor)
+	{
+		if (*cursor == '.')
+			*cursor = '\\';
+		cursor++;
+	}
+
+#if defined(_WIN32)
+	char fullpath[MAX_PATH];
+	FILE *dummy;
+
+	list_t *curr = vm->paths;
+	while (curr)
+	{
+		fullpath[0] = 0;
+		char *pathString = (char *)curr->data;
+		strcat_s(fullpath, sizeof(fullpath), pathString);
+		strcat_s(fullpath, sizeof(fullpath), tempName);
+		fopen_s(&dummy, fullpath, "rb");
+		if (dummy)
+		{
+			fclose(dummy);
+			result = vm_load_class_file(vm, fullpath);
+			break;
+		}
+		strcat_s(fullpath, sizeof(fullpath), ".lb");
+		fopen_s(&dummy, fullpath, "rb");
+		if (dummy)
+		{
+			fclose(dummy);
+			result = vm_load_class_file(vm, fullpath);
+			break;
+		}
+
+		curr = curr->next;
+	}
+#endif
+	FREE(tempName);
+
+	return result;
+}
+
+class_t *vm_load_class_file(vm_t *vm, const char *filename)
 {
 	FILE *file;
 
@@ -167,6 +245,20 @@ class_t *vm_load_class_binary(vm_t *vm, const byte_t *binary, size_t size)
 	if (clazz)
 		map_insert(vm->classes, clazz->name, clazz);
 	return clazz;
+}
+
+void vm_add_path(vm_t *vm, const char *path)
+{
+	list_t *node = vm->paths;
+	while (node->next)
+		node = node->next;
+	size_t size = strlen(path) + 1;
+	char *buf = (char *)MALLOC(size);
+	if (buf)
+	{
+		MEMCPY(buf, path, size);
+		list_insert(node, buf);
+	}
 }
 
 int vm_load_library(vm_t *vm, const char *libpath)
@@ -223,6 +315,7 @@ void vm_free(vm_t *vm)
 #else
 #endif
 
+	list_free(vm->paths, 1);
 
 	FREE(vm);
 }
@@ -273,16 +366,52 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 	{
 		*beg = 0;
 		mapNode = map_find((map_t *)env->variables->data, name);
-		*beg = '.';
 
-		if (!mapNode)
+		if (mapNode)
 		{
-			env->exception = exception_bad_variable_name;
-			return 0;
+			*beg = '.';
+			beg++;
+			return env_resolve_object_field(env, (object_t *)((value_t *)mapNode->value)->ovalue, beg, data, flags);
 		}
-		
-		beg++;
-		return env_resolve_object_field(env, (object_t *)((value_t *)mapNode->value)->ovalue, beg, data, flags);
+		else
+		{
+			class_t *clazz = vm_load_class(env->vm, name);
+			*beg = '.';
+			beg++;
+			if (!clazz)
+			{
+				env->exception = exception_bad_variable_name;
+				return 0;
+			}
+			value_t *fieldVal;
+
+			char *nbeg = strchr(beg, '.');
+			if (beg)
+			{
+				*nbeg = 0;
+				fieldVal = class_get_static_field(clazz, beg);
+				*nbeg = '.';
+				if (!fieldVal)
+				{
+					env->exception = exception_bad_variable_name;
+					return 0;
+				}
+				nbeg++;
+				return env_resolve_object_field(env, (object_t *)((value_t *)fieldVal->ovalue), nbeg, data, flags);
+			}
+			else
+			{
+				fieldVal = class_get_static_field(clazz, beg);
+				if (!fieldVal)
+				{
+					env->exception = exception_bad_variable_name;
+					return 0;
+				}
+				*data = &fieldVal->ovalue;
+				*flags = fieldVal->flags;
+				return 1;
+			}
+		}	
 	}
 	size_t valsize;
 
@@ -422,7 +551,7 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 		else
 		{
 			funcname = end + 1;
-			class_t *clazz = vm_get_class(env->vm, name);
+			class_t *clazz = vm_load_class(env->vm, name);
 			if (!clazz)
 			{
 				env->exception = exception_class_not_found;
@@ -875,7 +1004,7 @@ int env_run(env_t *env, void *location)
 			case lb_new:
 				counter++;
 				name2 = (const char *)counter;
-				clazz = vm_get_class(env->vm, name2);
+				clazz = vm_load_class(env->vm, name2); // This function will only load the class if it is not loaded
 				if (!clazz)
 					return env->exception = exception_class_not_found;
 				counter += strlen(name2) + 1;
@@ -900,9 +1029,9 @@ int env_run(env_t *env, void *location)
 				break;
 			case lb_string:
 				counter++;
-				clazz = vm_get_class(env->vm, "String");
+				clazz = vm_get_class(env->vm, "String"); // Don't used vm_load_class here - String should have already been loaded
 				if (!clazz)
-					return env->exception = exception_class_not_found;
+					return env->exception = exception_class_not_found; // Throw exception if it is not loaded
 				name2 = counter;
 				callFunc = class_get_function(clazz, "<init>([C");
 				if (!callFunc)

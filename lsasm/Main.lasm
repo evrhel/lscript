@@ -13,6 +13,8 @@ class Main
 	function static interp main(intarray args, object String str)
 		static_call putls(LString;) str
 
+		static_call FileOutputStream.ls_write(q[Cii) qword[0] args dword[0] dword[0]
+
 		object myString
 		seto myString "Hello World\n"
 		static_call putls(LString;) myString

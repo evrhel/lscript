@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 
 	vm_t *vm = vm_create(KB_TO_B(4), 1024);
 
-	byte_t *stringHeapData = MALLOC(sizeof(string_class));
+	/*byte_t *stringHeapData = MALLOC(sizeof(string_class));
 	if (!stringHeapData)
 	{
 		vm_free(vm);
@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
 	object_t *object = manager_alloc_object(vm->manager, stringClass);
 	array_t *array = manager_alloc_array(vm->manager, lb_chararray, 5);
 	MEMCPY(&array->data, "hello", array->length);
-	object_set_object(object, "data", array);
+	object_set_object(object, "data", array);*/
 
 	/*byte_t *heapData = MALLOC(sizeof(data));
 	if (!heapData)
@@ -132,7 +132,27 @@ int main(int argc, char *argv[])
 		return 2;
 	}*/
 
-	class_t *clazz = vm_load_class(vm, "..\\lsasm\\test.lb");
+	vm_add_path(vm, "..\\lsasm\\");
+
+	class_t *stringClass = vm_load_class(vm, "String");
+	if (!stringClass)
+	{
+		printf("Failed to load String class!\n");
+		return 1;
+	}
+
+	/*class_t *fileOutputStreamClass = vm_load_class(vm, "FileOutputStream");
+	if (!fileOutputStreamClass)
+	{
+		printf("Failed to load FileOutputStream class!\n");
+	}*/
+
+	class_t *clazz = vm_load_class(vm, "Main");
+	if (!clazz)
+	{
+		printf("Failed to load Main class!\n");
+		return 1;
+	}
 
 	env_t *env = env_create(vm);
 
@@ -146,7 +166,7 @@ int main(int argc, char *argv[])
 	array_set_int(arr, 3, 20);
 
 	int error;
-	if (error = env_run_func_static(env, func, arr, object))
+	if (error = env_run_func_static(env, func, arr, NULL))
 	{
 		printf("Exception thrown: %d\n", error);
 	}

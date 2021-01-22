@@ -5,6 +5,7 @@ PUBLIC vm_call_extern_asm
 	table1 dq byte1, word1, dword1, qword1, real41, real81
 	table2 dq byte2, word2, dword2, qword2, real42, real82
 	table3 dq byte3, word3, dword3, qword3, real43, real83
+	table4 dq stackByte, stackWord, stackDword, stackQword, stackReal4, stackReal8
 
 .code
 
@@ -51,17 +52,17 @@ vm_call_extern_asm PROC
 		jmp table0[8 * r13]
 
 		byte0::
-			mov rcx, qword ptr[r10]
+			mov cl, byte ptr[r10]
 			sub rsp, 1
 			add r10, 1
 			jmp table0Done
 		word0::
-			mov rcx, qword ptr[r10]
+			mov cx, word ptr[r10]
 			sub rsp, 2
 			add r10, 2
 			jmp table0Done
 		dword0::
-			mov rcx, qword ptr[r10]
+			mov ecx, dword ptr[r10]
 			sub rsp, 4
 			add r10, 4
 			jmp table0Done
@@ -94,17 +95,17 @@ vm_call_extern_asm PROC
 		jmp table1[8 * r13]
 
 		byte1::
-			mov rdx, qword ptr[r10]
+			mov dl, byte ptr[r10]
 			sub rsp, 1
 			add r10, 1
 			jmp table1Done
 		word1::
-			mov rdx, qword ptr[r10]
+			mov dx, word ptr[r10]
 			sub rsp, 2
 			add r10, 2
 			jmp table1Done
 		dword1::
-			mov rdx, qword ptr[r10]
+			mov edx, dword ptr[r10]
 			sub rsp, 4
 			add r10, 4
 			jmp table1Done
@@ -137,17 +138,17 @@ vm_call_extern_asm PROC
 		jmp table2[8 * r13]
 
 		byte2::
-			mov r8, qword ptr[r10]
+			mov r8b, byte ptr[r10]
 			sub rsp, 1
 			add r10, 1
 			jmp table2Done
 		word2::
-			mov r8, qword ptr[r10]
+			mov r8w, word ptr[r10]
 			sub rsp, 2
 			add r10, 2
 			jmp table2Done
 		dword2::
-			mov r8, qword ptr[r10]
+			mov r8d, dword ptr[r10]
 			sub rsp, 4
 			add r10, 4
 			jmp table2Done
@@ -182,17 +183,17 @@ vm_call_extern_asm PROC
 		jmp table3[8 * r13]
 
 		byte3::
-			mov r9, qword ptr[r10]
+			mov r9b, byte ptr[r10]
 			sub rsp, 1
 			add r10, 1
 			jmp table3Done
 		word3::
-			mov r9, qword ptr[r10]
+			mov r9w, word ptr[r10]
 			sub rsp, 2
 			add r10, 2
 			jmp table3Done
 		dword3::
-			mov r9, qword ptr[r10]
+			mov r9d, dword ptr[r10]
 			sub rsp, 4
 			add r10, 4
 			jmp table3Done
@@ -220,8 +221,44 @@ vm_call_extern_asm PROC
 	; The rest of the arguments must go on the stack
 
 		pushLoop:
-			push qword ptr[r10]
+			mov r13b, byte ptr[r12]
 
+			sub r13b, 0B5h
+			jmp table4[8 * r13]
+
+			stackByte::
+				sub rsp, 1
+				mov r13b, byte ptr[r10]
+				mov byte ptr[rsp], r13b
+				jmp stackTableDone
+			stackWord::
+				sub rsp, 2
+				mov r13w, word ptr[r10]
+				mov word ptr[rsp], r13w
+				jmp stackTableDone
+			stackDword::
+				mov r13d, dword ptr[r10]
+				sub rsp, 4
+				mov dword ptr[rsp], r13d
+				jmp stackTableDone
+			stackQword::
+				mov r13, qword ptr[r10]
+				sub rsp, 8
+				mov qword ptr[rsp], r13
+				jmp stackTableDone
+			stackReal4::
+				mov r13d, dword ptr[r10]
+				sub rsp, 4
+				mov dword ptr[rsp], r13d
+				jmp stackTableDone
+			stackReal8::
+				mov r13, qword ptr[r10]
+				mov qword ptr[rsp], r13
+				sub rsp, 8
+
+			stackTableDone:
+
+			add r12, 1
 			sub rax, 1
 			test rax, rax
 			jnz pushLoop
