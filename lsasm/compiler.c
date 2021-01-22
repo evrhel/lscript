@@ -100,13 +100,17 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 {
 	compile_error_t *errors = NULL;
 
-	if (version != 1)
-		return add_compile_error(errors, "", 0, error_error, "Unsupported compile standard.");
-
-	while (files)
+	if (files)
 	{
-		errors = compile_file(files->filename, outputDirectory, errors, version);
-		files = files->next;
+		files = files->front;
+		if (version != 1)
+			return add_compile_error(errors, "", 0, error_error, "Unsupported compile standard.");
+
+		while (files)
+		{
+			errors = compile_file(files->filename, outputDirectory, errors, version);
+			files = files->next;
+		}
 	}
 	return errors;
 }

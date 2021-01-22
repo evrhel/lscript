@@ -1,0 +1,36 @@
+
+class FileOutputStream
+	
+	global dynamic varying ulong handle
+
+	function dynamic interp <init>()
+		ret
+
+	function dynamic interp <init>(ulong handle)
+		setv this.handle handle
+		ret
+
+	function dynamic interp write(chararray data, int off, int length)
+		static_call write(j[Cii) this.handle data off length
+		ret
+
+	function dynamic interp print(object String str)
+		static_call write(j[Cii) this.handle str.data dword[0] str.length
+		ret
+
+	function dynamic interp println()
+		static_call putc(jC) this.handle byte[10]
+		ret
+
+	function dynamic interp println(object String str)
+		static_call print(LString;) str
+		static_call println()
+		ret
+
+	function dynamic interp close()
+		static_call close(j) this.handle
+		ret
+
+	function static native close(ulong handle)
+	function static native putc(ulong handle, char c)
+	function static native write(ulong handle, chararray data, uint off, uint length)
