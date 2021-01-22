@@ -39,6 +39,61 @@ vm_call_extern_asm PROC
 	test rax, rax
 	je startCall
 
+	cmp rax, 4
+	jle pushRegs
+
+	add r8, 
+	pushLoop:
+		mov r13b, byte ptr[r12]
+
+		sub r13b, 0B5h
+		jmp table4[8 * r13]
+
+		stackByte::
+			sub rsp, 8
+			mov r13b, byte ptr[r10]
+			mov byte ptr[rsp], r13b
+			add r10, 1
+			jmp stackTableDone
+		stackWord::
+			sub rsp, 8
+			mov r13w, word ptr[r10]
+			mov word ptr[rsp], r13w
+			add r10, 2
+			jmp stackTableDone
+		stackDword::
+			mov r13d, dword ptr[r10]
+			sub rsp, 8
+			mov dword ptr[rsp], r13d
+			add r10, 4
+			jmp stackTableDone
+		stackQword::
+			mov r13, qword ptr[r10]
+			sub rsp, 8
+			mov qword ptr[rsp], r13
+			add r10, 8
+			jmp stackTableDone
+		stackReal4::
+			mov r13d, dword ptr[r10]
+			sub rsp, 8
+			mov dword ptr[rsp], r13d
+			add r10, 4
+			jmp stackTableDone
+		stackReal8::
+			mov r13, qword ptr[r10]
+			mov qword ptr[rsp], r13
+			sub rsp, 8
+			add r10, 8
+
+		stackTableDone:
+
+		add r12, 1
+		sub rax, 1
+		cmp rax, 4
+		jg pushLoop
+
+	pushRegs:
+
 	; Begin preparing arguments for calling, starting with the registers
 	; space must be allocated on the stack for the callee
 	
@@ -53,17 +108,17 @@ vm_call_extern_asm PROC
 
 		byte0::
 			mov cl, byte ptr[r10]
-			sub rsp, 1
+			sub rsp, 8
 			add r10, 1
 			jmp table0Done
 		word0::
 			mov cx, word ptr[r10]
-			sub rsp, 2
+			sub rsp, 8
 			add r10, 2
 			jmp table0Done
 		dword0::
 			mov ecx, dword ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table0Done
 		qword0::
@@ -73,7 +128,7 @@ vm_call_extern_asm PROC
 			jmp table0Done
 		real40::
 			movss xmm0, real4 ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table0Done
 		real80::
@@ -96,17 +151,17 @@ vm_call_extern_asm PROC
 
 		byte1::
 			mov dl, byte ptr[r10]
-			sub rsp, 1
+			sub rsp, 8
 			add r10, 1
 			jmp table1Done
 		word1::
 			mov dx, word ptr[r10]
-			sub rsp, 2
+			sub rsp, 8
 			add r10, 2
 			jmp table1Done
 		dword1::
 			mov edx, dword ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table1Done
 		qword1::
@@ -116,7 +171,7 @@ vm_call_extern_asm PROC
 			jmp table1Done
 		real41::
 			movss xmm1, real4 ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table1Done
 		real81::
@@ -139,17 +194,17 @@ vm_call_extern_asm PROC
 
 		byte2::
 			mov r8b, byte ptr[r10]
-			sub rsp, 1
+			sub rsp, 8
 			add r10, 1
 			jmp table2Done
 		word2::
 			mov r8w, word ptr[r10]
-			sub rsp, 2
+			sub rsp, 8
 			add r10, 2
 			jmp table2Done
 		dword2::
 			mov r8d, dword ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table2Done
 		qword2::
@@ -159,7 +214,7 @@ vm_call_extern_asm PROC
 			jmp table2Done
 		real42::
 			movss xmm2, real4 ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table2Done
 		real82::
@@ -184,17 +239,17 @@ vm_call_extern_asm PROC
 
 		byte3::
 			mov r9b, byte ptr[r10]
-			sub rsp, 1
+			sub rsp, 8
 			add r10, 1
 			jmp table3Done
 		word3::
 			mov r9w, word ptr[r10]
-			sub rsp, 2
+			sub rsp, 8
 			add r10, 2
 			jmp table3Done
 		dword3::
 			mov r9d, dword ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table3Done
 		qword3::
@@ -204,7 +259,7 @@ vm_call_extern_asm PROC
 			jmp table3Done
 		real43::
 			movss xmm3, real4 ptr[r10]
-			sub rsp, 4
+			sub rsp, 8
 			add r10, 4
 			jmp table3Done
 		real83::
@@ -220,48 +275,6 @@ vm_call_extern_asm PROC
 
 	; The rest of the arguments must go on the stack
 
-		pushLoop:
-			mov r13b, byte ptr[r12]
-
-			sub r13b, 0B5h
-			jmp table4[8 * r13]
-
-			stackByte::
-				sub rsp, 1
-				mov r13b, byte ptr[r10]
-				mov byte ptr[rsp], r13b
-				jmp stackTableDone
-			stackWord::
-				sub rsp, 2
-				mov r13w, word ptr[r10]
-				mov word ptr[rsp], r13w
-				jmp stackTableDone
-			stackDword::
-				mov r13d, dword ptr[r10]
-				sub rsp, 4
-				mov dword ptr[rsp], r13d
-				jmp stackTableDone
-			stackQword::
-				mov r13, qword ptr[r10]
-				sub rsp, 8
-				mov qword ptr[rsp], r13
-				jmp stackTableDone
-			stackReal4::
-				mov r13d, dword ptr[r10]
-				sub rsp, 4
-				mov dword ptr[rsp], r13d
-				jmp stackTableDone
-			stackReal8::
-				mov r13, qword ptr[r10]
-				mov qword ptr[rsp], r13
-				sub rsp, 8
-
-			stackTableDone:
-
-			add r12, 1
-			sub rax, 1
-			test rax, rax
-			jnz pushLoop
 
 	startCall:
 	call r11

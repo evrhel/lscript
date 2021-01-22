@@ -13,6 +13,8 @@ class Main
 	function static interp main(intarray args, object String str)
 		static_call putls(LString;) str
 
+		static_call test_call(IIII) dword[1] dword[2] dword[3] dword[4]
+
 		static_call FileOutputStream.ls_write(q[Cii) qword[0] args dword[0] dword[0]
 
 		object myString
@@ -41,4 +43,5 @@ class Main
 
 	function static native testFunc()
 	function static native putls(object String str)
+	function static native test_call(int num1, int num2, int num3, int num4)
 

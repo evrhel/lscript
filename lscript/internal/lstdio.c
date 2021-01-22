@@ -84,3 +84,8 @@ LNIFUNC void LNICALL putls(LEnv venv, lclass vclazz, lobject string)
 	for (luint i = 0; i < arr->length; i++)
 		putchar(data[i]);
 }
+
+LNIFUNC void LNICALL test_call(LEnv venv, lclass vclazz, lint num1, lint num2, lint num3, lint num4)
+{
+
+}

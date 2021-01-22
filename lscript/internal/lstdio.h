@@ -13,4 +13,6 @@ LNIFUNC luint LNICALL ls_write(LEnv, lclass, lulong, lchararray, luint, luint);
 
 LNIFUNC void LNICALL putls(LEnv, lclass, lobject);
 
+LNIFUNC void LNICALL test_call(LEnv, lclass, lint, lint, lint, lint);
+
 #endif
