@@ -648,29 +648,27 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 				return env->exception = exception_link_error;
 		}
 
-		void *args = MALLOC(function->argSize + (2 * sizeof(qword_t)));
+		void *args = CALLOC(function->numargs + 2, sizeof(qword_t));
+
+			//MALLOC((function->numargs * sizeof(qword_t)) + (2 * sizeof(qword_t)));
 		if (!args)
 			return env->exception = exception_vm_error;
 		
 		void **temp = (void **)args;
 		temp[0] = env;
 		temp[1] = function->parentClass;
-		MEMCPY(temp + 2, ls, function->argSize);
 
-		byte_t *types = (byte_t *)MALLOC(sizeof(byte_t) * function->numargs + 2);
+		byte_t *types = (byte_t *)MALLOC(sizeof(byte_t) * function->numargs);
 		if (!types)
 		{
 			FREE(args);
 			return env->exception = exception_vm_error;
 		}
-		
-		types[0] = lb_qword;
-		types[1] = lb_qword;
 
 		if (function->numargs > 0)
 		{
 			map_iterator_t *mit = map_create_iterator(function->argTypes);
-			size_t i = 2;
+			size_t i = 0;
 			flags_t flags;
 			while (mit->node)
 			{
@@ -719,9 +717,43 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 			map_iterator_free(mit);
 		}
 
-		env->qret = vm_call_extern_asm(function->numargs + 2, types, args, function->location);
+		size_t *outArgsCursor = (size_t *)args;
+		char *lsCursor = ls;
+		outArgsCursor += 2;
+		for (size_t i = 0; i < function->numargs; i++, outArgsCursor++)
+		{
+			switch (types[i])
+			{
+			case lb_byte:
+				*((byte_t *)outArgsCursor) = *((byte_t *)lsCursor);
+				lsCursor += sizeof(byte_t);
+				break;
+			case lb_word:
+				*((word_t *)outArgsCursor) = *((word_t *)*lsCursor);
+				lsCursor += sizeof(word_t);
+				break;
+			case lb_dword:
+				*((dword_t *)outArgsCursor) = *((dword_t *)lsCursor);
+				lsCursor += sizeof(dword_t);
+				break;
+			case lb_qword:
+				*((qword_t *)outArgsCursor) = *((qword_t *)lsCursor);
+				lsCursor += sizeof(qword_t);
+				break;
+			case lb_real4:
+				*((real4_t *)outArgsCursor) = *((real4_t *)lsCursor);
+				lsCursor += sizeof(real4_t);
+				break;
+			case lb_real8:
+				*((real8_t *)outArgsCursor) = *((real8_t *)lsCursor);
+				lsCursor += sizeof(real8_t);
+				break;
+			}
+		}
 
-		FREE(types);
+		env->qret = vm_call_extern_asm(function->numargs + 2, NULL, args, function->location);
+
+		//FREE(types);
 		FREE(args);
 
 		return env->exception;

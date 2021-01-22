@@ -1,11 +1,6 @@
 PUBLIC vm_call_extern_asm
 
 .data
-	table0 dq byte0, word0, dword0, qword0, real40, real80
-	table1 dq byte1, word1, dword1, qword1, real41, real81
-	table2 dq byte2, word2, dword2, qword2, real42, real82
-	table3 dq byte3, word3, dword3, qword3, real43, real83
-	table4 dq stackByte, stackWord, stackDword, stackQword, stackReal4, stackReal8
 
 .code
 
@@ -34,247 +29,49 @@ vm_call_extern_asm PROC
 	push r12
 	mov r12, rdx
 	push r13
-	push r14
+	
+	shl rax, 3
+	sub rsp, rax
+	mov rax, rcx
 	
 	test rax, rax
 	je startCall
 
-	cmp rax, 4
-	jle pushRegs
+	mov r12, rax
+	shl r12, 3
 
-	add r8, 
+	mov rcx, qword ptr[r10]
+	sub rax, 1
+	test rax, rax
+	je startCall
+
+	mov rdx, qword ptr[r10 + 8]
+	sub rax, 1
+	test rax, rax
+	je startCall
+
+	mov r8, qword ptr[r10 + 16]
+	sub rax, 1
+	test rax, rax
+	je startCall
+
+	mov r9, qword ptr[r10 + 24]
+	sub rax, 1
+	test rax, rax
+	je startCall
+
+	add r10, 32
+	mov r13, rsp
+	add r13, 32
 	pushLoop:
-		mov r13b, byte ptr[r12]
+		mov r12, qword ptr[r10]
+		mov qword ptr[r13], r12
 
-		sub r13b, 0B5h
-		jmp table4[8 * r13]
-
-		stackByte::
-			sub rsp, 8
-			mov r13b, byte ptr[r10]
-			mov byte ptr[rsp], r13b
-			add r10, 1
-			jmp stackTableDone
-		stackWord::
-			sub rsp, 8
-			mov r13w, word ptr[r10]
-			mov word ptr[rsp], r13w
-			add r10, 2
-			jmp stackTableDone
-		stackDword::
-			mov r13d, dword ptr[r10]
-			sub rsp, 8
-			mov dword ptr[rsp], r13d
-			add r10, 4
-			jmp stackTableDone
-		stackQword::
-			mov r13, qword ptr[r10]
-			sub rsp, 8
-			mov qword ptr[rsp], r13
-			add r10, 8
-			jmp stackTableDone
-		stackReal4::
-			mov r13d, dword ptr[r10]
-			sub rsp, 8
-			mov dword ptr[rsp], r13d
-			add r10, 4
-			jmp stackTableDone
-		stackReal8::
-			mov r13, qword ptr[r10]
-			mov qword ptr[rsp], r13
-			sub rsp, 8
-			add r10, 8
-
-		stackTableDone:
-
-		add r12, 1
-		sub rax, 1
-		cmp rax, 4
-		jg pushLoop
-
-	pushRegs:
-
-	; Begin preparing arguments for calling, starting with the registers
-	; space must be allocated on the stack for the callee
-	
-	; First integer argument goes in rcx and floating point in xmm0
-		mov r13b, byte ptr[r12]
-
-		; Set the register and push the correct size onto the stack
-
-		; Get r13 to contain the offset into the jump table
-		sub r13b, 0B5h
-		jmp table0[8 * r13]
-
-		byte0::
-			mov cl, byte ptr[r10]
-			sub rsp, 8
-			add r10, 1
-			jmp table0Done
-		word0::
-			mov cx, word ptr[r10]
-			sub rsp, 8
-			add r10, 2
-			jmp table0Done
-		dword0::
-			mov ecx, dword ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table0Done
-		qword0::
-			mov rcx, qword ptr[r10]
-			sub rsp, 8
-			add r10, 8
-			jmp table0Done
-		real40::
-			movss xmm0, real4 ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table0Done
-		real80::
-			movsd xmm0, real8 ptr[r10]
-			sub rsp, 8
-			add r10,4
-		table0Done:
-
-		add r12, 1
+		add r10, 8
+		add r13, 8
 		sub rax, 1
 		test rax, rax
-		je startCall
-
-	; Second integer argument goes in rdx and floating point in xmm1
-
-		mov r13b, byte ptr[r12]
-
-		sub r13b, 0B5h
-		jmp table1[8 * r13]
-
-		byte1::
-			mov dl, byte ptr[r10]
-			sub rsp, 8
-			add r10, 1
-			jmp table1Done
-		word1::
-			mov dx, word ptr[r10]
-			sub rsp, 8
-			add r10, 2
-			jmp table1Done
-		dword1::
-			mov edx, dword ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table1Done
-		qword1::
-			mov rdx, qword ptr[r10]
-			sub rsp, 8
-			add r10, 8
-			jmp table1Done
-		real41::
-			movss xmm1, real4 ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table1Done
-		real81::
-			movsd xmm1, real8 ptr[r10]
-			sub rsp, 8
-			add r10, 8
-		table1Done:
-
-		add r12, 1
-		sub rax, 1
-		test rax, rax
-		je startCall
-
-	; Third integer argument goes in r8 and floating point in xmm2
-
-		mov r13b, byte ptr[r12]
-
-		sub r13b, 0B5h
-		jmp table2[8 * r13]
-
-		byte2::
-			mov r8b, byte ptr[r10]
-			sub rsp, 8
-			add r10, 1
-			jmp table2Done
-		word2::
-			mov r8w, word ptr[r10]
-			sub rsp, 8
-			add r10, 2
-			jmp table2Done
-		dword2::
-			mov r8d, dword ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table2Done
-		qword2::
-			mov r8, qword ptr[r10]
-			sub rsp, 8
-			add r10, 8
-			jmp table2Done
-		real42::
-			movss xmm2, real4 ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table2Done
-		real82::
-			movsd xmm2, real8 ptr[r10]
-			sub rsp, 8
-			add r10, 8
-		table2Done:
-
-		add r12, 1
-		sub rax, 1
-		test rax, rax
-		je startCall
-
-	; Fourth integer argument goes in r9 and floating point in xmm3
-
-		mov r9, qword ptr[r10]
-
-		mov r13b, byte ptr[r12]
-
-		sub r13b, 0B5h
-		jmp table3[8 * r13]
-
-		byte3::
-			mov r9b, byte ptr[r10]
-			sub rsp, 8
-			add r10, 1
-			jmp table3Done
-		word3::
-			mov r9w, word ptr[r10]
-			sub rsp, 8
-			add r10, 2
-			jmp table3Done
-		dword3::
-			mov r9d, dword ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table3Done
-		qword3::
-			mov r9, qword ptr[r10]
-			sub rsp, 8
-			add r10, 8
-			jmp table3Done
-		real43::
-			movss xmm3, real4 ptr[r10]
-			sub rsp, 8
-			add r10, 4
-			jmp table3Done
-		real83::
-			movsd xmm3, real8 ptr[r10]
-			sub rsp, 8
-			add r10, 8
-		table3Done:
-
-		add r12, 1
-		sub rax, 1
-		test rax, rax
-		je startCall
-
-	; The rest of the arguments must go on the stack
-
+		jnz pushLoop
 
 	startCall:
 	call r11
@@ -283,7 +80,6 @@ vm_call_extern_asm PROC
 	add rsp, 28
 
 	; Restore the pushed registers
-	pop r14
 	pop r13
 	pop r12
 
