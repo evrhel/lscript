@@ -150,6 +150,20 @@ vm_t *vm_create(size_t heapSize, size_t stackSize)
 #else
 #endif
 
+	class_t *systemClass = vm_load_class(vm, "System");
+	if (!systemClass)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+
+	class_t *fileoutputstreamClass = vm_load_class(vm, "FileOutputStream");
+	if (!fileoutputstreamClass)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+
 	return vm;
 }
 
@@ -753,7 +767,7 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 
 		env->qret = vm_call_extern_asm(function->numargs + 2, NULL, args, function->location);
 
-		//FREE(types);
+		FREE(types);
 		FREE(args);
 
 		return env->exception;

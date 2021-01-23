@@ -1,9 +1,9 @@
 
 class System
 	
-	global static const ulong stdout qword[0]
-	global static const ulong stderr qword[0]
-	global static const ulong stdin qword[0]
+	global static const object stdout null
+	global static const object stderr null
+	global static const object stdin null
 
 	function static native loadLibrary(object String libname)
 	function static native getProperty(object String propName)

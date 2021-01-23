@@ -72,7 +72,7 @@ struct env_s
 	};
 };
 
-vm_t *vm_create(size_t heapSize, size_t stackSize);
+vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const argv[]);
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
 class_t *vm_load_class_file(vm_t *vm, const char *filename);
