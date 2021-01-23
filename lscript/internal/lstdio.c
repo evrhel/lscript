@@ -66,7 +66,7 @@ LNIFUNC luint LNICALL ls_write(LEnv venv, lclass vclazz, lulong handle, lchararr
 
 	array_t *arr = (array_t *)data;
 	char *cdata = (char *)&arr->data;
-	luint result = (luint)fwrite(cdata, sizeof(char), arr->length, /*(FILE *)handle*/stdout);
+	luint result = (luint)fwrite(cdata, sizeof(char), arr->length, (FILE *)handle);
 	return result;
 }
 

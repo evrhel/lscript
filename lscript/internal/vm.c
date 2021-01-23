@@ -22,6 +22,8 @@ static int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFla
 
 static int try_link_function(vm_t *vm, function_t *func);
 
+static int equals_ignore_case(const char *s1, const char *s2);
+
 /*
 Implemented in hooks.asm
 */
@@ -78,7 +80,7 @@ static inline int is_numeric(const char *string)
 	return 1;
 }
 
-vm_t *vm_create(size_t heapSize, size_t stackSize)
+vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const argv[])
 {
 	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
 	if (!vm)
@@ -150,6 +152,25 @@ vm_t *vm_create(size_t heapSize, size_t stackSize)
 #else
 #endif
 
+	for (int i = 0; i < argc; i++)
+	{
+		if (equals_ignore_case("-p", argv[i]))
+		{
+			i++;
+			if (i < argc)
+			{
+				vm_add_path(vm, argv[i]);
+			}
+		}
+	}
+
+	class_t *stringClass = vm_load_class(vm, "String");
+	if (!stringClass)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+
 	class_t *systemClass = vm_load_class(vm, "System");
 	if (!systemClass)
 	{
@@ -163,6 +184,46 @@ vm_t *vm_create(size_t heapSize, size_t stackSize)
 		vm_free(vm);
 		return NULL;
 	}
+
+	value_t *systemStdout = class_get_static_field(systemClass, "stdout");
+	if (!systemStdout)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+
+	value_t *systemStderr = class_get_static_field(systemClass, "stderr");
+	if (!systemStderr)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+
+	value_t *systemStdin = class_get_static_field(systemClass, "stdin");
+	if (!systemStdin)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+
+	object_t *stdoutVal = manager_alloc_object(vm->manager, fileoutputstreamClass);
+	if (!stdoutVal)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+	systemStdout->ovalue = stdoutVal;
+
+	object_t *stderrVal = manager_alloc_object(vm->manager, fileoutputstreamClass);
+	if (!stderrVal)
+	{
+		vm_free(vm);
+		return NULL;
+	}
+	systemStderr->ovalue = stderrVal;
+
+	object_set_ulong(stdoutVal, "handle", (lulong)stdout);
+	object_set_ulong(stderrVal, "handle", (lulong)stderr);
 
 	return vm;
 }
@@ -400,7 +461,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 			value_t *fieldVal;
 
 			char *nbeg = strchr(beg, '.');
-			if (beg)
+			if (nbeg)
 			{
 				*nbeg = 0;
 				fieldVal = class_get_static_field(clazz, beg);
@@ -506,21 +567,58 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 	// We might need to go into another object's fields if there is a '.'
 	if (beg)
 	{
-		*beg = 0;
-		fieldData = object_get_field_data(object, name);
-		*beg = '.';
+		value_t *val = (value_t *)object;
+		byte_t type = value_typeof(val);
+		array_t *arr = (array_t *)val;
 
-		if (!fieldData)
+		size_t off;
+		void *objectData;
+
+		switch (type)
 		{
+		case lb_object:
+			*beg = 0;
+			fieldData = object_get_field_data(object, name);
+			*beg = '.';
+
+			if (!fieldData)
+			{
+				env->exception = exception_bad_variable_name;
+				return 0;
+			}
+
+			off = (size_t)fieldData->offset;
+			objectData = (byte_t *)&object->data + off;
+
+			beg++;
+			return env_resolve_object_field(env, *((object_t **)objectData), beg, data, flags);
+			break;
+		case lb_boolarray:
+		case lb_chararray:
+		case lb_uchararray:
+		case lb_shortarray:
+		case lb_ushortarray:
+		case lb_intarray:
+		case lb_uintarray:
+		case lb_longarray:
+		case lb_ulongarray:
+		case lb_floatarray:
+		case lb_doublearray:
+		case lb_objectarray:
+			if (strcmp(beg + 1, "length"))
+			{
+				env->exception = exception_bad_variable_name;
+				return 0;
+			}
+			*data = (data_t *)&arr->length;
+			*flags = 0;
+			SET_TYPE(flags, lb_uint);
+			break;
+		default:
 			env->exception = exception_bad_variable_name;
 			return 0;
+			break;
 		}
-
-		size_t off = (size_t)fieldData->offset;
-		void *data = (byte_t *)&object->data + off;
-
-		beg++;
-		return env_resolve_object_field(env, *((object_t **)data), beg, data, flags);
 	}
 
 	fieldData = object_get_field_data(object, name);
@@ -1282,10 +1380,11 @@ int env_run(env_t *env, void *location)
 					case lb_doublearray:
 					case lb_objectarray:
 						*((lobject *)cursor) = data->ovalue;
-						counter += strlen(counter) + 1;
+						counter += 8;
 						cursor += 8;
 						break;
 					}
+					counter += strlen(counter) + 1;
 					break;
 				default:
 					FREE(callFuncArgs);
@@ -1429,6 +1528,8 @@ int env_run(env_t *env, void *location)
 				}
 
 				callArgPtr += sizeof_type(callArgType);
+
+				mip = map_iterator_next(mip);
 			}
 			map_iterator_free(mip);
 
@@ -1586,6 +1687,29 @@ int try_link_function(vm_t *vm, function_t *func)
 #else
 #endif
 	return 0;
+}
+
+int equals_ignore_case(const char *s1, const char *s2)
+{
+	while (*s1 && *s2)
+	{
+		if (*s1 >= 64 && *s1 <= 90)
+		{
+			if (*s1 != *s2 && *s1 + 32 != *s2)
+				return 0;
+		}
+		else if (*s1 >= 97 && *s1 <= 121)
+		{
+			if (*s1 != *s2 && *s1 - 32 != *s2)
+				return 0;
+		}
+		else if (*s1 != *s2)
+			return 0;
+
+		s1++;
+		s2++;
+	}
+	return *s1 == *s2;
 }
 
 int call_native(env_t *env, function_t *function, va_list ls)
