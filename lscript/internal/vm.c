@@ -567,31 +567,41 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 	// We might need to go into another object's fields if there is a '.'
 	if (beg)
 	{
+		size_t off;
+		void *objectData;
+
+		*beg = 0;
+		fieldData = object_get_field_data(object, name);
+		*beg = '.';
+
+		if (!fieldData)
+		{
+			env->exception = exception_bad_variable_name;
+			return 0;
+		}
+
+		off = (size_t)fieldData->offset;
+		objectData = (byte_t *)&object->data + off;
+
+		beg++;
+		return env_resolve_object_field(env, *((object_t **)objectData), beg, data, flags);
+
+		
+	}
+	else
+	{
 		value_t *val = (value_t *)object;
 		byte_t type = value_typeof(val);
 		array_t *arr = (array_t *)val;
 
-		size_t off;
-		void *objectData;
-
 		switch (type)
 		{
 		case lb_object:
-			*beg = 0;
 			fieldData = object_get_field_data(object, name);
-			*beg = '.';
 
-			if (!fieldData)
-			{
-				env->exception = exception_bad_variable_name;
-				return 0;
-			}
-
-			off = (size_t)fieldData->offset;
-			objectData = (byte_t *)&object->data + off;
-
-			beg++;
-			return env_resolve_object_field(env, *((object_t **)objectData), beg, data, flags);
+			*flags = fieldData->flags;
+			*data = (data_t *)((byte_t *)&object->data + (size_t)fieldData->offset);
+			return 1;
 			break;
 		case lb_boolarray:
 		case lb_chararray:
@@ -605,14 +615,15 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 		case lb_floatarray:
 		case lb_doublearray:
 		case lb_objectarray:
-			if (strcmp(beg + 1, "length"))
+			if (strcmp(name, "length"))
 			{
 				env->exception = exception_bad_variable_name;
 				return 0;
 			}
 			*data = (data_t *)&arr->length;
 			*flags = 0;
-			SET_TYPE(flags, lb_uint);
+			SET_TYPE(*flags, lb_uint);
+			return 1;
 			break;
 		default:
 			env->exception = exception_bad_variable_name;
@@ -620,12 +631,6 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 			break;
 		}
 	}
-
-	fieldData = object_get_field_data(object, name);
-
-	*flags = fieldData->flags;
-	*data = (data_t *)((byte_t *)&object->data + (size_t)fieldData->offset);
-	return 1;
 }
 
 int env_resolve_function_name(env_t *env, const char *name, function_t **function)

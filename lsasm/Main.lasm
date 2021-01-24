@@ -12,7 +12,7 @@ class Main
 	# main function
 	function static interp main(intarray args, object String str)
 		object myString
-		seto myString "Hello World\n"
+		seto myString "Hello Austin"
 
 		dynamic_call System.stdout.println(LString;) myString
 
