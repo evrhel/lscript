@@ -38,6 +38,7 @@ struct vm_s
 	map_t *classes;
 	manager_t *manager;
 	size_t stackSize;
+	map_t *properties;
 
 	list_t *paths;
 

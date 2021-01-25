@@ -15,7 +15,6 @@
 static int equals_ignore_case(const char *s1, const char *s2);
 static void display_help();
 static void display_version();
-static void display_errors(compile_error_t *errors);
 
 int main(int argc, char *argv[])
 {
@@ -70,12 +69,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	compile_error_t *errors = compile(files, outputDirectory, version);
+	compile_error_t *errors = compile(files, outputDirectory, version, puts);
 	if (errors)
-	{
-		display_errors(errors);
 		return RETURN_COMPILE_ERROR;
-	}
 
 	return RETURN_NORMAL;
 }
@@ -125,25 +121,4 @@ void display_version()
 	printf("Version: %s\n", LSASM_VERSION);
 	printf("Build date: %s\n", __DATE__);
 	printf("Build time: %s\n", __TIME__);
-}
-
-void display_errors(compile_error_t *errors)
-{
-	while (errors)
-	{
-		switch (errors->type)
-		{
-		case error_info:
-			printf("[INFO] ");
-			break;
-		case error_warning:
-			printf("[WARN] ");
-			break;
-		case error_error:
-			printf("[ERRO] ");
-			break;
-		}
-		printf("%s.%d : %s\n", errors->file, errors->line, errors->desc);
-		errors = errors->next;
-	}
 }

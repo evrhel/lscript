@@ -5,5 +5,7 @@ class System
 	global static const object stderr null
 	global static const object stdin null
 
+	function static native exit(int code)
 	function static native loadLibrary(object String libname)
 	function static native getProperty(object String propName)
+	function static native setProperty(object String propName, object String value)

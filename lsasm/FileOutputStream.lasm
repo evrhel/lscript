@@ -11,15 +11,15 @@ class FileOutputStream
 		ret
 
 	function dynamic interp write(chararray data, int off, int length)
-		static_call ls_write(q[Cii) this.handle data off length
+		static_call fwrite(q[Cii) this.handle data off length
 		ret
 
 	function dynamic interp print(object String str)
-		static_call ls_write(q[Cii) this.handle str.chars dword[0] str.chars.length
+		static_call fwrite(q[Cii) this.handle str.chars dword[0] str.chars.length
 		ret
 
 	function dynamic interp println()
-		static_call ls_putc(qC) this.handle byte[10]
+		static_call fputc(qC) this.handle byte[10]
 		ret
 
 	function dynamic interp println(object String str)
@@ -28,10 +28,10 @@ class FileOutputStream
 		ret
 
 	function dynamic interp close()
-		static_call ls_close(q) this.handle
+		static_call fclose(q) this.handle
 		ret
 
-	function static native ls_open(object String filepath, int mode)
-	function static native ls_close(ulong handle)
-	function static native ls_putc(ulong handle, char c)
-	function static native ls_write(ulong handle, chararray data, uint off, uint length)
+	function static native fopen(object String filepath, int mode)
+	function static native fclose(ulong handle)
+	function static native fputc(ulong handle, char c)
+	function static native fwrite(ulong handle, chararray data, uint off, uint length)

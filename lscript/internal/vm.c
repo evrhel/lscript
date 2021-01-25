@@ -339,12 +339,18 @@ void vm_add_path(vm_t *vm, const char *path)
 int vm_load_library(vm_t *vm, const char *libpath)
 {
 #if defined(_WIN32)
+	char buf[MAX_PATH];
+	sprintf_s(buf, sizeof(buf), "%s.dll", libpath);
 	for (size_t i = 0; i < vm->libraryCount; i++)
 	{
 		if (!vm->hLibraries[i])
 		{
 			HINSTANCE hinstLib;
-			
+			hinstLib = LoadLibraryA(buf);
+			if (!hinstLib)
+				return 0;
+			vm->hLibraries = hinstLib;
+			return 1;
 		}
 	}
 #else
@@ -1336,40 +1342,40 @@ int env_run(env_t *env, void *location)
 					case lb_uchar:
 						*cursor = data->cvalue;
 						cursor += 1;
-						counter += 1;
+						//counter += 1;
 						break;
 					case lb_short:
 					case lb_ushort:
 						*((lshort *)cursor) = data->svalue;
 						cursor += 2;
-						counter += 2;
+						//counter += 2;
 						break;
 					case lb_int:
 					case lb_uint:
 						*((lint *)cursor) = data->ivalue;
 						cursor += 4;
-						counter += 4;
+						//counter += 4;
 						break;
 					case lb_long:
 					case lb_ulong:
 						*((llong *)cursor) = data->lvalue;
 						cursor += 8;
-						counter += 8;
+						//counter += 8;
 						break;
 					case lb_bool:
 						*((lbool *)cursor) = data->bvalue;
 						cursor += 1;
-						counter += 1;
+						//counter += 1;
 						break;
 					case lb_float:
 						*((lfloat *)cursor) = data->fvalue;
 						cursor += 4;
-						counter += 4;
+						//counter += 4;
 						break;
 					case lb_double:
 						*((ldouble *)cursor) = data->dvalue;
 						cursor += 8;
-						counter += 8;
+						//counter += 8;
 						break;
 					case lb_object:
 					case lb_chararray:
@@ -1385,7 +1391,7 @@ int env_run(env_t *env, void *location)
 					case lb_doublearray:
 					case lb_objectarray:
 						*((lobject *)cursor) = data->ovalue;
-						counter += 8;
+						//counter += 8;
 						cursor += 8;
 						break;
 					}
@@ -1471,40 +1477,40 @@ int env_run(env_t *env, void *location)
 					case lb_uchar:
 						*cursor = data->cvalue;
 						cursor += 1;
-						counter += 1;
+						//counter += 1;
 						break;
 					case lb_short:
 					case lb_ushort:
 						*((lshort *)cursor) = data->svalue;
 						cursor += 2;
-						counter += 2;
+						//counter += 2;
 						break;
 					case lb_int:
 					case lb_uint:
 						*((lint *)cursor) = data->ivalue;
 						cursor += 4;
-						counter += 4;
+						//counter += 4;
 						break;
 					case lb_long:
 					case lb_ulong:
 						*((llong *)cursor) = data->lvalue;
 						cursor += 8;
-						counter += 8;
+						//counter += 8;
 						break;
 					case lb_bool:
 						*((lbool *)cursor) = data->bvalue;
 						cursor += 1;
-						counter += 1;
+						//counter += 1;
 						break;
 					case lb_float:
 						*((lfloat *)cursor) = data->fvalue;
 						cursor += 4;
-						counter += 4;
+						//counter += 4;
 						break;
 					case lb_double:
 						*((ldouble *)cursor) = data->dvalue;
 						cursor += 8;
-						counter += 8;
+						//counter += 8;
 						break;
 					case lb_object:
 					case lb_chararray:
@@ -1521,7 +1527,7 @@ int env_run(env_t *env, void *location)
 					case lb_objectarray:
 						*((lobject *)cursor) = data->ovalue;
 						cursor += 8;
-						counter += 8;
+						//counter += 8;
 						break;
 					}
 					counter += strlen(counter) + 1;
@@ -1679,12 +1685,14 @@ int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 int try_link_function(vm_t *vm, function_t *func)
 {
 #if defined(_WIN32)
+	char decName[512];
+	sprintf_s(decName, sizeof(decName), "%s_%s", func->parentClass->name, func->name);
 	for (size_t i = 0; i < vm->libraryCount; i++)
 	{
 		HMODULE hModule = vm->hLibraries[i];
 		if (hModule)
 		{
-			func->location = GetProcAddress(hModule, func->name);
+			func->location = GetProcAddress(hModule, decName);
 			if (func->location)
 				return 1;
 		}

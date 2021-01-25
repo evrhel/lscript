@@ -66,7 +66,22 @@ void free_file_list(input_file_t *front)
 	}
 }
 
-compile_error_t *add_compile_error(compile_error_t *back, const char *file, int line, int type, const char *desc)
+compile_error_t *create_base_compile_error(msg_func_t messenger)
+{
+	compile_error_t *next = (compile_error_t *)malloc(sizeof(compile_error_t));
+	if (!next)
+		return NULL;
+	next->file = NULL;
+	next->line = 0;
+	next->type = -1;
+	next->next = NULL;
+	next->front = next;
+	next->messenger = messenger;
+	next->desc[0] = 0;
+	return next;
+}
+
+compile_error_t *add_compile_error(compile_error_t *back, const char *file, int line, int type, const char *format, ...)
 {
 	compile_error_t *next = (compile_error_t *)malloc(sizeof(compile_error_t));
 	if (!next)
@@ -75,14 +90,57 @@ compile_error_t *add_compile_error(compile_error_t *back, const char *file, int 
 	{
 		back->next = next;
 		next->front = back->front;
+		next->messenger = back->messenger;
 	}
 	else
+	{
 		next->front = next;
+		next->messenger = NULL;
+	}
 	next->file = file;
 	next->line = line;
-	next->desc = desc;
 	next->type = type;
 	next->next = NULL;
+
+	size_t len;
+	size_t bufsize = sizeof(next->desc);
+	char *curr = next->desc;
+
+	switch (type)
+	{
+	case error_error:
+		sprintf_s(curr, bufsize, "[ERRO] ");
+		break;
+	case error_warning:
+		sprintf_s(curr, bufsize, "[WARN] ");
+		break;
+	case error_info:
+		sprintf_s(curr, bufsize, "[INFO] ");
+		break;
+	default:
+		return next;
+	}
+	len = strlen(curr);
+	curr += len;
+	bufsize -= len;
+
+	if (file)
+	{
+		sprintf_s(curr, bufsize, "%s.%d : ", file, line);
+		len = strlen(curr);
+		curr += len;
+		bufsize -= len;
+	}
+
+	va_list ls;
+	va_start(ls, format);
+	va_arg(ls, const char *);
+	vsprintf_s(curr, bufsize, format, ls);
+	va_end(ls);
+
+	if (next->messenger)
+		next->messenger(next->desc);
+
 	return next;
 }
 
@@ -96,9 +154,9 @@ void free_compile_error_list(compile_error_t *front)
 	}
 }
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version)
+compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, msg_func_t messenger)
 {
-	compile_error_t *errors = NULL;
+	compile_error_t *errors = create_base_compile_error(messenger);
 
 	if (files)
 	{
@@ -118,6 +176,9 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back, unsigned int version)
 {
 	FILE *in;
+
+	back = add_compile_error(back, NULL, 0, error_info, "Build: %s", file);
+
 	fopen_s(&in, file, "rb");
 	if (!in)
 		return add_compile_error(back, file, 0, error_error, "Failed to fopen for read");
@@ -136,13 +197,19 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	buffer_t *obuf = new_buffer(256);
 	back = compile_data(buf, length, obuf, file, back, version);
 
+	int hasWarnings = 0;
 	if (back)
 	{
 		compile_error_t *curr = back->front;
 		while (curr)
 		{
 			if (curr->type == error_error)
+			{
+				back = add_compile_error(back, NULL, 0, error_info, "%s failed to build with errors.", file);
 				return back->front;
+			}
+			else if (curr->type == error_warning)
+				hasWarnings = 1;
 			curr = curr->next;
 		}
 	}
@@ -190,6 +257,11 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	fclose(out);
 	free_buffer(obuf);
 	free(nstr);
+
+	if (hasWarnings)
+		back = add_compile_error(back, NULL, 0, error_info, "%s built with warnings.", file);
+	else
+		back = add_compile_error(back, NULL, 0, error_info, "%s successfully built.", file);
 
 	return back ? back->front : NULL;
 }
@@ -299,7 +371,7 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_end:
 				break;
 			default:
-				back = add_compile_error(back, srcFile, curr->linenum, error_error, "Unknown command");
+				back = add_compile_error(back, srcFile, curr->linenum, error_error, "Unknown command \"%s\"", tokens[0]);
 				break;
 			}
 
@@ -1081,7 +1153,7 @@ compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *ou
 	if (tokenCount > 2)
 	{
 		if (strcmp(tokens[2], "extends"))
-			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token, \"extends\" expected.");
+			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", \"extends\" expected.", tokens[2]);
 
 		if (tokenCount == 3)
 			return add_compile_error(back, srcFile, srcLine, error_error, "Expected token superclass name declaration");
@@ -1126,18 +1198,18 @@ compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *ou
 	else if (!strcmp(tokens[1], "dynamic"))
 		isStatic = 0;
 	else
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token, expected \"static\" or \"dynamic\"");
+		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", tokens[1]);
 
 	if (!strcmp(tokens[2], "varying"))
 		isVarying = 1;
 	else if (!strcmp(tokens[2], "const"))
 		isVarying = 0;
 	else
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token, expected \"varying\" or \"const\"");
+		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"varying\" or \"const\"", tokens[1]);
 
 	dataType = get_command_byte(tokens[3]);
 	if (dataType < lb_char || dataType > lb_objectarray)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Invalid global data type specifier");
+		return add_compile_error(back, srcFile, srcLine, error_error, "Invalid global data type specifier \"%s\"", tokens[3]);
 
 	name = tokens[4];
 
@@ -1237,14 +1309,14 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 	else if (!strcmp(tokens[1], "dynamic"))
 		isStatic = 0;
 	else
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token, expected \"static\" or \"dynamic\"");
+		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", tokens[1]);
 
 	if (!strcmp(tokens[2], "interp"))
 		isInterp = 1;
 	else if (!strcmp(tokens[2], "native"))
 		isInterp = 0;
 	else
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token, expected \"interp\" or \"native\"");
+		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"interp\" or \"native\"", tokens[2]);
 
 	size_t functionTokenCount;
 	char **functionData = tokenize_function(tokens + 3, tokenCount - 3, &functionTokenCount);
@@ -1377,7 +1449,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 					if (reqArgSize != argSize)
 					{
 						free_buffer(argbuf);
-						return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
+						return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)argSize, (int)reqArgSize);
 					}
 
 					if (reqArgType != argType)
@@ -1459,7 +1531,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 		setWidth = evaluate_constant(tokens[2], &setData, &setType, &setIsAbsolute);
 
 		if (myWidth != setWidth)
-			return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
+			return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)setWidth, (int)myWidth);
 
 		if (myType != setType)
 			back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
@@ -1555,7 +1627,7 @@ compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 				return add_compile_error(back, srcFile, srcLine, error_error, "Absolute type specifier not supported on return statement");
 
 			if (retSize != valueRetDesSize)
-				return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
+				return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)retSize, (int)valueRetDesSize);
 
 			if (retType != valueRetDesType)
 				back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");

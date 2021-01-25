@@ -69,6 +69,9 @@
     <ClInclude Include="internal\lstdio.h">
       <Filter>Header Files\internal</Filter>
     </ClInclude>
+    <ClInclude Include="internal\lsystem.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="internal\heap.c">
@@ -102,6 +105,9 @@
       <Filter>Source Files\internal</Filter>
     </ClCompile>
     <ClCompile Include="internal\lstdio.c">
+      <Filter>Source Files\internal</Filter>
+    </ClCompile>
+    <ClCompile Include="internal\lsystem.c">
       <Filter>Source Files\internal</Filter>
     </ClCompile>
   </ItemGroup>

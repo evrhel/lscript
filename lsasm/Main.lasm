@@ -38,7 +38,3 @@ class Main
 	function dynamic interp <init>()
 		ret
 
-	function static native testFunc()
-	function static native putls(object String str)
-	function static native test_call(int num1, int num2, int num3, int num4)
-
