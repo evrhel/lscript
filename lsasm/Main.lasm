@@ -10,7 +10,7 @@ class Main
 	global dynamic varying intarray array
 	
 	# main function
-	function static interp main(objectarray args)
+	function static interp main(objectarray String args)
 		object myString
 		seto myString "Hello Austin"
 

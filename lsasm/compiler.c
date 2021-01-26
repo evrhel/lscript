@@ -40,7 +40,6 @@ static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCo
 static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_while_cmd(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
 input_file_t *add_file(input_file_t *back, const char *filename)
 {
@@ -374,10 +373,8 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 
 			case lb_if:
 			case lb_elif:
-				back = handle_if_style_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
-				break;
 			case lb_while:
-				back = handle_while_cmd(tokens, tokenCount, out, srcFile, curr->linenum, back);
+				back = handle_if_style_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 			case lb_else:
 			case lb_end:
@@ -626,6 +623,17 @@ byte_t get_command_byte(const char *string)
 		return lb_div;
 	else if (!strcmp(string, "mod"))
 		return lb_mod;
+
+	else if (!strcmp(string, "if"))
+		return lb_if;
+	else if (!strcmp(string, "elif"))
+		return lb_elif;
+	else if (!strcmp(string, "else"))
+		return lb_else;
+	else if (!strcmp(string, "while"))
+		return lb_while;
+	else if (!strcmp(string, "end"))
+		return lb_end;
 
 	return lb_noop;
 }
@@ -935,7 +943,11 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *is
 		size = sizeof(ldouble);
 	}
 	else
+	{
+		*lBracket = '[';
+		*rBracket = ']';
 		return 0;
+	}
 
 	*lBracket = '[';
 	*rBracket = ']';
@@ -1853,11 +1865,6 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 
 compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
-	return back;
-}
-
-compile_error_t *handle_while_cmd(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
-{
 	if (tokenCount < 2)
 		return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
 
@@ -1868,6 +1875,7 @@ compile_error_t *handle_while_cmd(char **tokens, size_t tokenCount, buffer_t *ou
 	int lhsIsAbsolute;
 	size_t lhsSize = evaluate_constant(tokens[1], &lhsData, &lhsType, &lhsIsAbsolute);
 
+	put_byte(temp, cmd);
 	if (lhsSize == 0)
 	{
 		put_byte(temp, lb_value);
@@ -1922,7 +1930,7 @@ compile_error_t *handle_while_cmd(char **tokens, size_t tokenCount, buffer_t *ou
 		if (rhsSize == 0)
 		{
 			put_byte(temp, lb_value);
-			put_string(temp, tokens[1]);
+			put_string(temp, tokens[3]);
 		}
 		else if (!rhsIsAbsolute)
 		{
@@ -1955,4 +1963,3 @@ compile_error_t *handle_while_cmd(char **tokens, size_t tokenCount, buffer_t *ou
 
 	return back;
 }
-
