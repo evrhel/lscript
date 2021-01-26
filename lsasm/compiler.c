@@ -30,6 +30,7 @@ static int is_valid_identifier(const char *string);
 static char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTokenCount);
 static byte_t *derive_function_args(const char *functionSig, size_t *argc);
 static void free_derived_args(byte_t *args);
+static byte_t get_comparator_byte(const char *comparatorString);
 
 static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
@@ -38,6 +39,8 @@ static compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCo
 static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_while_cmd(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
 input_file_t *add_file(input_file_t *back, const char *filename)
 {
@@ -368,7 +371,17 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_mod:
 				back = handle_math_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
+
+			case lb_if:
+			case lb_elif:
+				back = handle_if_style_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				break;
+			case lb_while:
+				back = handle_while_cmd(tokens, tokenCount, out, srcFile, curr->linenum, back);
+				break;
+			case lb_else:
 			case lb_end:
+				out = put_byte(out, cmd);
 				break;
 			default:
 				back = add_compile_error(back, srcFile, curr->linenum, error_error, "Unknown command \"%s\"", tokens[0]);
@@ -1142,6 +1155,39 @@ void free_derived_args(byte_t *args)
 	free(args);
 }
 
+byte_t get_comparator_byte(const char *comparatorString)
+{
+	if (strlen(comparatorString) > 2)
+		return 0;
+	int c = 0;
+	char *buf = (char *)&c;
+	buf[0] = comparatorString[0];
+	buf[1] = comparatorString[1];
+	switch (c)
+	{
+	case '==':
+		return lb_equal;
+		break;
+	case '!=':
+		return lb_nequal;
+		break;
+	case '<':
+		return lb_less;
+		break;
+	case '<=':
+		return lb_lequal;
+		break;
+	case '>':
+		return lb_greater;
+		break;
+	case '>=':
+		return lb_gequal;
+		break;
+	default:
+		return 0;
+	}
+}
+
 compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
 	if (tokenCount < 2)
@@ -1801,6 +1847,111 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 
 	if (tokenCount > 4)
 		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following arithmetic operation");
+
+	return back;
+}
+
+compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	return back;
+}
+
+compile_error_t *handle_while_cmd(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	if (tokenCount < 2)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
+
+	buffer_t *temp = new_buffer(32);
+
+	data_t lhsData;
+	byte_t lhsType;
+	int lhsIsAbsolute;
+	size_t lhsSize = evaluate_constant(tokens[1], &lhsData, &lhsType, &lhsIsAbsolute);
+
+	if (lhsSize == 0)
+	{
+		put_byte(temp, lb_value);
+		put_string(temp, tokens[1]);
+	}
+	else if (!lhsIsAbsolute)
+	{
+		free_buffer(temp);
+		return add_compile_error(back, srcFile, srcLine, error_error, "Compare operation requires absolute type");
+	}
+	else
+	{
+		put_byte(temp, lhsType);
+		switch (lhsSize)
+		{
+		case 1:
+			put_char(temp, lhsData.cvalue);
+			break;
+		case 2:
+			put_short(temp, lhsData.svalue);
+			break;
+		case 4:
+			put_int(temp, lhsData.dvalue);
+			break;
+		case 8:
+			put_long(temp, lhsData.lvalue);
+			break;
+		}
+	}
+
+	if (tokenCount > 2)
+	{
+		byte_t comparatorByte = get_comparator_byte(tokens[2]);
+		if (comparatorByte == 0)
+		{
+			free_buffer(temp);
+			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected comparator", tokens[2]);
+		}
+		put_byte(temp, comparatorByte);
+
+		if (tokenCount < 4)
+		{
+			free_buffer(temp);
+			return add_compile_error(back, srcFile, srcLine, error_error, "Expected compare argument");
+		}
+
+		data_t rhsData;
+		byte_t rhsType;
+		int rhsIsAbsolute;
+		size_t rhsSize = evaluate_constant(tokens[3], &rhsData, &rhsType, &rhsIsAbsolute);
+
+		if (rhsSize == 0)
+		{
+			put_byte(temp, lb_value);
+			put_string(temp, tokens[1]);
+		}
+		else if (!rhsIsAbsolute)
+		{
+			free_buffer(temp);
+			return add_compile_error(back, srcFile, srcLine, error_error, "Compare operation requires absolute type");
+		}
+		else
+		{
+			put_byte(temp, rhsType);
+			switch (lhsSize)
+			{
+			case 1:
+				put_char(temp, rhsData.cvalue);
+				break;
+			case 2:
+				put_short(temp, rhsData.svalue);
+				break;
+			case 4:
+				put_int(temp, rhsData.dvalue);
+				break;
+			case 8:
+				put_long(temp, rhsData.lvalue);
+				break;
+			}
+		}
+	}
+
+	put_buf(out, temp);
+	free_buffer(temp);
 
 	return back;
 }

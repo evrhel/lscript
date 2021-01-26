@@ -85,7 +85,15 @@ enum
 	lb_if = 0xc3,
 	lb_elif,
 	lb_else,
-	lb_end
+	lb_while,
+	lb_end,
+
+	lb_equal = 0xe0,
+	lb_nequal,
+	lb_less,
+	lb_lequal,
+	lb_greater,
+	lb_gequal
 };
 
 #endif

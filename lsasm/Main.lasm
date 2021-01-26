@@ -10,30 +10,20 @@ class Main
 	global dynamic varying intarray array
 	
 	# main function
-	function static interp main(intarray args, object String str)
+	function static interp main(objectarray args)
 		object myString
 		seto myString "Hello Austin"
 
 		dynamic_call System.stdout.println(LString;) myString
 
-		#static_call putls(LString;) myString
+		int counter
+		while counter < args.length
+			dynamic_call System.stdout.println(LString;) args[counter]
+			add counter counter int[1]
+		end
 
-		int variable
-		setd variable dword[10]
+		retd dword[25]
 
-		object myObj
-		seto myObj new Main <init>()
-		dynamic_call myObj.myFunc()
-		setr args[3]
-		
-		static_call myFunc()
-		setr args[1]
-
-		add variable variable int[16]
-		retv variable
-
-	function static interp myFunc()
-		retd dword[17]
 
 	function dynamic interp <init>()
 		ret
