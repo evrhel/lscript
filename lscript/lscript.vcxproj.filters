@@ -72,6 +72,9 @@
     <ClInclude Include="internal\lsystem.h">
       <Filter>Header Files\internal</Filter>
     </ClInclude>
+    <ClInclude Include="internal\vm_compare.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="internal\heap.c">
@@ -108,6 +111,9 @@
       <Filter>Source Files\internal</Filter>
     </ClCompile>
     <ClCompile Include="internal\lsystem.c">
+      <Filter>Source Files\internal</Filter>
+    </ClCompile>
+    <ClCompile Include="internal\vm_compare.c">
       <Filter>Source Files\internal</Filter>
     </ClCompile>
   </ItemGroup>

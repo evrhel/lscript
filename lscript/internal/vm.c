@@ -7,6 +7,17 @@
 #include "cast.h"
 #include "value.h"
 #include "vm_math.h"
+#include "vm_compare.h"
+
+#define CURR_CLASS(env) ((class_t *)(env)->rbp+2)
+
+typedef struct control_s control_t;
+struct control_s
+{
+	byte_t *loc;
+	byte_t type;
+	byte_t padding[7];
+};
 
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
@@ -23,6 +34,9 @@ static int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFla
 static int try_link_function(vm_t *vm, function_t *func);
 
 static int equals_ignore_case(const char *s1, const char *s2);
+
+static void add_control_statement(byte_t *loc, byte_t type, list_t **front, list_t **last);
+static void remove_control_statement(list_t **front, list_t **last);
 
 /*
 Implemented in hooks.asm
@@ -744,23 +758,6 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 	return 1;
 }
 
-void __stdcall test_func_void(env_t *env)
-{
-	printf("Void func\n");
-}
-
-void __stdcall test_func_args(env_t *env, const char *string, float fl, double d)
-{
-	printf("Hello World! %s\n", string);
-}
-
-void __stdcall test_func_args2(env_t *env, class_t *clazz, const char *string)
-{
-
-}
-
-// byte_t arr
-
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
 	if (function->flags & FUNCTION_FLAG_NATIVE)
@@ -1017,6 +1014,8 @@ int env_run(env_t *env, void *location)
 	class_t *clazz;				// A pointer to a class_t used for holding some class
 	array_t *array;				// A pointer to an array_t used for holding some array
 	size_t length;				// An arbitrary value for storing a length
+	list_t *controlList;		// A list storing the pointer to the top of a control statement
+	list_t *controlLast;		// The last element in the control list
 
 	while (1)
 	{
@@ -1575,6 +1574,27 @@ int env_run(env_t *env, void *location)
 				return env->exception;
 			break;
 
+		case lb_while:
+
+			if (!vmc_compare(env, &counter))
+			{
+				if (env->exception)
+					return env->exception;
+				counter = CURR_CLASS(env)->data + *counter;
+			}
+			else
+				counter += 8;
+			break;
+
+		case lb_if:
+			break;
+		case lb_elif:
+			break;
+		case lb_else:
+			break;
+		case lb_end:
+			break;
+
 		default:
 			env->exception = exception_bad_command;
 			env->exceptionDesc = *counter;
@@ -1725,12 +1745,40 @@ int equals_ignore_case(const char *s1, const char *s2)
 	return *s1 == *s2;
 }
 
-int call_native(env_t *env, function_t *function, va_list ls)
+void add_control_statement(byte_t *loc, byte_t type, list_t **front, list_t **last)
 {
-#if defined(_WIN32)
+	list_t *node = list_create();
+	control_t *control = (control_t *)malloc(sizeof(control_t));
+	if (!control)
+	{
+		*front = NULL;
+		return;
+	}
+	control->loc = loc;
+	control->type = type;
+	node->data = control;
+	if (!(*front))
+	{
+		*front = node;
+		*last = node;
+	}
+	else
+	{
+		(*last)->next = node;
+		node->prev = *last;
+		*last = node;
+	}
+}
 
-
-#else
-#endif
-	return 0;
+void remove_control_statement(list_t **front, list_t **last)
+{
+	if (*last)
+	{
+		list_t *prev = (*last)->prev;
+		prev->next = NULL;
+		list_free(*last, 1);
+		*last = prev;
+		if (!prev)
+			*front = NULL;
+	}
 }

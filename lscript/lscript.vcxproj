@@ -158,6 +158,7 @@
     <ClInclude Include="internal\lb.h" />
     <ClInclude Include="internal\lstdio.h" />
     <ClInclude Include="internal\lsystem.h" />
+    <ClInclude Include="internal\vm_compare.h" />
     <ClInclude Include="internal\vm_math.h" />
     <ClInclude Include="internal\mem.h" />
     <ClInclude Include="internal\mem_debug.h" />
@@ -174,6 +175,7 @@
     <ClCompile Include="internal\heap.c" />
     <ClCompile Include="internal\lstdio.c" />
     <ClCompile Include="internal\lsystem.c" />
+    <ClCompile Include="internal\vm_compare.c" />
     <ClCompile Include="internal\vm_math.c" />
     <ClCompile Include="internal\mem.c" />
     <ClCompile Include="internal\mem_debug.c" />
