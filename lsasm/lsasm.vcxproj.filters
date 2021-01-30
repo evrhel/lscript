@@ -24,12 +24,24 @@
     <ClCompile Include="buffer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="linker.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="collections.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="compiler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="buffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="linker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="collections.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

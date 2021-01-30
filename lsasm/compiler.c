@@ -41,121 +41,6 @@ static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenC
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
-input_file_t *add_file(input_file_t *back, const char *filename)
-{
-	input_file_t *next = (input_file_t *)malloc(sizeof(input_file_t));
-	if (!next)
-		return NULL;
-	if (back)
-	{
-		back->next = next;
-		next->front = back->front;
-	}
-	else
-		next->front = next;
-	next->filename = filename;
-	next->next = NULL;
-	return next;
-}
-
-void free_file_list(input_file_t *front)
-{
-	input_file_t *curr = front;
-	while (curr)
-	{
-		curr = front->next;
-		free(front);
-	}
-}
-
-compile_error_t *create_base_compile_error(msg_func_t messenger)
-{
-	compile_error_t *next = (compile_error_t *)malloc(sizeof(compile_error_t));
-	if (!next)
-		return NULL;
-	next->file = NULL;
-	next->line = 0;
-	next->type = -1;
-	next->next = NULL;
-	next->front = next;
-	next->messenger = messenger;
-	next->desc[0] = 0;
-	return next;
-}
-
-compile_error_t *add_compile_error(compile_error_t *back, const char *file, int line, int type, const char *format, ...)
-{
-	compile_error_t *next = (compile_error_t *)malloc(sizeof(compile_error_t));
-	if (!next)
-		return NULL;
-	if (back)
-	{
-		back->next = next;
-		next->front = back->front;
-		next->messenger = back->messenger;
-	}
-	else
-	{
-		next->front = next;
-		next->messenger = NULL;
-	}
-	next->file = file;
-	next->line = line;
-	next->type = type;
-	next->next = NULL;
-
-	size_t len;
-	size_t bufsize = sizeof(next->desc);
-	char *curr = next->desc;
-
-	switch (type)
-	{
-	case error_error:
-		sprintf_s(curr, bufsize, "[ERRO] ");
-		break;
-	case error_warning:
-		sprintf_s(curr, bufsize, "[WARN] ");
-		break;
-	case error_info:
-		sprintf_s(curr, bufsize, "[INFO] ");
-		break;
-	default:
-		return next;
-	}
-	len = strlen(curr);
-	curr += len;
-	bufsize -= len;
-
-	if (file)
-	{
-		sprintf_s(curr, bufsize, "%s.%d : ", file, line);
-		len = strlen(curr);
-		curr += len;
-		bufsize -= len;
-	}
-
-	va_list ls;
-	va_start(ls, format);
-	va_arg(ls, const char *);
-	vsprintf_s(curr, bufsize, format, ls);
-	va_end(ls);
-
-	if (next->messenger)
-		next->messenger(next->desc);
-
-	return next;
-}
-
-void free_compile_error_list(compile_error_t *front)
-{
-	compile_error_t *curr = front;
-	while (curr)
-	{
-		curr = front->next;
-		free(front);
-	}
-}
-
 compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, msg_func_t messenger)
 {
 	compile_error_t *errors = create_base_compile_error(messenger);
@@ -372,13 +257,18 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 				break;
 
 			case lb_if:
-			case lb_elif:
 			case lb_while:
 				back = handle_if_style_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 			case lb_else:
+				out = put_byte(out, lb_else);
+				out = put_byte(out, tokenCount > 1);
+				if (tokenCount > 1)
+					back = handle_if_style_cmd(cmd, tokens + 1, tokenCount - 1, out, srcFile, curr->linenum, back);
+				break;
 			case lb_end:
 				out = put_byte(out, cmd);
+				out = put_long(out, -1);
 				break;
 			default:
 				back = add_compile_error(back, srcFile, curr->linenum, error_error, "Unknown command \"%s\"", tokens[0]);
@@ -1959,6 +1849,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 	}
 
 	put_buf(out, temp);
+	put_long(out, -1);
 	free_buffer(temp);
 
 	return back;

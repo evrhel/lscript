@@ -145,12 +145,16 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="buffer.c" />
+    <ClCompile Include="collections.c" />
     <ClCompile Include="compiler.c" />
+    <ClCompile Include="linker.c" />
     <ClCompile Include="main.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="buffer.h" />
+    <ClInclude Include="collections.h" />
     <ClInclude Include="compiler.h" />
+    <ClInclude Include="linker.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

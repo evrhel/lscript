@@ -16,6 +16,14 @@ class Main
 
 		dynamic_call System.stdout.println(LString;) myString
 
+		if args.length == int[0]
+			dynamic_call System.stdout.println(LString;) "There are no arguments!"
+		else if args.length == int[1]
+			dynamic_call System.stdout.println(LString;) "There is one argument!"
+		else
+			dynamic_call System.stdout.println(LString;) "There is more than one argument!"
+		end
+
 		int counter
 		while counter < args.length
 			dynamic_call System.stdout.println(LString;) args[counter]

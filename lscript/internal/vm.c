@@ -35,9 +35,6 @@ static int try_link_function(vm_t *vm, function_t *func);
 
 static int equals_ignore_case(const char *s1, const char *s2);
 
-static void add_control_statement(byte_t *loc, byte_t type, list_t **front, list_t **last);
-static void remove_control_statement(list_t **front, list_t **last);
-
 /*
 Implemented in hooks.asm
 */
@@ -92,6 +89,20 @@ static inline int is_numeric(const char *string)
 		string++;
 	}
 	return 1;
+}
+
+static inline int handle_if(env_t *env, byte_t **counterPtr)
+{
+	byte_t *counter = *counterPtr;
+	if (!vmc_compare(env, &counter))
+	{
+		if (env->exception)
+			return env->exception;
+		counter = CURR_CLASS(env)->data + *((size_t *)counter);
+	}
+	else
+		counter += sizeof(size_t);
+	return 0;
 }
 
 vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const argv[])
@@ -1014,8 +1025,7 @@ int env_run(env_t *env, void *location)
 	class_t *clazz;				// A pointer to a class_t used for holding some class
 	array_t *array;				// A pointer to an array_t used for holding some array
 	size_t length;				// An arbitrary value for storing a length
-	list_t *controlList;		// A list storing the pointer to the top of a control statement
-	list_t *controlLast;		// The last element in the control list
+	size_t off;					// An arbitrary value for storing an offset
 
 	while (1)
 	{
@@ -1575,24 +1585,41 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_while:
-
 			if (!vmc_compare(env, &counter))
 			{
 				if (env->exception)
 					return env->exception;
-				counter = CURR_CLASS(env)->data + *counter;
+				counter = CURR_CLASS(env)->data + *((size_t *)counter);
 			}
 			else
-				counter += 8;
+				counter += sizeof(size_t);
 			break;
 
 		case lb_if:
-			break;
-		case lb_elif:
+			handle_if(env, &counter);
 			break;
 		case lb_else:
+			counter++;
+			if (*counter == lb_if)
+			{
+				counter++;
+				if (handle_if(env, &counter))
+					return env->exception;
+			}
+			else
+				counter++;
 			break;
 		case lb_end:
+			counter++;
+			off = *((size_t *)counter);
+			if (off == (size_t)-1)
+			{
+				counter += sizeof(size_t);
+			}
+			else
+			{
+				counter = CURR_CLASS(env)->data + off;
+			}
 			break;
 
 		default:
@@ -1743,42 +1770,4 @@ int equals_ignore_case(const char *s1, const char *s2)
 		s2++;
 	}
 	return *s1 == *s2;
-}
-
-void add_control_statement(byte_t *loc, byte_t type, list_t **front, list_t **last)
-{
-	list_t *node = list_create();
-	control_t *control = (control_t *)malloc(sizeof(control_t));
-	if (!control)
-	{
-		*front = NULL;
-		return;
-	}
-	control->loc = loc;
-	control->type = type;
-	node->data = control;
-	if (!(*front))
-	{
-		*front = node;
-		*last = node;
-	}
-	else
-	{
-		(*last)->next = node;
-		node->prev = *last;
-		*last = node;
-	}
-}
-
-void remove_control_statement(list_t **front, list_t **last)
-{
-	if (*last)
-	{
-		list_t *prev = (*last)->prev;
-		prev->next = NULL;
-		list_free(*last, 1);
-		*last = prev;
-		if (!prev)
-			*front = NULL;
-	}
 }
