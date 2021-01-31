@@ -1759,6 +1759,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 		return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
 
 	buffer_t *temp = new_buffer(32);
+	byte_t count = lb_one;
 
 	data_t lhsData;
 	byte_t lhsType;
@@ -1798,6 +1799,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 
 	if (tokenCount > 2)
 	{
+		count = lb_two;
 		byte_t comparatorByte = get_comparator_byte(tokens[2]);
 		if (comparatorByte == 0)
 		{
@@ -1848,6 +1850,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 		}
 	}
 
+	put_byte(out, count);
 	put_buf(out, temp);
 	put_long(out, -1);
 	free_buffer(temp);

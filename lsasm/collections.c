@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 input_file_t *add_file(input_file_t *back, const char *filename)
 {

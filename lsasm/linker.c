@@ -4,11 +4,17 @@
 #include <stdio.h>
 #include <internal/lb.h>
 
+enum
+{
+	search_end = 0x1,
+	search_else = 0x2,
+};
+
 static compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int linkVersion);
 static compile_error_t *link_data(byte_t *data, size_t datalen, compile_error_t *back, unsigned int linkVersion);
 
 static byte_t *seek_to_next_control(byte_t *off, byte_t *end);
-static byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart);
+static byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, int searchType);
 static byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart);
 
 compile_error_t *link(input_file_t *files, unsigned int linkVersion, msg_func_t messenger)
@@ -28,12 +34,12 @@ compile_error_t *link(input_file_t *files, unsigned int linkVersion, msg_func_t 
 	return errors;
 }
 
-compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int linkVersion)
+compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned int linkVersion)
 {
 	FILE *file = NULL;
-	fopen_s(&file, file, "rb");
+	fopen_s(&file, filepath, "rb");
 	if (!file)
-		return add_compile_error(back, file, 0, error_error, "Failed to fopen for read");
+		return add_compile_error(back, filepath, 0, error_error, "Failed to fopen for read");
 
 	fseek(file, 0, SEEK_END);
 	long len = ftell(file);
@@ -41,16 +47,16 @@ compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int
 
 	byte_t *data = (byte_t *)malloc(len);
 	if (!data)
-		return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
+		return add_compile_error(back, filepath, 0, error_error, "Failed to allocate buffer");
 
 	fread_s(data, len, sizeof(byte_t), len, file);
 	fclose(file);
 
 	back = link_data(data, len, back, linkVersion);
 
-	fopen_s(&file, file, "wb");
+	fopen_s(&file, filepath, "wb");
 	if (!file)
-		return add_compile_error(back, file, 0, error_error, "Failed to fopen for write");
+		return add_compile_error(back, filepath, 0, error_error, "Failed to fopen for write");
 
 	fwrite(data, sizeof(byte_t), len, file);
 
@@ -65,6 +71,8 @@ compile_error_t *link_data(byte_t *data, size_t len, compile_error_t *back, unsi
 {
 	byte_t *counter = data;
 	byte_t *end = data + len;
+	size_t *linkLoc;
+	byte_t *controlEnd;
 	while (1)
 	{
 		counter = seek_to_next_control(counter, end);
@@ -72,13 +80,19 @@ compile_error_t *link_data(byte_t *data, size_t len, compile_error_t *back, unsi
 		{
 			switch (*counter)
 			{
-			case lb_if:
-				break;
 			case lb_else:
 				counter++;
-				if (*counter == lb_if)
+				if (*counter != lb_if)
+					break;
+			case lb_if:
+				controlEnd = seek_to_cooresponding_end(counter, end, &linkLoc, search_end | search_else);
+				controlEnd++;
+				*linkLoc = (size_t)(controlEnd - data);
 				break;
 			case lb_while:
+				controlEnd = seek_to_cooresponding_end(counter, end, &linkLoc, search_end);
+				controlEnd++;
+				*linkLoc = (size_t)(controlEnd - data);
 				break;
 			}
 		}
@@ -293,7 +307,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end)
 	return off;
 }
 
-byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart)
+byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, int searchType)
 {
 	int level = 0;
 	while (off && off < end)
@@ -332,5 +346,86 @@ byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart)
 
 byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart)
 {
-	return NULL;
+	byte_t *off = start;
+	off++;
+	byte_t count = *off;
+	off++;
+
+	switch (*off)
+	{
+	case lb_char:
+	case lb_uchar:
+		off++;
+		off += sizeof(byte_t);
+		break;
+	case lb_short:
+	case lb_ushort:
+		off++;
+		off += sizeof(word_t);
+		break;
+	case lb_int:
+	case lb_uint:
+	case lb_float:
+		off += sizeof(dword_t);
+		break;
+	case lb_long:
+	case lb_ulong:
+	case lb_double:
+		off += sizeof(qword_t);
+		break;
+	case lb_value:
+		off++;
+		off += strlen(off) + 1;
+		break;
+	default:
+		break;
+	}
+
+	if (count == lb_one)
+	{
+		if (linkStart)
+			*linkStart = (size_t *)off;
+		off += sizeof(size_t);
+	}
+	else if (count = lb_two)
+	{
+		switch (*off)
+		{
+		case lb_char:
+		case lb_uchar:
+			off++;
+			off += sizeof(byte_t);
+			break;
+		case lb_short:
+		case lb_ushort:
+			off++;
+			off += sizeof(word_t);
+			break;
+		case lb_int:
+		case lb_uint:
+		case lb_float:
+			off += sizeof(dword_t);
+			break;
+		case lb_long:
+		case lb_ulong:
+		case lb_double:
+			off += sizeof(qword_t);
+			break;
+		case lb_value:
+			off++;
+			off += strlen(off) + 1;
+			break;
+		default:
+			break;
+		}
+
+		if (linkStart)
+			*linkStart = (size_t *)off;
+		off += sizeof(size_t);
+	}
+	else
+	{
+		// bad
+	}
+	return off;
 }

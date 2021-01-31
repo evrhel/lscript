@@ -1,5 +1,5 @@
-#if !defined(COLLETIONS_H)
-#define COLLETCIONS_H
+#if !defined(COLLECTIONS_H)
+#define COLLECTIONS_H
 
 enum
 {

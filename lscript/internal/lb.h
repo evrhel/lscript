@@ -93,7 +93,9 @@ enum
 	lb_less,
 	lb_lequal,
 	lb_greater,
-	lb_gequal
+	lb_gequal,
+	lb_one,
+	lb_two
 };
 
 #endif

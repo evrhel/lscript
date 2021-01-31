@@ -5,12 +5,14 @@
 #include <stdlib.h>
 
 #include "compiler.h"
+#include "linker.h"
 
 #define LSASM_VERSION "1.0.0a"
 
 #define RETURN_NORMAL 0x01
 #define RETURN_INVALID_ARGUMENT 0x02
-#define RETURN_COMPILE_ERROR
+#define RETURN_COMPILE_ERROR 0x03
+#define RETURN_LINK_ERROR 0x04
 
 static int equals_ignore_case(const char *s1, const char *s2);
 static void display_help();
@@ -72,6 +74,10 @@ int main(int argc, char *argv[])
 	compile_error_t *errors = compile(files, outputDirectory, version, puts);
 	if (errors)
 		return RETURN_COMPILE_ERROR;
+
+	errors = link(files, version, puts);
+	if (errors)
+		return RETURN_LINK_ERROR;
 
 	return RETURN_NORMAL;
 }
