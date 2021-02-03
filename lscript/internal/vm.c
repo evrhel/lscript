@@ -1585,7 +1585,8 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_while:
-			if (!vmc_compare(env, &counter))
+			if (!vmc_compare
+			(env, &counter))
 			{
 				if (env->exception)
 					return env->exception;

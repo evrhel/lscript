@@ -17,12 +17,14 @@
 static int equals_ignore_case(const char *s1, const char *s2);
 static void display_help();
 static void display_version();
+static int are_errors(const compile_error_t *list);
 
 int main(int argc, char *argv[])
 {
 	input_file_t *files = NULL;
 	const char *outputDirectory = ".";
 	unsigned int version = 1;
+	int runCompiler = 1, runLinker = 1;
 	for (int i = 1; i < argc; i++)
 	{
 		if (equals_ignore_case(argv[i], "-h"))
@@ -71,13 +73,25 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	compile_error_t *errors = compile(files, outputDirectory, version, puts);
-	if (errors)
-		return RETURN_COMPILE_ERROR;
+	compile_error_t *errors;
+	input_file_t *linkFiles = NULL;
+	
+	if (runCompiler)
+	{
+		errors = compile(files, outputDirectory, version, (msg_func_t)puts, &linkFiles);
+		if (are_errors(errors))
+			return RETURN_COMPILE_ERROR;
+	}
 
-	errors = link(files, version, puts);
-	if (errors)
-		return RETURN_LINK_ERROR;
+	if (!linkFiles)
+		linkFiles = files;
+
+	if (runLinker)
+	{
+		errors = link(linkFiles, version, (msg_func_t)puts);
+		if (are_errors(errors))
+			return RETURN_LINK_ERROR;
+	}
 
 	return RETURN_NORMAL;
 }
@@ -127,4 +141,15 @@ void display_version()
 	printf("Version: %s\n", LSASM_VERSION);
 	printf("Build date: %s\n", __DATE__);
 	printf("Build time: %s\n", __TIME__);
+}
+
+int are_errors(const compile_error_t *list)
+{
+	while (list)
+	{
+		if (list->type == error_error)
+			return 1;
+		list = list->next;
+	}
+	return 0;
 }

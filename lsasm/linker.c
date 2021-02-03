@@ -2,7 +2,7 @@
 
 #include "buffer.h"
 #include <stdio.h>
-#include <internal/lb.h>
+#include <internal/value.h>
 
 enum
 {
@@ -11,11 +11,13 @@ enum
 };
 
 static compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int linkVersion);
-static compile_error_t *link_data(byte_t *data, size_t datalen, compile_error_t *back, unsigned int linkVersion);
+static compile_error_t *link_data(byte_t *data, size_t datalen, const char *srcFile, compile_error_t *back, unsigned int linkVersion);
 
 static byte_t *seek_to_next_control(byte_t *off, byte_t *end);
 static byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, int searchType);
 static byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart);
+
+static unsigned char infer_argument_count(const char *qualname);
 
 compile_error_t *link(input_file_t *files, unsigned int linkVersion, msg_func_t messenger)
 {
@@ -52,7 +54,7 @@ compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned
 	fread_s(data, len, sizeof(byte_t), len, file);
 	fclose(file);
 
-	back = link_data(data, len, back, linkVersion);
+	back = link_data(data, len, filepath, back, linkVersion);
 
 	fopen_s(&file, filepath, "wb");
 	if (!file)
@@ -67,12 +69,26 @@ compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned
 	return back;
 }
 
-compile_error_t *link_data(byte_t *data, size_t len, compile_error_t *back, unsigned int linkVersion)
+compile_error_t *link_data(byte_t *data, size_t len, const char *srcFile, compile_error_t *back, unsigned int linkVersion)
 {
 	byte_t *counter = data;
 	byte_t *end = data + len;
 	size_t *linkLoc;
 	byte_t *controlEnd;
+
+	counter += 5; // (unused) compressed bit and version number
+
+	if (*counter != lb_class)
+		return add_compile_error(back, srcFile, 0, error_error, "Bad file for link");
+
+	counter++; // class
+	counter += strlen(counter) + 1; // classname;
+	if (*counter == lb_extends)
+	{
+		counter++; // extends
+		counter += strlen(counter) + 1; // superclass name
+	}
+
 	while (1)
 	{
 		counter = seek_to_next_control(counter, end);
@@ -105,6 +121,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end)
 {
 	unsigned char i;
 	unsigned char argCount;
+	value_t *val;
 	while (off < end)
 	{
 		switch (*off)
@@ -116,9 +133,62 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end)
 			return off;
 			break;
 
+		case lb_class:
+			break;
+
 		case lb_global:
+			off++;
+			off += strlen(off) + 1;
+			val = (value_t *)off;
+			off += 8; // flags field
+			if (value_is_static(val))
+			{
+				off += value_sizeof(val);
+			}
 			break;
 		case lb_function:
+			off++;
+			off += 2; // 2 function qualifiers
+			off += strlen(off) + 1; // function name;
+			argCount = *off;
+			off++;
+			for (i = 0; i < argCount; i++)
+			{
+				switch (*off)
+				{
+				case lb_char:
+				case lb_uchar:
+				case lb_short:
+				case lb_ushort:
+				case lb_int:
+				case lb_uint:
+				case lb_long:
+				case lb_ulong:
+				case lb_float:
+				case lb_double:
+				case lb_bool:
+				case lb_chararray:
+				case lb_uchararray:
+				case lb_shortarray:
+				case lb_ushortarray:
+				case lb_intarray:
+				case lb_uintarray:
+				case lb_longarray:
+				case lb_ulongarray:
+				case lb_floatarray:
+				case lb_doublearray:
+				case lb_boolarray:
+					off++;
+					off += strlen(off) + 1; // argument name
+					break;
+				case lb_object:
+				case lb_objectarray:
+					off++;
+					off += strlen(off) + 1; // argument classname
+					off += strlen(off) + 1; // argument name
+					break;
+				}
+			}
 			break;
 
 		case lb_noop:
@@ -232,41 +302,31 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end)
 		case lb_static_call:
 		case lb_dynamic_call:
 			off++;
+			argCount = infer_argument_count((const char *)off);
 			off += strlen(off) + 1;	// Function name
-			argCount = *off;
 			for (i = 0; i < argCount; i++)
 			{
 				switch (*off)
 				{
-				case lb_char:
-				case lb_uchar:
-				case lb_short:
-				case lb_ushort:
-				case lb_int:
-				case lb_uint:
-				case lb_long:
-				case lb_ulong:
-				case lb_real4:
-				case lb_real8:
-				case lb_bool:
-				case lb_chararray:
-				case lb_uchararray:
-				case lb_shortarray:
-				case lb_ushortarray:
-				case lb_intarray:
-				case lb_uintarray:
-				case lb_longarray:
-				case lb_ulongarray:
-				case lb_floatarray:
-				case lb_doublearray:
+				case lb_byte:
 					off++;
-					off += strlen(off) + 1;	// Argument name
+					off += sizeof(byte_t);
 					break;
-				case lb_object:
-				case lb_objectarray:
+				case lb_word:
 					off++;
-					off += strlen(off) + 1;	// Classname
-					off += strlen(off) + 1;	// Argument name
+					off += sizeof(word_t);
+					break;
+				case lb_dword:
+					off++;
+					off += sizeof(dword_t);
+					break;
+				case lb_qword:
+					off++;
+					off += sizeof(qword_t);
+					break;
+				case lb_value:
+					off++;
+					off += strlen(off) + 1;
 					break;
 				}
 			}
@@ -324,6 +384,7 @@ byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, 
 			off = seek_past_if_style_cmd(off, level == 1 ? linkStart : NULL);
 			break;
 		case lb_end:
+			off++;
 			level--;
 			if (level == 0)
 				return off;
@@ -387,8 +448,9 @@ byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart)
 			*linkStart = (size_t *)off;
 		off += sizeof(size_t);
 	}
-	else if (count = lb_two)
+	else if (count == lb_two)
 	{
+		off++; // comparator
 		switch (*off)
 		{
 		case lb_char:
@@ -404,11 +466,13 @@ byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart)
 		case lb_int:
 		case lb_uint:
 		case lb_float:
+			off++;
 			off += sizeof(dword_t);
 			break;
 		case lb_long:
 		case lb_ulong:
 		case lb_double:
+			off++;
 			off += sizeof(qword_t);
 			break;
 		case lb_value:
@@ -428,4 +492,18 @@ byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart)
 		// bad
 	}
 	return off;
+}
+
+unsigned char infer_argument_count(const char *qualname)
+{
+	unsigned char argCount = 0;
+	char *cursor = strchr(qualname, '(') + 1;
+	while (*cursor)
+	{
+		if (*cursor == 'L')
+			cursor = strchr(cursor, ';');
+		cursor++;
+		argCount++;
+	}
+	return argCount;
 }

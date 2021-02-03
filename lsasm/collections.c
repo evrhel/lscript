@@ -21,13 +21,17 @@ input_file_t *add_file(input_file_t *back, const char *filename)
 	return next;
 }
 
-void free_file_list(input_file_t *front)
+void free_file_list(input_file_t *front, int freeData)
 {
 	input_file_t *curr = front;
+	input_file_t *next = NULL;
 	while (curr)
 	{
-		curr = front->next;
-		free(front);
+		next = curr->next;
+		if (freeData)
+			free(curr->filename);
+		free(curr);
+		curr = next;
 	}
 }
 
@@ -99,7 +103,7 @@ compile_error_t *add_compile_error(compile_error_t *back, const char *file, int 
 
 	va_list ls;
 	va_start(ls, format);
-	const char *dummy = va_arg(ls, const char *);
+	//const char *dummy = va_arg(ls, const char *);
 	vsprintf_s(curr, bufsize, format, ls);
 	va_end(ls);
 

@@ -16,7 +16,7 @@ struct line_s
 	int linenum;
 };
 
-static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version);
+static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version, input_file_t **outputFiles);
 static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version);
 static line_t *format_document(const char *data, size_t datalen);
 static void free_formatted(line_t *first);
@@ -41,9 +41,16 @@ static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenC
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, msg_func_t messenger)
+compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, msg_func_t messenger, input_file_t **outputFiles)
 {
 	compile_error_t *errors = create_base_compile_error(messenger);
+	input_file_t *base = (input_file_t *)malloc(sizeof(input_file_t));
+	if (!base)
+		return add_compile_error(errors, "", 0, error_error, "Allocation failure.");
+	base->next = NULL;
+	base->front = base;
+	
+	input_file_t *back = base;
 
 	if (files)
 	{
@@ -53,14 +60,28 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 
 		while (files)
 		{
-			errors = compile_file(files->filename, outputDirectory, errors, version);
+			errors = compile_file(files->filename, outputDirectory, errors, version, &back);
 			files = files->next;
 		}
 	}
+
+	input_file_t *curr = base->next;
+	input_file_t *front = base->next;
+
+	base->next = NULL;
+	free_file_list(base, 0);
+
+	while (curr)
+	{
+		curr->front = front;
+		curr = curr->next;
+	}
+
+	*outputFiles = front;
 	return errors;
 }
 
-compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back, unsigned int version)
+compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back, unsigned int version, input_file_t **outputFiles)
 {
 	FILE *in;
 
@@ -129,12 +150,14 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		fname[len] = 0;
 	}
 
+	*outputFiles = add_file(*outputFiles, nstr);
+
 	FILE *out;
 	fopen_s(&out, nstr, "wb");
 	if (!out)
 	{
 		free_buffer(obuf);
-		free(nstr);
+		//free(nstr);
 		return add_compile_error(back, file, 0, 0, "Failed to fopen for write", error_error);
 	}
 	fputc(0, out);
@@ -143,7 +166,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 	fclose(out);
 	free_buffer(obuf);
-	free(nstr);
+	//free(nstr);
 
 	if (hasWarnings)
 		back = add_compile_error(back, NULL, 0, error_info, "%s built with warnings.", file);
@@ -1766,7 +1789,6 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 	int lhsIsAbsolute;
 	size_t lhsSize = evaluate_constant(tokens[1], &lhsData, &lhsType, &lhsIsAbsolute);
 
-	put_byte(temp, cmd);
 	if (lhsSize == 0)
 	{
 		put_byte(temp, lb_value);
@@ -1832,7 +1854,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 		else
 		{
 			put_byte(temp, rhsType);
-			switch (lhsSize)
+			switch (rhsSize)
 			{
 			case 1:
 				put_char(temp, rhsData.cvalue);
@@ -1850,6 +1872,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 		}
 	}
 
+	put_byte(out, cmd);
 	put_byte(out, count);
 	put_buf(out, temp);
 	put_long(out, -1);
