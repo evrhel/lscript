@@ -285,6 +285,7 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 				break;
 			case lb_else:
 				out = put_byte(out, lb_else);
+				out = put_long(out, -1);
 				out = put_byte(out, tokenCount > 1);
 				if (tokenCount > 1)
 					back = handle_if_style_cmd(cmd, tokens + 1, tokenCount - 1, out, srcFile, curr->linenum, back);

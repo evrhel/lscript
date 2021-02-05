@@ -1600,16 +1600,6 @@ int env_run(env_t *env, void *location)
 			handle_if(env, &counter);
 			break;
 		case lb_else:
-			counter++;
-			if (*counter == lb_if)
-			{
-				counter++;
-				if (handle_if(env, &counter))
-					return env->exception;
-			}
-			else
-				counter++;
-			break;
 		case lb_end:
 			counter++;
 			off = *((size_t *)counter);

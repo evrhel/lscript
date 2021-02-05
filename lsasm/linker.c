@@ -15,6 +15,7 @@ static compile_error_t *link_data(byte_t *data, size_t datalen, const char *srcF
 
 static byte_t *seek_to_next_control(byte_t *off, byte_t *end);
 static byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, int searchType);
+static byte_t *link_if_cmd(byte_t *off, byte_t *end, int searchType);
 static byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart);
 
 static unsigned char infer_argument_count(const char *qualname);
@@ -101,10 +102,12 @@ compile_error_t *link_data(byte_t *data, size_t len, const char *srcFile, compil
 				if (*counter != lb_if)
 					break;
 			case lb_if:
-				controlEnd = seek_to_cooresponding_end(counter, end, &linkLoc, search_end | search_else);
+				link_if_cmd(counter, end, search_end | search_else);
+				break;
+				/*controlEnd = seek_to_cooresponding_end(counter, end, &linkLoc, search_end | search_else);
 				controlEnd++;
 				*linkLoc = (size_t)(controlEnd - data);
-				break;
+				break;*/
 			case lb_while:
 				controlEnd = seek_to_cooresponding_end(counter, end, &linkLoc, search_end);
 				controlEnd++;
@@ -403,6 +406,59 @@ byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, 
 	if (linkStart)
 		*linkStart = NULL;
 	return NULL;
+}
+
+byte_t *link_if_cmd(byte_t *off, byte_t *end, int searchType)
+{
+	int level = 0;
+	byte_t *top = off;
+	byte_t *blockEnd = NULL;
+	while (off && off < end)
+	{
+		switch (*off)
+		{
+		case lb_else:
+			off++;
+			if (searchType & search_else)
+			{
+				blockEnd = link_if_cmd(off, end, search_end);
+				goto perform_link;
+			}
+			else
+			{
+				off += sizeof(size_t);
+				if (*off == lb_if)
+					off = seek_past_if_style_cmd(off, NULL);
+			}
+			break;
+		case lb_if:
+		case lb_while:
+			level++;
+			off = seek_past_if_style_cmd(off, NULL);
+			break;
+		case lb_end:
+			level--;
+			if (level == 0 && searchType & search_end)
+			{
+				blockEnd = off;
+				goto perform_link;
+			}
+			off++;
+			break;
+		default:
+			off = seek_to_next_control(off, end);
+			if (!off)
+			{
+				return NULL;
+			}
+			break;
+		}
+	}
+perform_link:
+
+
+
+	return off;
 }
 
 byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart)
