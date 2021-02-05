@@ -8,14 +8,15 @@ enum
 {
 	search_end = 0x1,
 	search_else = 0x2,
+	search_no_link = 0x4
 };
 
 static compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int linkVersion);
 static compile_error_t *link_data(byte_t *data, size_t datalen, const char *srcFile, compile_error_t *back, unsigned int linkVersion);
 
 static byte_t *seek_to_next_control(byte_t *off, byte_t *end);
-static byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, int searchType);
-static byte_t *link_if_cmd(byte_t *off, byte_t *end, int searchType);
+static byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType);
+static byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType);
 static byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart);
 
 static unsigned char infer_argument_count(const char *qualname);
@@ -102,16 +103,10 @@ compile_error_t *link_data(byte_t *data, size_t len, const char *srcFile, compil
 				if (*counter != lb_if)
 					break;
 			case lb_if:
-				link_if_cmd(counter, end, search_end | search_else);
+				counter = link_if_cmd(data, counter, end, search_end | search_else);
 				break;
-				/*controlEnd = seek_to_cooresponding_end(counter, end, &linkLoc, search_end | search_else);
-				controlEnd++;
-				*linkLoc = (size_t)(controlEnd - data);
-				break;*/
 			case lb_while:
-				controlEnd = seek_to_cooresponding_end(counter, end, &linkLoc, search_end);
-				controlEnd++;
-				*linkLoc = (size_t)(controlEnd - data);
+				counter = link_while_cmd(data, counter, end, search_end);
 				break;
 			}
 		}
@@ -370,49 +365,14 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end)
 	return off;
 }
 
-byte_t *seek_to_cooresponding_end(byte_t *off, byte_t *end, size_t **linkStart, int searchType)
-{
-	int level = 0;
-	while (off && off < end)
-	{
-		switch (*off)
-		{
-		case lb_else:
-			off++;
-			if (*off != lb_if)
-				break;
-		case lb_if:
-		case lb_while:
-			level++;
-			off = seek_past_if_style_cmd(off, level == 1 ? linkStart : NULL);
-			break;
-		case lb_end:
-			off++;
-			level--;
-			if (level == 0)
-				return off;
-			break;
-		default:
-			off = seek_to_next_control(off, end);
-			if (!off)
-			{
-				if (linkStart)
-					*linkStart = NULL;
-				return NULL;
-			}
-			break;
-		}
-	}
-	if (linkStart)
-		*linkStart = NULL;
-	return NULL;
-}
-
-byte_t *link_if_cmd(byte_t *off, byte_t *end, int searchType)
+byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
 {
 	int level = 0;
 	byte_t *top = off;
-	byte_t *blockEnd = NULL;
+	byte_t *failLoc = NULL;
+	byte_t *exitLoc = NULL;
+	size_t *failLinkLoc = NULL;
+	size_t *exitLinkLoc = NULL;
 	while (off && off < end)
 	{
 		switch (*off)
@@ -421,8 +381,13 @@ byte_t *link_if_cmd(byte_t *off, byte_t *end, int searchType)
 			off++;
 			if (searchType & search_else)
 			{
-				blockEnd = link_if_cmd(off, end, search_end);
-				goto perform_link;
+				exitLinkLoc = (size_t *)off;
+				off += sizeof(size_t);
+				failLoc = off;
+				exitLoc = link_if_cmd(start, off, end, search_end | search_no_link);
+				if (searchType & search_no_link)
+					return off;
+				goto perform_if_link;
 			}
 			else
 			{
@@ -435,13 +400,17 @@ byte_t *link_if_cmd(byte_t *off, byte_t *end, int searchType)
 		case lb_while:
 			level++;
 			off = seek_past_if_style_cmd(off, NULL);
+			if (level == 1)
+				failLinkLoc = (size_t *)(off - sizeof(size_t));
 			break;
 		case lb_end:
 			level--;
 			if (level == 0 && searchType & search_end)
 			{
-				blockEnd = off;
-				goto perform_link;
+				exitLoc = off;
+				if (searchType & search_no_link)
+					return off;
+				goto perform_if_link;
 			}
 			off++;
 			break;
@@ -454,11 +423,73 @@ byte_t *link_if_cmd(byte_t *off, byte_t *end, int searchType)
 			break;
 		}
 	}
-perform_link:
+perform_if_link:
 
-
+	if (failLinkLoc && failLoc)
+		*failLinkLoc = failLoc - start;
+	
+	if (exitLinkLoc && exitLoc)
+		*exitLinkLoc = exitLoc - start;
 
 	return off;
+}
+
+byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
+{
+	int level = 0;
+	byte_t *topLoc = off;
+	byte_t *failLoc = NULL;
+	size_t *topLinkLoc = NULL;
+	size_t *failLinkLoc = NULL;
+
+	while (off && off < end)
+	{
+		switch (*off)
+		{
+		case lb_else:
+			off++;
+			off += sizeof(size_t);
+			if (*off == lb_if)
+				off = seek_past_if_style_cmd(off, NULL);
+			break;
+		case lb_if:
+		case lb_while:
+			level++;
+			off = seek_past_if_style_cmd(off, NULL);
+			if (level == 1)
+				failLinkLoc = (size_t *)(off - sizeof(size_t));
+			break;
+		case lb_end:
+			level--;
+			off++;
+			off += sizeof(size_t);
+			if (level == 0 && searchType & search_end)
+			{
+				topLinkLoc = off - sizeof(size_t);
+				failLoc = off;
+				if (searchType & search_no_link)
+					return off;
+				goto perform_while_link;
+			}
+			break;
+		default:
+			off = seek_to_next_control(off, end);
+			if (!off)
+			{
+				return NULL;
+			}
+			break;
+		}
+	}
+perform_while_link:
+
+	if (topLoc && topLinkLoc)
+		*topLinkLoc = topLoc - start;
+
+	if (failLoc && failLinkLoc)
+		*failLinkLoc = failLoc - start;
+
+	return NULL;
 }
 
 byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart)
