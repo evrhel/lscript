@@ -988,6 +988,34 @@ int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls
 	return env_run(env, function->location);
 }
 
+object_t *env_new_string(env_t *env, const char *cstring)
+{
+	class_t *stringClass = vm_get_class(env->vm, "String");
+	if (!stringClass)
+		return NULL;
+
+	size_t len = strlen(cstring);
+
+	array_t *arr = manager_alloc_array(env->vm->manager, lb_chararray, len);
+	if (!arr)
+		return NULL;
+
+	MEMCPY(&arr->data, cstring, len);
+
+	object_t *stringObj = manager_alloc_object(env->vm->manager, stringClass);
+	if (!stringObj)
+		return NULL;
+
+	function_t *constructor = class_get_function(stringClass, "<init>([C");
+	if (!constructor)
+		return NULL;
+
+	if (env_run_func(env, constructor, stringObj, arr))
+		return NULL;
+
+	return stringObj;
+}
+
 void env_free(env_t *env)
 {
 	FREE(env);

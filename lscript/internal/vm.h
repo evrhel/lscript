@@ -89,6 +89,7 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t **function, data_t **data, flags_t *flags);
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls);
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls);
+object_t *env_new_string(env_t *env, const char *cstring);
 
 inline int env_run_func_static(env_t *env, function_t *function, ...)
 {
