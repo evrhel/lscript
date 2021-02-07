@@ -9,7 +9,7 @@
 #include "vm_math.h"
 #include "vm_compare.h"
 
-#define CURR_CLASS(env) ((class_t *)(env)->rbp+2)
+#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
 
 typedef struct control_s control_t;
 struct control_s
@@ -93,15 +93,15 @@ static inline int is_numeric(const char *string)
 
 static inline int handle_if(env_t *env, byte_t **counterPtr)
 {
-	byte_t *counter = *counterPtr;
-	if (!vmc_compare(env, &counter))
+	if (!vmc_compare(env, counterPtr))
 	{
 		if (env->exception)
 			return env->exception;
-		counter = CURR_CLASS(env)->data + *((size_t *)counter);
+		class_t *c = CURR_CLASS(env);
+		*counterPtr = c->data + *((size_t *)(*counterPtr));
 	}
 	else
-		counter += sizeof(size_t);
+		*counterPtr += sizeof(size_t);
 	return 0;
 }
 
@@ -1013,6 +1013,7 @@ int env_run(env_t *env, void *location)
 	value_t *valPtr;			// An arbitrary value pointer
 	void *stackAllocLoc;		// A pointer to where a value on the stack was allocated
 	function_t *callFunc;		// A pointer to a function which will be called
+	function_t *callFunc2;		// A pointer to another function which will gbe called
 	byte_t *callArgPtr;			// A pointer to some bytes which will be the function arguments
 	byte_t *callFuncArgs;		// A pointer to some bytes which will be the function arguments
 	size_t callFuncArgSize;		// The size of the call arguments
@@ -1022,6 +1023,7 @@ int env_run(env_t *env, void *location)
 	byte_t *cursor;				// A cursor into an array of bytes
 	byte_t valueType;			// A byte to store the type of some value
 	object_t *object;			// A pointer to an object_t used for holding some object
+	object_t *object2;			// A pointer to another object_t used for holding some object
 	class_t *clazz;				// A pointer to a class_t used for holding some class
 	array_t *array;				// A pointer to an array_t used for holding some array
 	size_t length;				// An arbitrary value for storing a length
@@ -1337,6 +1339,29 @@ int env_run(env_t *env, void *location)
 					cursor += 8;
 					counter += 8;
 					break;
+				case lb_string:
+					counter++;
+					clazz = vm_get_class(env->vm, "String"); // Don't used vm_load_class here - String should have already been loaded
+					if (!clazz)
+						return env->exception = exception_class_not_found; // Throw exception if it is not loaded
+					name2 = counter;
+					callFunc2 = class_get_function(clazz, "<init>([C");
+					if (!callFunc2)
+						return env->exception = exception_function_not_found;
+					object2 = manager_alloc_object(env->vm->manager, clazz);
+					if (!object2)
+						return env->exception = exception_out_of_memory;
+					length = strlen(counter);
+					array = manager_alloc_array(env->vm->manager, lb_chararray, length);
+					if (!array)
+						return env->exception = exception_out_of_memory;
+					MEMCPY(&array->data, counter, length);
+					counter += length + 1;
+					if (env_run_func(env, callFunc2, object2, array))
+						return env->exception;
+					*((qword_t *)cursor) = (qword_t)object2;
+					cursor += 8;
+					break;
 				case lb_value:
 					counter++;
 					if (!env_resolve_variable(env, counter, &data, &flags))
@@ -1472,6 +1497,29 @@ int env_run(env_t *env, void *location)
 					cursor += 8;
 					counter += 8;
 					break;
+				case lb_string:
+					counter++;
+					clazz = vm_get_class(env->vm, "String"); // Don't used vm_load_class here - String should have already been loaded
+					if (!clazz)
+						return env->exception = exception_class_not_found; // Throw exception if it is not loaded
+					name2 = counter;
+					callFunc2 = class_get_function(clazz, "<init>([C");
+					if (!callFunc2)
+						return env->exception = exception_function_not_found;
+					object2 = manager_alloc_object(env->vm->manager, clazz);
+					if (!object2)
+						return env->exception = exception_out_of_memory;
+					length = strlen(counter);
+					array = manager_alloc_array(env->vm->manager, lb_chararray, length);
+					if (!array)
+						return env->exception = exception_out_of_memory;
+					MEMCPY(&array->data, counter, length);
+					counter += length + 1;
+					if (env_run_func(env, callFunc2, object2, array))
+						return env->exception;
+					*((qword_t *)cursor) = (qword_t)object2;
+					cursor += 8;
+					break;
 				case lb_value:
 					counter++;
 					if (!env_resolve_variable(env, counter, &data, &flags))
@@ -1585,8 +1633,7 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_while:
-			if (!vmc_compare
-			(env, &counter))
+			if (!vmc_compare(env, &counter))
 			{
 				if (env->exception)
 					return env->exception;
@@ -1597,7 +1644,8 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_if:
-			handle_if(env, &counter);
+			if (handle_if(env, &counter))
+				return env->exception;
 			break;
 		case lb_else:
 		case lb_end:

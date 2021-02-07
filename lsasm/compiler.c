@@ -1654,8 +1654,16 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 
 		if (argSize == 0)
 		{
-			put_byte(argBuffer, lb_value);
-			put_string(argBuffer, tokens[i]);
+			if (tokens[i][0] == SIG_STRING_CHAR)
+			{
+				put_byte(argBuffer, lb_string);
+				put_string(argBuffer, tokens[i] + 1);
+			}
+			else
+			{
+				put_byte(argBuffer, lb_value);
+				put_string(argBuffer, tokens[i]);
+			}
 			continue;
 		}
 
@@ -1864,7 +1872,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 				put_short(temp, rhsData.svalue);
 				break;
 			case 4:
-				put_int(temp, rhsData.dvalue);
+				put_int(temp, rhsData.ivalue);
 				break;
 			case 8:
 				put_long(temp, rhsData.lvalue);

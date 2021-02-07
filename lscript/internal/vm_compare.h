@@ -2,6 +2,7 @@
 #define VM_COMPARE_H
 
 #include "types.h"
+#include "datau.h"
 
 enum
 {

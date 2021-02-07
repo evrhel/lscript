@@ -26,7 +26,8 @@ class Main
 
 		int counter
 		while counter < args.length
-			dynamic_call System.stdout.println(LString;) args[counter]
+			dynamic_call System.stdout.println(LString;) "In loop"
+			#dynamic_call System.stdout.println(LString;) args[counter]
 			add counter counter int[1]
 		end
 

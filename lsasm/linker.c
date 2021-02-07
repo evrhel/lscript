@@ -14,10 +14,10 @@ enum
 static compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int linkVersion);
 static compile_error_t *link_data(byte_t *data, size_t datalen, const char *srcFile, compile_error_t *back, unsigned int linkVersion);
 
-static byte_t *seek_to_next_control(byte_t *off, byte_t *end);
-static byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType);
-static byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType);
-static byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart);
+static byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, compile_error_t **backPtr);
+static byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, const char *srcFile, compile_error_t **backPtr);
+static byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, const char *srcFile, compile_error_t **backPtr);
+static byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart, const char *srcFile, compile_error_t **backPtr);
 
 static unsigned char infer_argument_count(const char *qualname);
 
@@ -40,6 +40,8 @@ compile_error_t *link(input_file_t *files, unsigned int linkVersion, msg_func_t 
 
 compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned int linkVersion)
 {
+	back = add_compile_error(back, NULL, 0, error_info, "Link: %s", filepath);
+
 	FILE *file = NULL;
 	fopen_s(&file, filepath, "rb");
 	if (!file)
@@ -58,6 +60,23 @@ compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned
 
 	back = link_data(data, len, filepath, back, linkVersion);
 
+	int hasWarnings = 0;
+	if (back)
+	{
+		compile_error_t *curr = back->front;
+		while (curr)
+		{
+			if (curr->type == error_error)
+			{
+				back = add_compile_error(back, NULL, 0, error_info, "Link error in file: %s", file);
+				return back->front;
+			}
+			else if (curr->type == error_warning)
+				hasWarnings = 1;
+			curr = curr->next;
+		}
+	}
+
 	fopen_s(&file, filepath, "wb");
 	if (!file)
 		return add_compile_error(back, filepath, 0, error_error, "Failed to fopen for write");
@@ -67,6 +86,11 @@ compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned
 	fclose(file);
 
 	free(data);
+
+	if (hasWarnings)
+		back = add_compile_error(back, NULL, 0, error_info, "%s linked with warnings.", filepath);
+	else
+		back = add_compile_error(back, NULL, 0, error_info, "%s successfully linked.", filepath);
 
 	return back;
 }
@@ -93,29 +117,38 @@ compile_error_t *link_data(byte_t *data, size_t len, const char *srcFile, compil
 
 	while (1)
 	{
-		counter = seek_to_next_control(counter, end);
-		if (counter)
+		counter = seek_to_next_control(counter, end, srcFile, &back);
+		if (counter >= end)
+			break;
+		switch (*counter)
 		{
-			switch (*counter)
-			{
-			case lb_else:
-				counter++;
-				if (*counter != lb_if)
-					break;
-			case lb_if:
-				counter = link_if_cmd(data, counter, end, search_end | search_else);
+		case lb_else:
+			counter++;
+			counter += sizeof(size_t);
+			if (*counter != lb_if)
 				break;
-			case lb_while:
-				counter = link_while_cmd(data, counter, end, search_end);
-				break;
-			}
+		case lb_if:
+			counter = link_if_cmd(data, counter, end, search_end | search_else, srcFile, &back);
+			break;
+		case lb_while:
+			counter = link_while_cmd(data, counter, end, search_end, srcFile, &back);
+			break;
+		case lb_end:
+			// Just skip past the end statement, it should have already been linked
+			counter++;
+			counter += sizeof(size_t);
+			break;
+		default:
+			back = add_compile_error(back, srcFile, 0, error_error, "Failed to seek to a valid control statement.");
+		case NULL:
+			return back;
+			break;
 		}
-		else break;
 	}
 	return back;
 }
 
-byte_t *seek_to_next_control(byte_t *off, byte_t *end)
+byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, compile_error_t **backPtr)
 {
 	unsigned char i;
 	unsigned char argCount;
@@ -322,6 +355,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end)
 					off++;
 					off += sizeof(qword_t);
 					break;
+				case lb_string:
 				case lb_value:
 					off++;
 					off += strlen(off) + 1;
@@ -365,7 +399,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end)
 	return off;
 }
 
-byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
+byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, const char *srcFile, compile_error_t **backPtr)
 {
 	int level = 0;
 	byte_t *top = off;
@@ -384,7 +418,7 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
 				exitLinkLoc = (size_t *)off;
 				off += sizeof(size_t);
 				failLoc = off;
-				exitLoc = link_if_cmd(start, off, end, search_end | search_no_link);
+				exitLoc = link_if_cmd(start, off, end, search_end | search_no_link, srcFile, backPtr);
 				if (searchType & search_no_link)
 					return off;
 				goto perform_if_link;
@@ -393,19 +427,19 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
 			{
 				off += sizeof(size_t);
 				if (*off == lb_if)
-					off = seek_past_if_style_cmd(off, NULL);
+					off = seek_past_if_style_cmd(off, NULL, srcFile, backPtr);
 			}
 			break;
 		case lb_if:
 		case lb_while:
 			level++;
-			off = seek_past_if_style_cmd(off, NULL);
+			off = seek_past_if_style_cmd(off, NULL, srcFile, backPtr);
 			if (level == 1)
 				failLinkLoc = (size_t *)(off - sizeof(size_t));
 			break;
 		case lb_end:
 			level--;
-			if (level == 0 && searchType & search_end)
+			if (level <= 0 && searchType & search_end)
 			{
 				exitLoc = off;
 				if (searchType & search_no_link)
@@ -415,11 +449,9 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
 			off++;
 			break;
 		default:
-			off = seek_to_next_control(off, end);
+			off = seek_to_next_control(off, end, srcFile, backPtr);
 			if (!off)
-			{
 				return NULL;
-			}
 			break;
 		}
 	}
@@ -431,10 +463,10 @@ perform_if_link:
 	if (exitLinkLoc && exitLoc)
 		*exitLinkLoc = exitLoc - start;
 
-	return off;
+	return failLinkLoc + 1; // Return start of next command
 }
 
-byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
+byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, const char *srcFile, compile_error_t **backPtr)
 {
 	int level = 0;
 	byte_t *topLoc = off;
@@ -447,15 +479,13 @@ byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
 		switch (*off)
 		{
 		case lb_else:
-			off++;
-			off += sizeof(size_t);
-			if (*off == lb_if)
-				off = seek_past_if_style_cmd(off, NULL);
+			*backPtr = add_compile_error(*backPtr, srcFile, 0, error_error, "Unexepected else command while linking while command.");
+			return NULL;
 			break;
 		case lb_if:
 		case lb_while:
 			level++;
-			off = seek_past_if_style_cmd(off, NULL);
+			off = seek_past_if_style_cmd(off, NULL, srcFile, backPtr);
 			if (level == 1)
 				failLinkLoc = (size_t *)(off - sizeof(size_t));
 			break;
@@ -473,26 +503,36 @@ byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType)
 			}
 			break;
 		default:
-			off = seek_to_next_control(off, end);
+			off = seek_to_next_control(off, end, srcFile, backPtr);
 			if (!off)
-			{
 				return NULL;
-			}
 			break;
 		}
 	}
 perform_while_link:
 
-	if (topLoc && topLinkLoc)
-		*topLinkLoc = topLoc - start;
+	if (!failLinkLoc)
+	{
+		*backPtr = add_compile_error(*backPtr, srcFile, 0, error_error, "Error linking while command: NULL fail link location");
+		return NULL;
+	}
 
-	if (failLoc && failLinkLoc)
+	if (failLoc)
 		*failLinkLoc = failLoc - start;
 
-	return NULL;
+	if (!topLinkLoc)
+	{
+		*backPtr = add_compile_error(*backPtr, srcFile, 0, error_error, "Error linking while command: NULL top link location");
+		return NULL;
+	}
+
+	if (topLoc)
+		*topLinkLoc = topLoc - start;
+
+	return failLinkLoc + 1; // Return start of next command
 }
 
-byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart)
+byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart, const char *srcFile, compile_error_t **backPtr)
 {
 	byte_t *off = start;
 	off++;

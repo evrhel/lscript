@@ -94,26 +94,26 @@ static int resolve_data(env_t *env, byte_t **counterPtr, data_t **data, flags_t 
 int vmc_compare(void *envPtr, byte_t **counterPtr)
 {
     env_t *env = (env_t *)envPtr;
-    byte_t *counter = *counterPtr;
 
     data_t *lhs, *rhs;
     flags_t lhf, rhf;
 
-    byte_t count = *counter;
-    counter++;
+    (*counterPtr)++;
+    byte_t count = **counterPtr;
+    (*counterPtr)++;
 
     if (!resolve_data(env, counterPtr, &lhs, &lhf))
         return 0;
 
     if (count == lb_one)
     {
-        counter++;
+        (*counterPtr)++;
         return lhs->bvalue;
     }
     else if (count == lb_two)
     {
-        byte_t comparator = *counter;
-        counter++;
+        byte_t comparator = **counterPtr;
+        (*counterPtr)++;
 
         if (!resolve_data(env, counterPtr, &rhs, &rhf))
             return 0;
@@ -130,16 +130,16 @@ int vmc_compare(void *envPtr, byte_t **counterPtr)
             return TOBOOL(!(result & compare_equal));
             break;
         case lb_greater:
-            return TOBOOL(!(result & compare_greater));
+            return TOBOOL(result & compare_greater);
             break;
         case lb_gequal:
-            return TOBOOL(!(result & compare_greaterequ));
+            return TOBOOL(result & compare_greaterequ);
             break;
         case lb_less:
-            return TOBOOL(!(result & compare_less));
+            return TOBOOL(result & compare_less);
             break;
         case lb_lequal:
-            return TOBOOL(!(result & compare_lessequ));
+            return TOBOOL(result & compare_lessequ);
             break;
         default:
             env->exception = exception_bad_command;
@@ -165,7 +165,7 @@ int resolve_data(env_t *env, byte_t **counterPtr, data_t **data, flags_t *flags)
     byte_t *counter = *counterPtr;
     byte_t *dataStart = ++counter;
     *flags = 0;
-    switch (*dataStart)
+    switch (*(counter - 1))
     {
     case lb_char:
         SET_TYPE(*flags, lb_char);
@@ -212,9 +212,10 @@ int resolve_data(env_t *env, byte_t **counterPtr, data_t **data, flags_t *flags)
         counter += sizeof(lbool);
         break;
     case lb_value:
-        if (!env_resolve_variable(env, (const char *)counter, &data, flags))
+        if (!env_resolve_variable(env, (const char *)counter, data, flags))
             return 0;
         counter += strlen(counter) + 1;
+        *counterPtr = counter;
         return 1;
         break;
     default:
@@ -222,5 +223,6 @@ int resolve_data(env_t *env, byte_t **counterPtr, data_t **data, flags_t *flags)
         return 0;
     }
     *data = (data_t *)dataStart;
+    *counterPtr = counter;
     return 1;
 }

@@ -27,17 +27,13 @@ int main(int argc, char *argv[])
 
 	env_t *env = env_create(vm);
 
-	function_t *func = class_get_function(clazz, "main([ILString;");
+	function_t *func = class_get_function(clazz, "main([LString;");
 	function_t *func1 = class_get_function(clazz, "myFunc(");
 
-	array_t *arr = manager_alloc_array(vm->manager, lb_intarray, 4);
-	array_set_int(arr, 0, 5);
-	array_set_int(arr, 1, 10);
-	array_set_int(arr, 2, 25);
-	array_set_int(arr, 3, 20);
+	array_t *arr = manager_alloc_array(vm->manager, lb_objectarray, 4);
 
 	int error;
-	if (error = env_run_func_static(env, func, arr, NULL))
+	if (error = env_run_func_static(env, func, arr))
 	{
 		printf("Exception thrown: %d\n", error);
 	}
@@ -45,9 +41,6 @@ int main(int argc, char *argv[])
 	{
 		printf("Function returned: %d\n", env->dret);
 	}
-
-	for (int i = 0; i < arr->length; i++)
-		printf("array[%d] = %d\n", i,  array_get_int(arr, i));
 
 	vm_free(vm);
 
