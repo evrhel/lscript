@@ -13,7 +13,7 @@ static int register_functions(class_t *clazz, const byte_t *dataStart, const byt
 static int register_static_fields(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd);
 static int register_field_offests(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd);
 
-class_t *class_load(const byte_t *binary, size_t length, classloadproc_t loadproc, void *more)
+class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, void *more)
 {
 	class_t *result;
 
@@ -25,8 +25,8 @@ class_t *class_load(const byte_t *binary, size_t length, classloadproc_t loadpro
 		return NULL;
 	result->data = binary;
 
-	const byte_t *end = binary + length;
-	const byte_t *curr = binary;
+	byte_t *end = binary + length;
+	byte_t *curr = binary;
 
 	char compressed;
 	unsigned int version;
@@ -349,7 +349,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				argorderLast->next = list_create();
 				argorderLast->next->prev = argorderLast;
 				argorderLast = argorderLast->next;
-				argorderLast->data = argname;
+				argorderLast->data = (void *)argname;
 
 				curr += strlen(argname) + 1;
 			}
@@ -358,7 +358,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 			if (func)
 			{
 				func->name = funcName;
-				func->location = isNative ? NULL : curr;
+				func->location = isNative ? NULL : (void *)curr;
 				func->argTypes = argTypes;
 				func->numargs = numArgs;
 				func->parentClass = clazz;

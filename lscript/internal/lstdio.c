@@ -11,7 +11,7 @@ LNIFUNC lulong LNICALL FileOutputStream_fopen(LEnv venv, lclass vclazz, lobject 
 	if (!filepath)
 	{
 		env->exception = exception_null_dereference;
-		return NULL;
+		return 0;
 	}
 
 	array_t *arr = (array_t *)object_get_object((object_t *)filepath, "chars");
@@ -34,7 +34,7 @@ LNIFUNC lulong LNICALL FileOutputStream_fopen(LEnv venv, lclass vclazz, lobject 
 		break;
 	default:
 		env->exception = exception_illegal_state;
-		return NULL;
+		return 0;
 		break;
 	}
 

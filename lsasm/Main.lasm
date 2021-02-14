@@ -12,7 +12,7 @@ class Main
 	# main function
 	function static interp main(objectarray String args)
 		object myString
-		seto myString "Hello Austin"
+		seto myString "Hello World"
 
 		dynamic_call System.stdout.println(LString;) myString
 
@@ -30,6 +30,9 @@ class Main
 			#dynamic_call System.stdout.println(LString;) args[counter]
 			add counter counter int[1]
 		end
+
+		intarray array
+		seto array int dword[5]
 
 		retd dword[25]
 

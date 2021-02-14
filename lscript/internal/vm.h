@@ -77,7 +77,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const a
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
 class_t *vm_load_class_file(vm_t *vm, const char *filename);
-class_t *vm_load_class_binary(vm_t *vm, const byte_t *binary, size_t size);
+class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size);
 void vm_add_path(vm_t *vm, const char *path);
 int vm_load_library(vm_t *vm, const char *libpath);
 void vm_free(vm_t *vm);

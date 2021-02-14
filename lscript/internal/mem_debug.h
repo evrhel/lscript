@@ -24,10 +24,10 @@ int __dend_debug();
 #else
 #define BEGIN_DEBUG()
 #define MALLOC(size) malloc(size)
-#define CALLOC(count, size) calloc(count, size)
-#define FREE(block) free(block)
-#define MEMSET(dst, val, size) memset(dst, val, size)
-#define MEMCPY(dst, src, size) memcpy(dst, src, size)
+#define CALLOC(count, size) calloc((count), (size))
+#define FREE(block) free((void *)(block))
+#define MEMSET(dst, val, size) memset((dst), (val), (size))
+#define MEMCPY(dst, src, size) memcpy((dst), (src), (size))
 #define END_DEBUG()
 #endif
 

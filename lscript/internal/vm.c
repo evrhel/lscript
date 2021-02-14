@@ -339,7 +339,7 @@ class_t *vm_load_class_file(vm_t *vm, const char *filename)
 	return vm_load_class_binary(vm, binary, size);
 }
 
-class_t *vm_load_class_binary(vm_t *vm, const byte_t *binary, size_t size)
+class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size)
 {
 	class_t *clazz = class_load(binary, size, (classloadproc_t)class_load_ext, vm);
 	if (clazz)
@@ -370,11 +370,11 @@ int vm_load_library(vm_t *vm, const char *libpath)
 	{
 		if (!vm->hLibraries[i])
 		{
-			HINSTANCE hinstLib;
-			hinstLib = LoadLibraryA(buf);
-			if (!hinstLib)
+			HMODULE hmodLib;
+			hmodLib = LoadLibraryA(buf);
+			if (!hmodLib)
 				return 0;
-			vm->hLibraries = hinstLib;
+			vm->hLibraries[i] = hmodLib;
 			return 1;
 		}
 	}
@@ -445,7 +445,7 @@ env_t *env_create(vm_t *vm)
 	env->variables->data = NULL;
 
 
-	env->variables->data = 0xdeadcafedeadcafe;
+	env->variables->data = (void *)0xdeadcafedeadcafe;
 
 	env->rip = NULL;
 	env->vm = vm;
@@ -513,7 +513,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 					env->exception = exception_bad_variable_name;
 					return 0;
 				}
-				*data = &fieldVal->ovalue;
+				*data = (data_t *)&fieldVal->ovalue;
 				*flags = fieldVal->flags;
 				return 1;
 			}
@@ -800,7 +800,6 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		{
 			map_iterator_t *mit = map_create_iterator(function->argTypes);
 			size_t i = 0;
-			flags_t flags;
 			while (mit->node)
 			{
 				switch ((byte_t)mit->value)
@@ -909,7 +908,7 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		for (size_t i = 0; i < function->numargs; i++)
 		{
 			const char *argname = function->args[i];
-			flags_t type = map_at(function->argTypes, argname);
+			byte_t type = (byte_t)map_at(function->argTypes, argname);
 			size_t size = sizeof_type(type);
 			value_t val;
 			val.flags = 0;
@@ -950,7 +949,7 @@ int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls
 	for (size_t i = 0; i < function->numargs; i++)
 	{
 		const char *argname = function->args[i];
-		flags_t type = map_at(function->argTypes, argname);
+		byte_t type = (byte_t)map_at(function->argTypes, argname);
 		size_t size = sizeof_type(type);
 		value_t val;
 		val.flags = 0;
@@ -994,7 +993,7 @@ object_t *env_new_string(env_t *env, const char *cstring)
 	if (!stringClass)
 		return NULL;
 
-	size_t len = strlen(cstring);
+	unsigned int len = (unsigned int)strlen(cstring);
 
 	array_t *arr = manager_alloc_array(env->vm->manager, lb_chararray, len);
 	if (!arr)
@@ -1038,14 +1037,12 @@ int env_run(env_t *env, void *location)
 	data_t *data2;				// An arbitrary data_t pointer
 	flags_t flags2;				// An arbitrary flags_t
 	value_t val;				// An arbitrary value
-	value_t *valPtr;			// An arbitrary value pointer
 	void *stackAllocLoc;		// A pointer to where a value on the stack was allocated
 	function_t *callFunc;		// A pointer to a function which will be called
 	function_t *callFunc2;		// A pointer to another function which will gbe called
 	byte_t *callArgPtr;			// A pointer to some bytes which will be the function arguments
 	byte_t *callFuncArgs;		// A pointer to some bytes which will be the function arguments
 	size_t callFuncArgSize;		// The size of the call arguments
-	list_iterator_t *lit;		// An arbitrary list iterator
 	map_iterator_t *mip;		// An arbitrary map iterator
 	byte_t callArgType;			// A byte to store the type of a call argument
 	byte_t *cursor;				// A cursor into an array of bytes
@@ -1056,6 +1053,7 @@ int env_run(env_t *env, void *location)
 	array_t *array;				// A pointer to an array_t used for holding some array
 	size_t length;				// An arbitrary value for storing a length
 	size_t off;					// An arbitrary value for storing an offset
+	byte_t type;				// An arbitrary value for storing a type
 
 	while (1)
 	{
@@ -1065,72 +1063,40 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_char:
-			break;
 		case lb_uchar:
-			break;
 		case lb_short:
-			break;
 		case lb_ushort:
-			break;
 		case lb_int:
-			counter++;
-			name = counter;
-			if (!is_varname_avaliable(env, name))
-				return env->exception = exception_bad_variable_name;
-			counter += strlen(name) + 1;
-			val.flags = 0;
-			val.ivalue = 0;
-			value_set_type(&val, lb_int);
-			stackAllocLoc = stack_push(env, &val);
-			if (!stackAllocLoc)
-				return env->exception;
-			map_insert((map_t *)env->variables->data, name, stackAllocLoc);
-			break;
 		case lb_uint:
-			break;
 		case lb_ulong:
-			break;
 		case lb_bool:
-			break;
 		case lb_float:
-			break;
 		case lb_object:
+		case lb_chararray:
+		case lb_uchararray:
+		case lb_shortarray:
+		case lb_ushortarray:
+		case lb_intarray:
+		case lb_uintarray:
+		case lb_longarray:
+		case lb_ulongarray:
+		case lb_boolarray:
+		case lb_floatarray:
+		case lb_doublearray:
+		case lb_objectarray:
+			type = *counter;
 			counter++;
 			name = counter;
 			if (!is_varname_avaliable(env, name))
 				return env->exception = exception_bad_variable_name;
 			counter += strlen(name) + 1;
 			val.flags = 0;
-			val.ovalue = NULL;
-			value_set_type(&val, lb_object);
+			val.lvalue = 0;
+			value_set_type(&val, type);
 			stackAllocLoc = stack_push(env, &val);
 			if (!stackAllocLoc)
 				return env->exception;
 			map_insert((map_t *)env->variables->data, name, stackAllocLoc);
-			break;
-		case lb_chararray:
-			break;
-		case lb_uchararray:
-			break;
-		case lb_shortarray:
-			break;
-		case lb_ushortarray:
-			break;
-		case lb_intarray:
-			break;
-		case lb_uintarray:
-			break;
-		case lb_longarray:
-			break;
-		case lb_ulongarray:
-			break;
-		case lb_boolarray:
-			break;
-		case lb_floatarray:
-			break;
-		case lb_doublearray:
-			break;
-		case lb_objectarray:
 			break;
 
 		case lb_setb:
@@ -1221,27 +1187,30 @@ int env_run(env_t *env, void *location)
 				counter += strlen(name2) + 1;
 				data->ovalue = data2->ovalue;
 				break;
+			case lb_char:
+			case lb_uchar:
+			case lb_short:
+			case lb_ushort:
+			case lb_int:
+			case lb_uint:
+			case lb_long:
+			case lb_ulong:
+			case lb_bool:
+			case lb_float:
+			case lb_double:
+			case lb_object:
+				type = (*counter) + 0x0c;
+				data->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++counter)));
+				if (!data->ovalue)
+					return env->exception = exception_out_of_memory;
+				counter += 4;
+				break;
 			case lb_string:
 				counter++;
-				clazz = vm_get_class(env->vm, "String"); // Don't used vm_load_class here - String should have already been loaded
-				if (!clazz)
-					return env->exception = exception_class_not_found; // Throw exception if it is not loaded
-				name2 = counter;
-				callFunc = class_get_function(clazz, "<init>([C");
-				if (!callFunc)
-					return env->exception = exception_function_not_found;
-				object = manager_alloc_object(env->vm->manager, clazz);
-				if (!object)
-					return env->exception = exception_out_of_memory;
-				length = strlen(counter);
-				array = manager_alloc_array(env->vm->manager, lb_chararray, length);
-				if (!array)
-					return env->exception = exception_out_of_memory;
-				MEMCPY(&array->data, counter, length);
-				counter += length + 1;
-				if (env_run_func(env, callFunc, object, array))
+				data->ovalue = env_new_string(env, counter);
+				if (env->exception)
 					return env->exception;
-				data->ovalue = object;
+				counter += strlen(counter) + 1;
 				break;
 			case lb_null:
 				data->ovalue = NULL;
@@ -1339,7 +1308,7 @@ int env_run(env_t *env, void *location)
 			mip = map_create_iterator(callFunc->argTypes);
 			while (mip->node)
 			{
-				callArgType = (flags_t)mip->value;
+				callArgType = (byte_t)mip->value;
 
 				switch (*counter)
 				{
@@ -1369,25 +1338,10 @@ int env_run(env_t *env, void *location)
 					break;
 				case lb_string:
 					counter++;
-					clazz = vm_get_class(env->vm, "String"); // Don't used vm_load_class here - String should have already been loaded
-					if (!clazz)
-						return env->exception = exception_class_not_found; // Throw exception if it is not loaded
-					name2 = counter;
-					callFunc2 = class_get_function(clazz, "<init>([C");
-					if (!callFunc2)
-						return env->exception = exception_function_not_found;
-					object2 = manager_alloc_object(env->vm->manager, clazz);
-					if (!object2)
-						return env->exception = exception_out_of_memory;
-					length = strlen(counter);
-					array = manager_alloc_array(env->vm->manager, lb_chararray, length);
-					if (!array)
-						return env->exception = exception_out_of_memory;
-					MEMCPY(&array->data, counter, length);
-					counter += length + 1;
-					if (env_run_func(env, callFunc2, object2, array))
+					*((qword_t *)cursor) = (qword_t)env_new_string(env, counter);
+					if (env->exception)
 						return env->exception;
-					*((qword_t *)cursor) = (qword_t)object2;
+					counter += strlen(counter) + 1;
 					cursor += 8;
 					break;
 				case lb_value:
@@ -1497,7 +1451,7 @@ int env_run(env_t *env, void *location)
 			mip = map_create_iterator(callFunc->argTypes);
 			while (mip->node)
 			{
-				callArgType = (flags_t)mip->value;
+				callArgType = (byte_t)mip->value;
 
 				switch (*counter)
 				{
@@ -1527,25 +1481,10 @@ int env_run(env_t *env, void *location)
 					break;
 				case lb_string:
 					counter++;
-					clazz = vm_get_class(env->vm, "String"); // Don't used vm_load_class here - String should have already been loaded
-					if (!clazz)
-						return env->exception = exception_class_not_found; // Throw exception if it is not loaded
-					name2 = counter;
-					callFunc2 = class_get_function(clazz, "<init>([C");
-					if (!callFunc2)
-						return env->exception = exception_function_not_found;
-					object2 = manager_alloc_object(env->vm->manager, clazz);
-					if (!object2)
-						return env->exception = exception_out_of_memory;
-					length = strlen(counter);
-					array = manager_alloc_array(env->vm->manager, lb_chararray, length);
-					if (!array)
-						return env->exception = exception_out_of_memory;
-					MEMCPY(&array->data, counter, length);
-					counter += length + 1;
-					if (env_run_func(env, callFunc2, object2, array))
+					*((qword_t *)cursor) = (qword_t)env_new_string(env, counter);
+					if (env->exception)
 						return env->exception;
-					*((qword_t *)cursor) = (qword_t)object2;
+					counter += strlen(counter) + 1;
 					cursor += 8;
 					break;
 				case lb_value:
@@ -1727,7 +1666,7 @@ void *stack_push(env_t *env, value_t *value)
 	stackPtr = (byte_t *)env->rsp;
 	size_t size = value_sizeof(value) + sizeof(value->flags);
 	byte_t *end = stackPtr + size;
-	if (end - stack >= env->vm->stackSize)
+	if ((size_t)(end - stack) >= env->vm->stackSize)
 	{
 		env->exception = exception_stack_overflow;
 		return NULL;
@@ -1762,34 +1701,34 @@ int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 		return cast_char(&src->cvalue, dstType, dst);
 		break;
 	case lb_uchar:
-		return cast_uchar(&src->cvalue, dstType, dst);
+		return cast_uchar(&src->ucvalue, dstType, dst);
 		break;
 	case lb_short:
-		return cast_short(&src->cvalue, dstType, dst);
+		return cast_short(&src->svalue, dstType, dst);
 		break;
 	case lb_ushort:
-		return cast_ushort(&src->cvalue, dstType, dst);
+		return cast_ushort(&src->usvalue, dstType, dst);
 		break;
 	case lb_int:
-		return cast_int(&src->cvalue, dstType, dst);
+		return cast_int(&src->ivalue, dstType, dst);
 		break;
 	case lb_uint:
-		return cast_uint(&src->cvalue, dstType, dst);
+		return cast_uint(&src->uivalue, dstType, dst);
 		break;
 	case lb_long:
-		return cast_long(&src->cvalue, dstType, dst);
+		return cast_long(&src->lvalue, dstType, dst);
 		break;
 	case lb_ulong:
-		return cast_ulong(&src->cvalue, dstType, dst);
+		return cast_ulong(&src->ulvalue, dstType, dst);
 		break;
 	case lb_bool:
-		return cast_bool(&src->cvalue, dstType, dst);
+		return cast_bool(&src->bvalue, dstType, dst);
 		break;
 	case lb_float:
-		return cast_float(&src->cvalue, dstType, dst);
+		return cast_float(&src->fvalue, dstType, dst);
 		break;
 	case lb_double:
-		return cast_double(&src->cvalue, dstType, dst);
+		return cast_double(&src->dvalue, dstType, dst);
 		break;
 	default:
 		return 0;

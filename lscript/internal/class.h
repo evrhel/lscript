@@ -40,7 +40,7 @@ struct class_s
 	const char *name;		// The class's name
 	class_t *super;			// The class's superclass
 	class_flags_t flags;	// The class's flags
-	const byte_t *data;		// The raw data of the class
+	byte_t *data;			// The raw data of the class
 	map_t *functions;		// Maps the function names to its location in memory
 	map_t *staticFields;	// Maps the static field name to its value in memory
 	map_t *fields;			// Maps the field name to its offset
@@ -49,7 +49,7 @@ struct class_s
 
 typedef class_t *(*classloadproc_t)(const char *classname, void *more);
 
-class_t *class_load(const byte_t *binary, size_t length, classloadproc_t loadproc, void *more);
+class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, void *more);
 
 inline function_t *class_get_function(class_t *clazz, const char *qualifiedName)
 {

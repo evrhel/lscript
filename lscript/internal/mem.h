@@ -14,7 +14,7 @@ struct manager_s
 
 manager_t *manager_create(size_t heapsize);
 object_t *manager_alloc_object(manager_t *manager, class_t *clazz);
-array_t *manager_alloc_array(manager_t *manager, unsigned int type, unsigned int length);
+array_t *manager_alloc_array(manager_t *manager, byte_t type, unsigned int length);
 void manager_gc(manager_t *manager, map_t *visibleSet);
 void manager_free(manager_t *manager);
 

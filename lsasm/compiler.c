@@ -31,11 +31,13 @@ static char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTok
 static byte_t *derive_function_args(const char *functionSig, size_t *argc);
 static void free_derived_args(byte_t *args);
 static byte_t get_comparator_byte(const char *comparatorString);
+static byte_t get_primitive_type(const char *stringType);
 
 static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
@@ -1114,6 +1116,35 @@ byte_t get_comparator_byte(const char *comparatorString)
 	}
 }
 
+byte_t get_primitive_type(const char *stringType)
+{
+	if (!strcmp(stringType, "char"))
+		return lb_char;
+	else if (!strcmp(stringType, "uchar"))
+		return lb_uchar;
+	else if (!strcmp(stringType, "short"))
+		return lb_short;
+	else if (!strcmp(stringType, "ushort"))
+		return lb_ushort;
+	else if (!strcmp(stringType, "int"))
+		return lb_int;
+	else if (!strcmp(stringType, "luint"))
+		return lb_uint;
+	else if (!strcmp(stringType, "long"))
+		return lb_long;
+	else if (!strcmp(stringType, "ulong"))
+		return lb_ulong;
+	else if (!strcmp(stringType, "bool"))
+		return lb_bool;
+	else if (!strcmp(stringType, "float"))
+		return lb_float;
+	else if (!strcmp(stringType, "double"))
+		return lb_double;
+	else if (!strcmp(stringType, "object"))
+		return lb_object;
+	return 0;
+}
+
 compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
 	if (tokenCount < 2)
@@ -1476,6 +1507,12 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 			put_string(out, varname);
 			put_byte(out, lb_null);
 		}
+		else if (get_primitive_type(tokens[2]))
+		{
+			put_byte(out, lb_seto);
+			put_string(out, varname);
+			back = handle_array_creation(&tokens[2], tokenCount - 2, out, srcFile, srcLine, back);
+		}
 		else if (tokens[2][0] == SIG_STRING_CHAR)
 		{
 			put_byte(out, lb_seto);
@@ -1536,6 +1573,54 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 		break;
 	}
+
+	return back;
+}
+
+compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	if (tokenCount == 0)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Not enough array initialization arguments");
+	else if (tokenCount == 1)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Expected array length specifier");
+
+	byte_t type = get_primitive_type(tokens[0]);
+
+	data_t argData;
+	byte_t argType;
+	int argIsAbsolute;
+	size_t argSize = evaluate_constant(tokens[1], &argData, &argType, &argIsAbsolute);
+	if (argIsAbsolute)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Array initialization does not support absolute type");
+	else if (argSize == 0)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Invalid array length specifier");
+	switch (argSize)
+	{
+	case lb_byte:
+		argData.uivalue = (luint)argData.ucvalue;
+		break;
+	case lb_word:
+		argData.uivalue = (luint)argData.usvalue;
+		break;
+	case lb_dword:
+		break;
+	case lb_qword:
+		argData.uivalue = (luint)argData.ulvalue;
+		back = add_compile_error(back, srcFile, srcLine, error_warning, "Arrays have maximum 32-bit unsigned length but requested length is 64-bit");
+		break;
+	case lb_real4:
+	case lb_real8:
+		return add_compile_error(back, srcFile, srcLine, error_error, "Array initialization requires an integral length type");
+		break;
+	}
+
+	if (tokenCount > 2)
+	{
+		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments in array initialization");
+	}
+
+	put_byte(out, type);
+	put_uint(out, argData.uivalue);
 
 	return back;
 }

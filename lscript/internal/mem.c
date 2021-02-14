@@ -47,7 +47,7 @@ object_t *manager_alloc_object(manager_t *manager, class_t *clazz)
 	return (object_t *)value;
 }
 
-array_t *manager_alloc_array(manager_t *manager, unsigned int type, unsigned int length)
+array_t *manager_alloc_array(manager_t *manager, byte_t type, unsigned int length)
 {
 	unsigned int elemSize;
 	switch (type)
@@ -198,7 +198,7 @@ void explore_value(value_t *value)
 		for (luint i = 0; i < array->length; i++)
 		{
 			object_t *object = (object_t *)array_get_object(array, i);
-			explore_value(object);
+			explore_value((value_t *)object);
 		}
 
 		break;
