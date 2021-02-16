@@ -152,6 +152,7 @@
     <ClInclude Include="internal\mem.h" />
     <ClInclude Include="internal\mem_debug.h" />
     <ClInclude Include="internal\object.h" />
+    <ClInclude Include="internal\string_util.h" />
     <ClInclude Include="internal\types.h" />
     <ClInclude Include="internal\value.h" />
     <ClInclude Include="internal\vm.h" />
@@ -170,6 +171,7 @@
     <ClCompile Include="internal\mem.c" />
     <ClCompile Include="internal\mem_debug.c" />
     <ClCompile Include="internal\object.c" />
+    <ClCompile Include="internal\string_util.c" />
     <ClCompile Include="internal\vm.c" />
     <ClCompile Include="internal\vm_compare.c" />
     <ClCompile Include="internal\vm_math.c" />

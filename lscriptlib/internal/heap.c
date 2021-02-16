@@ -44,7 +44,13 @@ heap_p create_heap(size_t size)
 		return NULL;
 	size_t adjSize = size + (size % WORD_SIZE);
 	const size_t fullSize = adjSize + HEADER_SIZE + FOOTER_SIZE;
-	heap->block = (size_t *)MALLOC(fullSize);
+#if defined(_WIN32)
+	SYSTEM_INFO sSysInfo;
+	GetSystemInfo(&sSysInfo);
+	DWORD dwPageSize = sSysInfo.dwPageSize;
+	heap->block = (size_t *)HeapAlloc(GetProcessHeap(), 0, fullSize);
+#else
+#endif
 	if (!heap->block)
 	{
 		FREE(heap);
@@ -62,7 +68,10 @@ heap_p create_heap(size_t size)
 
 void free_heap(heap_p heap)
 {
-	FREE(heap->block);
+#if defined(_WIN32)
+	HeapFree(GetProcessHeap(), 0, heap->block);
+#else
+#endif
 	FREE(heap);
 }
 

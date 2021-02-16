@@ -8,15 +8,15 @@
 #include "value.h"
 #include "vm_math.h"
 #include "vm_compare.h"
+#include "string_util.h"
 
 #define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
 
-typedef struct control_s control_t;
-struct control_s
+typedef struct start_args_s start_args_t;
+struct start_args_s
 {
-	byte_t *loc;
-	byte_t type;
-	byte_t padding[7];
+	vm_t *vm;
+	array_t *args;
 };
 
 static class_t *class_load_ext(const char *classname, vm_t *vm);
@@ -33,7 +33,7 @@ static int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFla
 
 static int try_link_function(vm_t *vm, function_t *func);
 
-static int equals_ignore_case(const char *s1, const char *s2);
+static void vm_start_routine(start_args_t *args);
 
 /*
 Implemented in hooks.asm
@@ -105,7 +105,7 @@ static inline int handle_if(env_t *env, byte_t **counterPtr)
 	return 0;
 }
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const argv[])
+vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pathCount, const char *const paths[], int argc, const char *const argv[])
 {
 	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
 	if (!vm)
@@ -161,6 +161,12 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const a
 	}
 	MEMCPY(vm->paths->data, current, sizeof(current));
 
+	for (int i = 0; i < pathCount; i++)
+	{
+		if (paths[i])
+			vm_add_path(vm, paths[i]);
+	}
+
 	vm->libraryCount = 4;
 #if defined(_WIN32)
 	vm->hLibraries = (HMODULE *)CALLOC(vm->libraryCount, sizeof(HMODULE));
@@ -174,67 +180,57 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const a
 		return NULL;
 	}
 	vm->hLibraries[0] = GetModuleHandleA(NULL);
+	vm->hVMThread = NULL;
+	vm->dwVMThreadID;
 #else
 #endif
-
-	for (int i = 0; i < argc; i++)
-	{
-		if (equals_ignore_case("-p", argv[i]))
-		{
-			i++;
-			if (i < argc)
-			{
-				vm_add_path(vm, argv[i]);
-			}
-		}
-	}
 
 	class_t *stringClass = vm_load_class(vm, "String");
 	if (!stringClass)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 
 	class_t *systemClass = vm_load_class(vm, "System");
 	if (!systemClass)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 
 	class_t *fileoutputstreamClass = vm_load_class(vm, "FileOutputStream");
 	if (!fileoutputstreamClass)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 
 	value_t *systemStdout = class_get_static_field(systemClass, "stdout");
 	if (!systemStdout)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 
 	value_t *systemStderr = class_get_static_field(systemClass, "stderr");
 	if (!systemStderr)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 
 	value_t *systemStdin = class_get_static_field(systemClass, "stdin");
 	if (!systemStdin)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 
 	object_t *stdoutVal = manager_alloc_object(vm->manager, fileoutputstreamClass);
 	if (!stdoutVal)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 	systemStdout->ovalue = stdoutVal;
@@ -242,13 +238,61 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const a
 	object_t *stderrVal = manager_alloc_object(vm->manager, fileoutputstreamClass);
 	if (!stderrVal)
 	{
-		vm_free(vm);
+		vm_free(vm, 0);
 		return NULL;
 	}
 	systemStderr->ovalue = stderrVal;
 
 	object_set_ulong(stdoutVal, "handle", (lulong)stdout);
 	object_set_ulong(stderrVal, "handle", (lulong)stderr);
+
+#if defined(_WIN32)
+	if (startOnNewThread)
+	{
+		if (argc == 0)
+			return NULL;
+
+		env_t *tempEnv = env_create(vm);
+		array_t *stringArgs = env_new_string_array(tempEnv, argc - 1, argv + 1);
+		env_free(tempEnv);
+
+		if (!vm_load_class(vm, argv[0]))
+		{
+			vm_free(vm, 0);
+			return NULL;
+		}
+
+		start_args_t *start = (start_args_t *)MALLOC(sizeof(start_args_t));
+		if (!start)
+		{
+			vm_free(vm, 0);
+			return NULL;
+		}
+		start->vm = vm;
+		start->args = stringArgs;
+
+		vm->hVMThread = CreateThread(
+			NULL,
+			0,
+			(LPTHREAD_START_ROUTINE)vm_start_routine,
+			start,
+			0,
+			&vm->dwVMThreadID
+		);
+
+		if (!vm->hVMThread)
+		{
+			vm_free(vm, 0);
+			return NULL;
+		}
+	}
+	else
+	{
+		vm->hVMThread = NULL;
+		vm->dwVMThreadID = 0;
+	}
+#else
+#endif
 
 	return vm;
 }
@@ -281,12 +325,14 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 #if defined(_WIN32)
 	char fullpath[MAX_PATH];
 	FILE *dummy;
+	size_t pathlen;
 
 	list_t *curr = vm->paths;
 	while (curr)
 	{
 		fullpath[0] = 0;
 		char *pathString = (char *)curr->data;
+		pathlen = strlen(pathString);
 		strcat_s(fullpath, sizeof(fullpath), pathString);
 		strcat_s(fullpath, sizeof(fullpath), tempName);
 		fopen_s(&dummy, fullpath, "rb");
@@ -352,11 +398,16 @@ void vm_add_path(vm_t *vm, const char *path)
 	list_t *node = vm->paths;
 	while (node->next)
 		node = node->next;
-	size_t size = strlen(path) + 1;
+	size_t pathlen = strlen(path);
+	int needPathSeparator = path[pathlen - 1] != '\\';
+	size_t size = pathlen + needPathSeparator + 1;
 	char *buf = (char *)MALLOC(size);
 	if (buf)
 	{
-		MEMCPY(buf, path, size);
+		MEMCPY(buf, path, pathlen);
+		if (needPathSeparator)
+			buf[size - 2] = '\\';
+		buf[size - 1] = 0;
 		list_insert(node, buf);
 	}
 }
@@ -383,8 +434,18 @@ int vm_load_library(vm_t *vm, const char *libpath)
 	return 0;
 }
 
-void vm_free(vm_t *vm)
+void vm_free(vm_t *vm, unsigned long threadWaitTime)
 {
+#if defined(_WIN32)
+	if (vm->hVMThread)
+	{
+		if (threadWaitTime)
+			WaitForSingleObject(vm->hVMThread, threadWaitTime);
+		CloseHandle(vm->hVMThread);
+	}
+#else
+#endif
+
 	list_iterator_t *lit = list_create_iterator(vm->envs);
 	while (lit)
 	{
@@ -1015,8 +1076,30 @@ object_t *env_new_string(env_t *env, const char *cstring)
 	return stringObj;
 }
 
+array_t *env_new_string_array(env_t *env, unsigned int count, const char *const strings[])
+{
+	array_t *arr = manager_alloc_array(env->vm->manager, lb_objectarray, count);
+	if (!arr)
+		return NULL;
+	for (int i = 0; i < count; i++)
+		array_set_object(arr, i, env_new_string(env, strings[i]));
+
+	return arr;
+}
+
 void env_free(env_t *env)
 {
+	FREE(env->stack);
+	list_iterator_t *lit = list_create_iterator(env->variables);
+	lit = list_iterator_next(lit);
+	while (lit)
+	{
+		map_free((map_t *)lit->data, 0);
+		lit = list_iterator_next(lit);
+	}
+	list_iterator_free(lit);
+	list_free(env->variables, 0);
+
 	FREE(env);
 }
 
@@ -1039,7 +1122,6 @@ int env_run(env_t *env, void *location)
 	value_t val;				// An arbitrary value
 	void *stackAllocLoc;		// A pointer to where a value on the stack was allocated
 	function_t *callFunc;		// A pointer to a function which will be called
-	function_t *callFunc2;		// A pointer to another function which will gbe called
 	byte_t *callArgPtr;			// A pointer to some bytes which will be the function arguments
 	byte_t *callFuncArgs;		// A pointer to some bytes which will be the function arguments
 	size_t callFuncArgSize;		// The size of the call arguments
@@ -1048,10 +1130,7 @@ int env_run(env_t *env, void *location)
 	byte_t *cursor;				// A cursor into an array of bytes
 	byte_t valueType;			// A byte to store the type of some value
 	object_t *object;			// A pointer to an object_t used for holding some object
-	object_t *object2;			// A pointer to another object_t used for holding some object
 	class_t *clazz;				// A pointer to a class_t used for holding some class
-	array_t *array;				// A pointer to an array_t used for holding some array
-	size_t length;				// An arbitrary value for storing a length
 	size_t off;					// An arbitrary value for storing an offset
 	byte_t type;				// An arbitrary value for storing a type
 
@@ -1755,25 +1834,30 @@ int try_link_function(vm_t *vm, function_t *func)
 	return 0;
 }
 
-int equals_ignore_case(const char *s1, const char *s2)
+void vm_start_routine(start_args_t *args)
 {
-	while (*s1 && *s2)
-	{
-		if (*s1 >= 64 && *s1 <= 90)
-		{
-			if (*s1 != *s2 && *s1 + 32 != *s2)
-				return 0;
-		}
-		else if (*s1 >= 97 && *s1 <= 121)
-		{
-			if (*s1 != *s2 && *s1 - 32 != *s2)
-				return 0;
-		}
-		else if (*s1 != *s2)
-			return 0;
+	class_t *clazz = NULL;
+	function_t *func = NULL;
+	map_iterator_t *mit;
 
-		s1++;
-		s2++;
+	mit = map_create_iterator(args->vm->classes);
+	while (mit->node)
+	{
+		clazz = (class_t *)mit->value;
+		func = class_get_function(clazz, "main([LString;");
+		if (func)
+			break;
+		mit = map_iterator_next(mit);
 	}
-	return *s1 == *s2;
+	map_iterator_free(mit);
+
+	if (func)
+	{
+		env_t *env = env_create(args->vm);
+		if (env)
+		{
+			env_run_func_static(env, func, args->args);
+			env_free(env);
+		}
+	}
 }

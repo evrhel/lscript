@@ -1,13 +1,20 @@
 #if !defined(LSCRIPT_H)
 #define LSCRIPT_H
 
-#include <varargs.h>
+#include <stdarg.h>
 
 #define LEXPORT __declspec(dllexport)
 #define LCALL __cdecl
 
 #define LNIFUNC __declspec(dllexport)
 #define LNICALL __stdcall
+
+#define KB_TO_B(KB) ((KB)*1024ULL)
+#define MB_TO_B(MB) (KB_TO_B((MB)*1024ULL))
+#define GB_TO_B(GB) (MB_TO_B((GB)*1024ULL))
+
+#define DEFAULT_HEAP_SIZE GB_TO_B(2)
+#define DEFAULT_STACK_SIZE KB_TO_B(2)
 
 #if defined(__cplusplus)
 extern "C"
@@ -50,23 +57,37 @@ extern "C"
 	typedef void *lfunction;
 
 	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[]);
-	LEXPORT void LCALL ls_destroy_vm(LVM vm);
+	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
+	LEXPORT lvoid LCALL ls_destroy_vm(unsigned long threadWaitTime);
+	LEXPORT LVM LCALL ls_get_current_vm();
 
-	LEXPORT void LCALL ls_add_to_classpath(const char *path);
+	LEXPORT lvoid LCALL ls_add_to_classpath(const char *path);
 
-	LEXPORT lbool LCALL ls_load_class_file(const char *filepath);
-	LEXPORT lbool LCALL ls_load_class_data(const char *data, luint datalen);
-	LEXPORT lbool LCALL ls_load_class_name(const lchar *classname);
+	LEXPORT lclass LCALL ls_load_class_file(const char *filepath);
+	LEXPORT lclass LCALL ls_load_class_data(unsigned char *data, luint datalen);
+	LEXPORT lclass LCALL ls_load_class_name(const lchar *classname);
 
 	LEXPORT lclass LCALL ls_class_for_name(const lchar *classname);
 	LEXPORT lfield LCALL ls_get_field(lclass clazz, const lchar *name);
-	LEXPORT lfunction LCALL ls_get_function(lclass clazz, const lchar *name, const lchar *sig);
+	LEXPORT lfunction LCALL ls_get_function(lclass clazz, const lchar *qualifiedName);
 
-	LEXPORT lvoid LCALL ls_call_void_function(lfunction function, lobject object, ...);
-	LEXPORT lvoid LCALL ls_call_void_functionv(lfunction function, lobject object, va_list list);
+	LEXPORT lvoid LCALL ls_call_void_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lvoid LCALL ls_call_void_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		va_list ls;
+		va_start(ls, object);
+		ls_call_void_functionv(env, function, object, ls);
+		va_end(ls);
+	}
 
-	LEXPORT lvoid LCALL ls_call_static_void_function(lfunction function, lclass clazz, ...);
-	LEXPORT lvoid LCALL ls_call_static_void_functionv(lfunction function, lclass clazz, va_list list);
+	LEXPORT lvoid LCALL ls_call_static_void_functionv(LEnv env, lfunction function, va_list list);
+	inline lvoid LCALL ls_call_static_void_function(LEnv env, lfunction function, ...)
+	{
+		va_list ls;
+		va_start(ls, function);
+		ls_call_static_void_functionv(env, function, ls);
+		va_end(ls);
+	}
 
 	LEXPORT luint LCALL ls_get_array_length(lobject array);
 

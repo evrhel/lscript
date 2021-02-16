@@ -44,6 +44,10 @@ struct vm_s
 
 #if defined(WIN32)
 	HMODULE *hLibraries;
+	HANDLE hVMThread;
+	DWORD dwVMThreadID;
+	
+	DWORD dwPadding;
 #else
 #endif
 	size_t libraryCount;
@@ -73,14 +77,14 @@ struct env_s
 	};
 };
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, int argc, const char *const argv[]);
+vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pathCount, const char *const paths[], int argc, const char *const argv[]);
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
 class_t *vm_load_class_file(vm_t *vm, const char *filename);
 class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size);
 void vm_add_path(vm_t *vm, const char *path);
 int vm_load_library(vm_t *vm, const char *libpath);
-void vm_free(vm_t *vm);
+void vm_free(vm_t *vm, unsigned long threadWaitTime);
 
 env_t *env_create(vm_t *vm);
 int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags);
@@ -90,6 +94,7 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls);
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls);
 object_t *env_new_string(env_t *env, const char *cstring);
+array_t *env_new_string_array(env_t *env, unsigned int count, const char *const strings[]);
 
 inline int env_run_func_static(env_t *env, function_t *function, ...)
 {

@@ -75,6 +75,9 @@
     <ClInclude Include="internal\datau.h">
       <Filter>Header Files\internal</Filter>
     </ClInclude>
+    <ClInclude Include="internal\string_util.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="internal\object.c">
@@ -114,6 +117,9 @@
       <Filter>Source Files\internal</Filter>
     </ClCompile>
     <ClCompile Include="internal\lscript.c">
+      <Filter>Source Files\internal</Filter>
+    </ClCompile>
+    <ClCompile Include="internal\string_util.c">
       <Filter>Source Files\internal</Filter>
     </ClCompile>
   </ItemGroup>
