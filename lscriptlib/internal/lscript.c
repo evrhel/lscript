@@ -17,15 +17,27 @@ struct vm_args_s
 
 static int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct);
 
-static LVM gCurrentVM = NULL;
+static vm_t *gCurrentVM = NULL;
 
 LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[])
 {
 	vm_args_t args;
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
-	vm_t *vm = vm_create(args.heapSize, args.stackSize, 0, MAX_PATHS, args.paths, args.argc, args.argv);
+	vm_t *vm = vm_create(args.heapSize, args.stackSize, MAX_PATHS, args.paths);
 	return gCurrentVM = vm;
+}
+
+LEXPORT int LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID)
+{
+	int result;
+	
+	result = vm_start(gCurrentVM, threadHandle, argc, argv);
+	if (threadHandle)
+		*threadHandle = gCurrentVM->hVMThread;
+	if (threadID)
+		*threadID = gCurrentVM->dwVMThreadID;
+	return result;
 }
 
 LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID)
@@ -33,15 +45,13 @@ LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], voi
 	vm_args_t args;
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
-	vm_t *vm = vm_create(args.heapSize, args.stackSize, 1, MAX_PATHS, args.paths, args.argc, args.argv);
-#if defined(_WIN32)
-	if (threadHandle)
-		*threadHandle = vm->hVMThread;
-	if (threadID)
-		*threadID = vm->dwVMThreadID;
-#else
-#endif
-	return gCurrentVM = vm;
+	vm_t *vm = vm_create(args.heapSize, args.stackSize, MAX_PATHS, args.paths);
+	gCurrentVM = vm;
+	if (!gCurrentVM)
+		return NULL;
+	if (!ls_start_vm(args.argc, args.argv, threadHandle, threadID))
+		return NULL;
+	return gCurrentVM;
 }
 
 LEXPORT LVM LCALL ls_get_current_vm()

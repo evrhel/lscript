@@ -57,6 +57,7 @@ extern "C"
 	typedef void *lfunction;
 
 	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[]);
+	LEXPORT int LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
 	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
 	LEXPORT lvoid LCALL ls_destroy_vm(unsigned long threadWaitTime);
 	LEXPORT LVM LCALL ls_get_current_vm();

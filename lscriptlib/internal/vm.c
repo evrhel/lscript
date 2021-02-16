@@ -105,7 +105,7 @@ static inline int handle_if(env_t *env, byte_t **counterPtr)
 	return 0;
 }
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pathCount, const char *const paths[], int argc, const char *const argv[])
+vm_t *vm_create(size_t heapSize, size_t stackSize, int pathCount, const char *const paths[])
 {
 	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
 	if (!vm)
@@ -118,15 +118,8 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pat
 		return NULL;
 	}
 
-	vm->envs = list_create();
-	if (!vm->envs)
-	{
-		map_free(vm->classes, 0);
-		FREE(vm);
-		return NULL;
-	}
-
-	vm->envs->data = NULL;
+	vm->envs = NULL;
+	vm->envsLast = vm->envs;
 
 	vm->manager = manager_create(heapSize);
 	if (!vm->manager)
@@ -181,7 +174,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pat
 	}
 	vm->hLibraries[0] = GetModuleHandleA(NULL);
 	vm->hVMThread = NULL;
-	vm->dwVMThreadID;
+	vm->dwVMThreadID = 0;
 #else
 #endif
 
@@ -247,6 +240,17 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pat
 	object_set_ulong(stderrVal, "handle", (lulong)stderr);
 
 #if defined(_WIN32)
+	vm->hVMThread = NULL;
+	vm->dwVMThreadID = 0;
+#else
+#endif
+
+	return vm;
+}
+
+int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[])
+{
+#if defined(_WIN32)
 	if (startOnNewThread)
 	{
 		if (argc == 0)
@@ -286,15 +290,10 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pat
 			return NULL;
 		}
 	}
-	else
-	{
-		vm->hVMThread = NULL;
-		vm->dwVMThreadID = 0;
-	}
 #else
 #endif
 
-	return vm;
+	return 1;
 }
 
 class_t *vm_get_class(vm_t *vm, const char *classname)
@@ -449,7 +448,8 @@ void vm_free(vm_t *vm, unsigned long threadWaitTime)
 	list_iterator_t *lit = list_create_iterator(vm->envs);
 	while (lit)
 	{
-		env_free((env_t * )lit->data);
+		if (lit->data)
+			env_free((env_t * )lit->data);
 
 		lit = list_iterator_next(lit);
 	}
@@ -520,6 +520,19 @@ env_t *env_create(vm_t *vm)
 	value_set_type(&val, lb_object);
 	stack_push(env, &val);
 
+	if (vm->envsLast)
+	{
+		vm->envsLast->next = list_create();
+		vm->envsLast->prev = vm->envsLast;
+		vm->envsLast = vm->envsLast->next;
+		vm->envsLast->data = env;
+	}
+	else
+	{
+		vm->envs = list_create();
+		vm->envsLast = vm->envs;
+		vm->envsLast->data = env;
+	}
 	return env;
 }
 
@@ -1099,6 +1112,28 @@ void env_free(env_t *env)
 	}
 	list_iterator_free(lit);
 	list_free(env->variables, 0);
+
+	vm_t *vm = env->vm;
+	list_t *curr = vm->envs;
+	while (curr)
+	{
+		if (env == curr->data)
+		{
+			list_t *next = curr->next;
+			list_t *prev = curr->prev;
+			curr->next = NULL;
+			list_free(curr, 0);
+
+			if (next == NULL)
+				vm->envsLast = prev;
+
+			if (prev == NULL)
+				vm->envs = next;
+
+			break;
+		}
+		curr = curr->next;
+	}
 
 	FREE(env);
 }
@@ -1856,7 +1891,9 @@ void vm_start_routine(start_args_t *args)
 		env_t *env = env_create(args->vm);
 		if (env)
 		{
-			env_run_func_static(env, func, args->args);
+			int exception = env_run_func_static(env, func, args->args);
+			if (exception)
+				printf("Internal exception thrown: %d\n", exception);
 			env_free(env);
 		}
 	}

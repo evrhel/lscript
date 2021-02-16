@@ -35,6 +35,7 @@ enum
 struct vm_s
 {
 	list_t *envs;
+	list_t *envsLast;
 	map_t *classes;
 	manager_t *manager;
 	size_t stackSize;
@@ -77,7 +78,8 @@ struct env_s
 	};
 };
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, int startOnNewThread, int pathCount, const char *const paths[], int argc, const char *const argv[]);
+vm_t *vm_create(size_t heapSize, size_t stackSize, int pathCount, const char *const paths[]);
+int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[]);
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
 class_t *vm_load_class_file(vm_t *vm, const char *filename);
