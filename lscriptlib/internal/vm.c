@@ -105,7 +105,7 @@ static inline int handle_if(env_t *env, byte_t **counterPtr)
 	return 0;
 }
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, int pathCount, const char *const paths[])
+vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount, const char *const paths[])
 {
 	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
 	if (!vm)
@@ -172,7 +172,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, int pathCount, const char *co
 		FREE(vm);
 		return NULL;
 	}
-	vm->hLibraries[0] = GetModuleHandleA(NULL);
+	vm->hLibraries[0] = (HMODULE)lsAPILib;//GetModuleHandleA(NULL);
 	vm->hVMThread = NULL;
 	vm->dwVMThreadID = 0;
 #else
@@ -416,7 +416,8 @@ int vm_load_library(vm_t *vm, const char *libpath)
 #if defined(_WIN32)
 	char buf[MAX_PATH];
 	sprintf_s(buf, sizeof(buf), "%s.dll", libpath);
-	for (size_t i = 0; i < vm->libraryCount; i++)
+	// Slot 0 is reserved for the lsapi functions
+	for (size_t i = 1; i < vm->libraryCount; i++)
 	{
 		if (!vm->hLibraries[i])
 		{
@@ -471,7 +472,8 @@ void vm_free(vm_t *vm, unsigned long threadWaitTime)
 	manager_free(vm->manager);
 
 #if defined(_WIN32)
-	for (size_t i = 0; i < vm->libraryCount; i++)
+	// Don't free the first library - it is passed in vm_create by user
+	for (size_t i = 1; i < vm->libraryCount; i++)
 	{
 		if (vm->hLibraries[i])
 		{

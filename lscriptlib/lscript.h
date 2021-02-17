@@ -9,6 +9,8 @@
 #define LNIFUNC __declspec(dllexport)
 #define LNICALL __stdcall
 
+#define LIMPORT __declspec(dllimport)
+
 #define KB_TO_B(KB) ((KB)*1024ULL)
 #define MB_TO_B(MB) (KB_TO_B((MB)*1024ULL))
 #define GB_TO_B(GB) (MB_TO_B((GB)*1024ULL))
@@ -56,9 +58,11 @@ extern "C"
 	typedef void *lfield;
 	typedef void *lfunction;
 
-	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[]);
+	LEXPORT int LCALL ls_init();
+
+	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib);
 	LEXPORT int LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
-	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
+	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib);
 	LEXPORT lvoid LCALL ls_destroy_vm(unsigned long threadWaitTime);
 	LEXPORT LVM LCALL ls_get_current_vm();
 
