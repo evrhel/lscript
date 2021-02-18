@@ -1087,10 +1087,8 @@ byte_t get_comparator_byte(const char *comparatorString)
 {
 	if (strlen(comparatorString) > 2)
 		return 0;
-	int c = 0;
-	char *buf = (char *)&c;
-	buf[0] = comparatorString[0];
-	buf[1] = comparatorString[1];
+	int c = (comparatorString[0] << 8) | (comparatorString[1]);
+
 	switch (c)
 	{
 	case '==':
@@ -1099,13 +1097,13 @@ byte_t get_comparator_byte(const char *comparatorString)
 	case '!=':
 		return lb_nequal;
 		break;
-	case '<':
+	case '<\0':
 		return lb_less;
 		break;
 	case '<=':
 		return lb_lequal;
 		break;
-	case '>':
+	case '>\0':
 		return lb_greater;
 		break;
 	case '>=':

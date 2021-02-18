@@ -17,6 +17,7 @@ class String
 		# If the lengths are different, exit early
 		if this.chars.length != other.chars.length
 			retb byte[0]
+		end
 
 		# Otherwise, iterate over the chars and test for differences
 		uint counter
@@ -24,6 +25,7 @@ class String
 		while counter < this.chars.length
 			if this.chars[counter] != other.chars[counter]
 				retb byte[0]
+			end
 			add counter counter uint[1]
 		end
 		retb byte[1]
