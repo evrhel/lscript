@@ -297,6 +297,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 			break;
 		case lb_setr:
 			off++;
+			off += strlen(off) + 1;
 			break;
 
 		case lb_ret:
@@ -446,7 +447,7 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, con
 					return off;
 				goto perform_if_link;
 			}
-			off++;
+			off += 9; // opcode + 8-byte offset
 			break;
 		default:
 			off = seek_to_next_control(off, end, srcFile, backPtr);

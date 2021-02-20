@@ -22,6 +22,14 @@ class Main
 			dynamic_call System.stdout.println(LString;) "There is one argument!"
 		else
 			dynamic_call System.stdout.println(LString;) "There is more than one argument!"
+			bool result
+			dynamic_call args[0].equals(LString;) args[1]
+			setr result
+			if result
+				dynamic_call System.stdout.println(LString;) "First and second are equal"
+			else
+				dynamic_call System.stdout.println(LString;) "First and second are not equal"
+			end
 		end
 
 		int counter
