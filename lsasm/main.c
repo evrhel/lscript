@@ -7,7 +7,7 @@
 #include "compiler.h"
 #include "linker.h"
 
-#define LSASM_VERSION "1.0.0a"
+#define LSASM_VERSION "1.0.0"
 
 #define RETURN_NORMAL 0x01
 #define RETURN_INVALID_ARGUMENT 0x02
@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
 	const char *outputDirectory = ".";
 	unsigned int version = 1;
 	int runCompiler = 1, runLinker = 1;
+	int compileDebug = 0;
 	for (int i = 1; i < argc; i++)
 	{
 		if (equals_ignore_case(argv[i], "-h"))
@@ -69,23 +70,15 @@ int main(int argc, char *argv[])
 		}
 		else if (equals_ignore_case(argv[i], "-nc"))
 		{
-			i++;
-			if (i == argc)
-			{
-				display_help();
-				return RETURN_INVALID_ARGUMENT;
-			}
 			runCompiler = 0;
 		}
 		else if (equals_ignore_case(argv[i], "-nl"))
 		{
-			i++;
-			if (i == argc)
-			{
-				display_help();
-				return RETURN_INVALID_ARGUMENT;
-			}
 			runLinker = 0;
+		}
+		else if (equals_ignore_case(argv[i], "-d"))
+		{
+			compileDebug = 1;
 		}
 		else
 		{
@@ -99,7 +92,7 @@ int main(int argc, char *argv[])
 	if (runCompiler)
 	{
 		printf("[BEGIN COMPILE]\n");
-		errors = compile(files, outputDirectory, version, (msg_func_t)puts, &linkFiles);
+		errors = compile(files, outputDirectory, version, compileDebug, (msg_func_t)puts, &linkFiles);
 		if (are_errors(errors))
 			return RETURN_COMPILE_ERROR;
 		putc('\n', stdout);
@@ -153,7 +146,8 @@ void display_help()
 	printf("               current working directory.\n");
 	printf("-s [version]   Sets the bytecode version to compile to. Default is 1.\n");
 	printf("-nc            Specifies not to run the compiler.\n");
-	printf("-nl            Specifies not to run the linker.\n\n");
+	printf("-nl            Specifies not to run the linker.\n");
+	printf("-d             Indicates debugging symbols should be compiled.\n\n");
 	printf("Application return codes:\n");
 	printf("0x00   Normal\n");
 	printf("0x01   Invalid command format\n");

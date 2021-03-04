@@ -16,8 +16,8 @@ struct line_s
 	int linenum;
 };
 
-static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version, input_file_t **outputFiles);
-static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version);
+static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version, int debug, input_file_t **outputFiles);
+static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version, int debug, buffer_t *debugOut);
 static line_t *format_document(const char *data, size_t datalen);
 static void free_formatted(line_t *first);
 static byte_t get_command_byte(const char *string);
@@ -43,7 +43,7 @@ static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenC
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, msg_func_t messenger, input_file_t **outputFiles)
+compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, int debug, msg_func_t messenger, input_file_t **outputFiles)
 {
 	compile_error_t *errors = create_base_compile_error(messenger);
 	input_file_t *base = (input_file_t *)malloc(sizeof(input_file_t));
@@ -62,7 +62,7 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 
 		while (files)
 		{
-			errors = compile_file(files->filename, outputDirectory, errors, version, &back);
+			errors = compile_file(files->filename, outputDirectory, errors, version, debug, &back);
 			files = files->next;
 		}
 	}
@@ -83,7 +83,7 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 	return errors;
 }
 
-compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back, unsigned int version, input_file_t **outputFiles)
+compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back, unsigned int version, int debug, input_file_t **outputFiles)
 {
 	FILE *in;
 
@@ -105,7 +105,8 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	fclose(in);
 
 	buffer_t *obuf = new_buffer(256);
-	back = compile_data(buf, length, obuf, file, back, version);
+	buffer_t *dbuf = debug ? new_buffer(256) : NULL;
+	back = compile_data(buf, length, obuf, file, back, version, debug, dbuf);
 
 	int hasWarnings = 0;
 	if (back)
@@ -168,7 +169,49 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 	fclose(out);
 	free_buffer(obuf);
-	//free(nstr);
+
+	if (debug)
+	{
+		filenameSize++;
+		nstr = (char *)malloc(filenameSize);
+		if (!nstr)
+		{
+			free(buf);
+			return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
+		}
+		memcpy(nstr, file, filenameSize);
+		lastSep = strrchr(nstr, '\\');
+		if (!lastSep)
+			lastSep = strrchr(nstr, '/');
+		fname = lastSep ? lastSep : nstr;
+		ext = strrchr(fname, '.');
+		if (ext)
+		{
+			ext[1] = 'l';
+			ext[2] = 'd';
+			ext[3] = 's';
+			ext[4] = 0;
+		}
+		else
+		{
+			size_t len = strlen(fname);
+			fname[len++] = '.';
+			fname[len++] = 'l';
+			fname[len++] = 'd';
+			fname[len++] = 's';
+			fname[len] = 0;
+		}
+
+		FILE *dfout;
+		fopen_s(&dfout, nstr, "wb");
+		fwrite(&version, sizeof(unsigned int), 1, dfout);
+		fputs(file, dfout);
+		fwrite(dbuf->buf, sizeof(char), (size_t)(dbuf->cursor - dbuf->buf), dfout);
+
+		free(nstr);
+		fclose(dfout);
+		free_buffer(dbuf);
+	}
 
 	if (hasWarnings)
 		back = add_compile_error(back, NULL, 0, error_info, "%s built with warnings.", file);
@@ -178,7 +221,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	return back ? back->front : NULL;
 }
 
-compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version)
+compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version, int debug, buffer_t *debugOut)
 {
 	line_t *formatted = format_document(data, datalen);
 
@@ -188,6 +231,13 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 		char *line = curr->line;
 		if (*line != '#')
 		{
+			if (debug)
+			{
+				unsigned int off = (unsigned int)(out->cursor - out->buf);
+				put_uint(debugOut, off);
+				put_int(debugOut, curr->linenum);
+			}
+
 			size_t tokenCount;
 			char **tokens = tokenize_string(line, &tokenCount);
 			byte_t cmd = get_command_byte(tokens[0]);

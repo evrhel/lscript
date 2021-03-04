@@ -95,7 +95,9 @@ enum
 	lb_greater,
 	lb_gequal,
 	lb_one,
-	lb_two
+	lb_two,
+
+	lb_debug = 0xff
 };
 
 #endif

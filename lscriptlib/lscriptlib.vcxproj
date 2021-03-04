@@ -149,6 +149,7 @@
     <ClInclude Include="internal\class.h" />
     <ClInclude Include="internal\collection.h" />
     <ClInclude Include="internal\datau.h" />
+    <ClInclude Include="internal\debug.h" />
     <ClInclude Include="internal\heap.h" />
     <ClInclude Include="internal\lb.h" />
     <ClInclude Include="internal\lstdio.h" />
@@ -168,6 +169,7 @@
     <ClCompile Include="internal\cast.c" />
     <ClCompile Include="internal\class.c" />
     <ClCompile Include="internal\collection.c" />
+    <ClCompile Include="internal\debug.c" />
     <ClCompile Include="internal\heap.c" />
     <ClCompile Include="internal\lscript.c" />
     <ClCompile Include="internal\lstdio.c" />
