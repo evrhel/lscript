@@ -443,6 +443,8 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, con
 			if (level <= 0 && searchType & search_end)
 			{
 				exitLoc = off;
+				if (!failLoc)
+					failLoc = off;
 				if (searchType & search_no_link)
 					return off;
 				goto perform_if_link;

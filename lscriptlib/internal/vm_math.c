@@ -74,7 +74,7 @@ case lb_value: \
 } \
 	break; \
 default: \
-	env->exception = exception_bad_command; \
+	env_raise_exception(env, exception_bad_command, "bad fetch arg data type %x", (unsigned int)(*argTypePtr)); \
 	return 0; \
 	break; \
 }

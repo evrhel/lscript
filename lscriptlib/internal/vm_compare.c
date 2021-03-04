@@ -142,13 +142,13 @@ int vmc_compare(void *envPtr, byte_t **counterPtr)
             return TOBOOL(result & compare_lessequ);
             break;
         default:
-            env->exception = exception_bad_command;
+            env_raise_exception(env, exception_bad_command, "invalid comparator %x", (unsigned int)comparator);
             return 0;
         }
     }
     else
     {
-        env->exception = exception_bad_command;
+        env_raise_exception(env, exception_bad_command, "invalid compare count constant %x", (unsigned int)count);
         return 0;
     }
 }
@@ -219,7 +219,7 @@ int resolve_data(env_t *env, byte_t **counterPtr, data_t **data, flags_t *flags)
         return 1;
         break;
     default:
-        env->exception = exception_bad_command;
+        env_raise_exception(env, exception_bad_command, "bad compare data type %x", (unsigned int)(*(counter - 1)));
         return 0;
     }
     *data = (data_t *)dataStart;

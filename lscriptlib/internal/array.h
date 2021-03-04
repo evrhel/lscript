@@ -2,10 +2,11 @@
 #define ARRAY_H
 
 #include "../lscript.h"
+#include "datau.h"
 
-#define ARRAY_INDEX_INBOUNDS(array, index) (index < array->length)
-#define ARRAY_GET_VALUE(array, type, index) (((type*)&array->data)[index])
-#define ARRAY_SET_VALUE(array, type, index, value) ((((type*)&array->data)[index])=value)
+#define ARRAY_INDEX_INBOUNDS(array, index) ((index)<(array)->length)
+#define ARRAY_GET_VALUE(array, type, index) (((type*)&(array)->data)[(index)])
+#define ARRAY_SET_VALUE(array, type, index, value) ((((type*)&(array)->data)[(index)])=(value))
 
 typedef struct array_s array_t;
 struct array_s
@@ -15,6 +16,11 @@ struct array_s
 	unsigned int dummy;
 	void *data;
 };
+
+inline data_t *array_get_data(array_t *array, luint index, size_t elemSize)
+{
+	return (data_t *)((byte_t *)&array->data + (index * elemSize));
+}
 
 inline lchar array_get_char(array_t *array, luint index)
 {

@@ -112,7 +112,17 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls);
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls);
 object_t *env_new_string(env_t *env, const char *cstring);
 array_t *env_new_string_array(env_t *env, unsigned int count, const char *const strings[]);
-int env_raise_exception(env_t *env, int exception, const char *message);
+int env_raise_exceptionv(env_t *env, int exception, const char *format, va_list ls);
+
+inline int env_raise_exception(env_t *env, int exception, const char *format, ...)
+{
+	va_list ls;
+	va_start(ls, format);
+	char *result = env_raise_exceptionv(env, exception, format, ls);
+	va_end(ls);
+	return result;
+}
+
 int env_get_exception_data(env_t *env, function_t **function, void **location);
 
 inline int env_run_func_static(env_t *env, function_t *function, ...)

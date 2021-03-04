@@ -9,6 +9,7 @@
 #include "vm_math.h"
 #include "vm_compare.h"
 #include "string_util.h"
+#include "debug.h"
 
 //#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
 #define CURR_FUNC(env) (*(((function_t**)(env)->rbp)+2))
@@ -111,17 +112,17 @@ static inline int is_numeric(const char *string)
 	return 1;
 }
 
-static inline int handle_if(env_t *env, byte_t **counterPtr)
+static inline int handle_if(env_t *env)
 {
-	if (!vmc_compare(env, counterPtr))
+	if (!vmc_compare(env, &env->rip))
 	{
 		if (env->exception)
 			return env->exception;
 		class_t *c = CURR_FUNC(env)->parentClass;
-		*counterPtr = c->data + *((size_t *)(*counterPtr));
+		env->rip = c->data + *((size_t *)(env->rip));
 	}
 	else
-		*counterPtr += sizeof(size_t);
+		env->rip += sizeof(size_t);
 	return 0;
 }
 
@@ -706,6 +707,67 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 
 	field_t *fieldData;
 	char *beg = strchr(name, '.');
+	char *bracBeg = strchr(name, '[');
+	char *bracEnd = NULL;
+
+	if (bracBeg && (bracBeg < beg || (bracBeg && !beg)))
+	{
+		bracEnd = strchr(name, ']');
+		if (!bracEnd)
+		{
+			env_raise_exception(env, exception_bad_variable_name, name);
+			return 0;
+		}
+		char *indBegin = bracBeg + 1;
+
+		*bracEnd = 0;
+		luint index = atoll(indBegin);
+		
+
+		char buf[100];
+		sprintf_s(buf, sizeof(buf), "%u", index);
+
+		if (strcmp(buf, indBegin))
+		{
+			// Index is possibly a variable
+
+			data_t *indexData;
+			flags_t indexFlags;
+			if (!env_resolve_variable(env, indBegin, &indexData, &indexFlags))
+			{
+				*bracEnd = ']';
+				env_raise_exception(env, exception_bad_variable_name, name);
+				return 0;
+			}
+
+			index = indexData->uivalue;
+		}
+
+		*bracBeg = 0;
+		fieldData = object_get_field_data(object, name);
+		if (!fieldData)
+		{
+			env_raise_exception(env, exception_bad_variable_name, "field %s", name);
+			return 0;
+		}
+		*bracBeg = '[';
+
+		*data = (data_t *)((byte_t *)&object->data + (size_t)fieldData->offset);
+		*flags = 0;
+		array_t *arr = (array_t *)(*data)->ovalue;
+		
+		if (!ARRAY_INDEX_INBOUNDS(arr, index))
+		{
+			env_raise_exception(env, exception_bad_array_index, "%u", index);
+			return 0;
+		}
+
+		byte_t elemType = value_typeof((value_t *)arr) - lb_object + lb_char - 1;
+		size_t elemSize = sizeof_type(elemType);
+		*data = array_get_data(arr, index, elemSize);
+		return 1;
+	}
+
 	// We might need to go into another object's fields if there is a '.'
 	if (beg)
 	{
@@ -740,6 +802,11 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 		{
 		case lb_object:
 			fieldData = object_get_field_data(object, name);
+			if (!fieldData)
+			{
+				env_raise_exception(env, exception_bad_variable_name, "field %s", name);
+				return 0;
+			}
 
 			*flags = fieldData->flags;
 			*data = (data_t *)((byte_t *)&object->data + (size_t)fieldData->offset);
@@ -759,7 +826,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 		case lb_objectarray:
 			if (strcmp(name, "length"))
 			{
-				env_raise_exception(env, exception_bad_variable_name, name);
+				env_raise_exception(env, exception_bad_variable_name, "field %s", name);
 				return 0;
 			}
 			*data = (data_t *)&arr->length;
@@ -1137,10 +1204,9 @@ array_t *env_new_string_array(env_t *env, unsigned int count, const char *const 
 	return arr;
 }
 
-int env_raise_exception(env_t *env, int exception, const char *message)
+int env_raise_exceptionv(env_t *env, int exception, const char *format, va_list ls)
 {
-	size_t messagelen = strlen(message);
-	env->exceptionMessage = message ? new_exception_string("%s", message) : NULL;
+	env->exceptionMessage = format ? new_exception_stringv(format, ls) : NULL;
 	env->exception = exception;
 	return exception;
 }
@@ -1601,7 +1667,8 @@ int env_run(env_t *env, void *location)
 			}
 			map_iterator_free(mip);
 
-			env_run_func_staticv(env, callFunc, callFuncArgs);
+			if (__retVal = env_run_func_staticv(env, callFunc, callFuncArgs))
+				EXIT_RUN(__retVal);
 
 			FREE(callFuncArgs);
 
@@ -1745,7 +1812,8 @@ int env_run(env_t *env, void *location)
 			}
 			map_iterator_free(mip);
 
-			env_run_funcv(env, callFunc, object, callFuncArgs);
+			if (__retVal = env_run_funcv(env, callFunc, object, callFuncArgs))
+				EXIT_RUN(__retVal);
 
 			FREE(callFuncArgs);
 			break;
@@ -1788,7 +1856,7 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_if:
-			if (handle_if(env, &env->rip))
+			if (handle_if(env))
 				EXIT_RUN(env->exception);
 			break;
 		case lb_else:
@@ -1806,7 +1874,7 @@ int env_run(env_t *env, void *location)
 			break;
 
 		default:
-			EXIT_RUN(env_raise_exception(env, exception_bad_command, "unknown instruction"));
+			EXIT_RUN(env_raise_exception(env, exception_bad_command, "unknown instruction %x", (unsigned int)(*env->rip)));
 		}
 	}
 
@@ -1968,24 +2036,71 @@ void vm_start_routine(start_args_t *args)
 				 
 				printf("Outputting known information up to exception:\n");
 				printf("Exception occurred during execution in environment %p\n", env);
-				printf("V I R T U A L   M A C H I N E\n\n");
+				/*printf("V I R T U A L   M A C H I N E\n\n");
 				printf("Variables of suspect environment:\n");
 				printf("rip = %p, cmdStart = %p, vm = %p\n", env->rip, env->cmdStart, env->vm);
 				printf("stack = %p, rsp = %p, rbp = %p\n", env->stack, env->rsp, env->rbp);
 				printf("variables = %p, exception = %d, exceptionMessage = %p\n", env->variables, env->exception, env->exceptionMessage);
 				printf("bret = %u, wret = %u, dret = %u\n", env->bret, env->wret, env->dret);
 				printf("qret = %llu, r4ret = %f, r8ret = %f\n", env->qret, (real8_t)env->r4ret, env->r8ret);
-				printf("vret = %p\n\n", env->vret);
+				printf("vret = %p\n\n", env->vret);*/
 				function_t *exceptionFunc = CURR_FUNC(env);
-				printf("Top stack frame parameters of suspect environment:\n");
+				/*printf("Top stack frame parameters of suspect environment:\n");
 				printf("(rbp + 0) (last stack frame rbp) = %p\n", *((size_t **)env->rbp));
 				printf("(rbp + 1) (last stack frame rip) = %p\n", *((size_t **)env->rbp + 1));
-				printf("(rbp + 2) (current function ptr) = %p\n\n", *((size_t **)env->rbp + 2));
+				printf("(rbp + 2) (current function ptr) = %p\n\n", *((size_t **)env->rbp + 2));*/
+
 				printf("Top stack frame points to function %p -> {\n", exceptionFunc);
 				printf("\tname = \"%s\"\n", exceptionFunc->name);
 				printf("\tparentClass = \"%s\"\n", exceptionFunc->parentClass->name);
 				printf("\trelativeLocation = %p\n", (void *)((char *)exceptionFunc->location - (char *)exceptionFunc->parentClass->data));
 				printf("}\n");
+
+				printf("Searching for debug information on classpath...\n");
+				char targetName[MAX_PATH];
+				char fullPath[MAX_PATH];
+
+				sprintf_s(targetName, MAX_PATH, "%s.lds", exceptionFunc->parentClass->name);
+
+				debug_t *debug = NULL;
+				vm_t *vm = env->vm;
+				list_t *curr = vm->paths;
+				while (curr)
+				{
+					sprintf_s(fullPath, MAX_PATH, "%s\\%s", (char *)curr->data, targetName);
+					FILE *dummy;
+					fopen_s(&dummy, fullPath, "rb");
+					if (dummy)
+					{
+						fclose(dummy);
+						debug = load_debug(fullPath);
+						break;
+					}
+					curr = curr->next;
+				}
+
+				if (debug)
+				{
+					printf("Found debug information for class \"%s\"\n", exceptionFunc->parentClass->name);
+					printf("Exception occurred in source file %s\n", debug->srcFile);
+					unsigned int binOffInt = (unsigned int)(env->cmdStart - exceptionFunc->parentClass->data);
+					debug_elem_t *start = debug->first;
+					while (start < debug->last)
+					{
+						if (start->binOff <= binOffInt)
+						{
+							printf("Exception occured around: %s.%d\n", debug->srcFile, start->srcLine);
+							break;
+						}
+						start++;
+					}
+					if (start >= debug->last)
+						printf("Could not find mapping from exception location to source location.\n");
+				}
+				else
+				{
+					printf("Could not find debug information for class \"%s\"\n", exceptionFunc->parentClass->name);
+				}
 			}
 			env_free(env);
 		}
