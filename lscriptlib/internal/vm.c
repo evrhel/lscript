@@ -10,7 +10,27 @@
 #include "vm_compare.h"
 #include "string_util.h"
 
-#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
+//#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
+#define CURR_FUNC(env) (*(((function_t**)(env)->rbp)+2))
+
+#define EXIT_RUN(val) {__retVal=(val);goto done_call;}
+
+static const char *const g_exceptionStrings[] =
+{
+	"NO_EXCEPTION",
+	"OUT_OF_MEMORY",
+	"STACK_OVERFLOW",
+	"BAD_COMMAND",
+	"VM_ERROR",
+	"ILLEGAL_STATE",
+	"CLASS_NOT_FOUND",
+	"FUNCTION_NOT_FOUND",
+	"FIELD_NOT_FOUND",
+	"NULL_DEREFERENCE",
+	"BAD_VARIABLE_NAME",
+	"BAD_ARRAY_INDEX",
+	"LINK_ERROR"
+};
 
 typedef struct start_args_s start_args_t;
 struct start_args_s
@@ -97,12 +117,27 @@ static inline int handle_if(env_t *env, byte_t **counterPtr)
 	{
 		if (env->exception)
 			return env->exception;
-		class_t *c = CURR_CLASS(env);
+		class_t *c = CURR_FUNC(env)->parentClass;
 		*counterPtr = c->data + *((size_t *)(*counterPtr));
 	}
 	else
 		*counterPtr += sizeof(size_t);
 	return 0;
+}
+
+char *new_exception_stringv(const char *format, va_list ls)
+{
+	char *buf = (char *)malloc(MAX_EXCEPTION_STRING_LENGTH);
+	if (!buf)
+		return NULL;
+	vsprintf_s(buf, MAX_EXCEPTION_STRING_LENGTH, format, ls);
+	return buf;
+}
+
+void free_exception_string(const char *exceptionString)
+{
+	if (exceptionString)
+		free((void *)exceptionString);
 }
 
 vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount, const char *const paths[])
@@ -254,7 +289,7 @@ int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[])
 	if (startOnNewThread)
 	{
 		if (argc == 0)
-			return NULL;
+			return 0;
 
 		env_t *tempEnv = env_create(vm);
 		array_t *stringArgs = env_new_string_array(tempEnv, argc - 1, argv + 1);
@@ -263,14 +298,14 @@ int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[])
 		if (!vm_load_class(vm, argv[0]))
 		{
 			vm_free(vm, 0);
-			return NULL;
+			return 0;
 		}
 
 		start_args_t *start = (start_args_t *)MALLOC(sizeof(start_args_t));
 		if (!start)
 		{
 			vm_free(vm, 0);
-			return NULL;
+			return 0;
 		}
 		start->vm = vm;
 		start->args = stringArgs;
@@ -287,7 +322,7 @@ int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[])
 		if (!vm->hVMThread)
 		{
 			vm_free(vm, 0);
-			return NULL;
+			return 0;
 		}
 	}
 #else
@@ -513,7 +548,7 @@ env_t *env_create(vm_t *vm)
 	env->rip = NULL;
 	env->vm = vm;
 	env->exception = exception_none;
-	env->exceptionDesc = 0;
+	env->exceptionMessage = NULL;
 	env->qret = 0;
 
 	value_t val;
@@ -562,7 +597,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 			beg++;
 			if (!clazz)
 			{
-				env->exception = exception_bad_variable_name;
+				env_raise_exception(env, exception_bad_variable_name, name);
 				return 0;
 			}
 			value_t *fieldVal;
@@ -575,7 +610,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 				*nbeg = '.';
 				if (!fieldVal)
 				{
-					env->exception = exception_bad_variable_name;
+					env_raise_exception(env, exception_bad_variable_name, name);
 					return 0;
 				}
 				nbeg++;
@@ -586,7 +621,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 				fieldVal = class_get_static_field(clazz, beg);
 				if (!fieldVal)
 				{
-					env->exception = exception_bad_variable_name;
+					env_raise_exception(env, exception_bad_variable_name, name);
 					return 0;
 				}
 				*data = (data_t *)&fieldVal->ovalue;
@@ -606,7 +641,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		if (!mapNode)
 		{
 			*beg = '[';
-			env->exception = exception_bad_variable_name;
+			env_raise_exception(env, exception_bad_variable_name, name);
 			return 0;
 		}
 		*beg = '[';
@@ -616,7 +651,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		luint index;
 		if (!numEnd)
 		{
-			env->exception = exception_bad_variable_name;
+			env_raise_exception(env, exception_bad_variable_name, name);
 			return 0;
 		}
 
@@ -624,7 +659,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		if (!is_numeric(numEnd))
 		{
 			*numEnd = ']';
-			env->exception = exception_bad_array_index;
+			env_raise_exception(env, exception_bad_array_index, name);
 			return 0;
 		}
 
@@ -634,7 +669,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		array_t *arr = (array_t *)(((value_t *)mapNode->value)->ovalue);
 		if (index >= arr->length)
 		{
-			env->exception = exception_bad_array_index;
+			env_raise_exception(env, exception_bad_array_index, name);
 			return 0;
 		}
 
@@ -650,7 +685,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 	mapNode = map_find((map_t *)env->variables->data, name);
 	if (!mapNode)
 	{
-		env->exception = exception_bad_variable_name;
+		env_raise_exception(env, exception_bad_variable_name, name);
 		return 0;
 	}
 
@@ -665,7 +700,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 {
 	if (!object)
 	{
-		env->exception = exception_null_dereference;
+		env_raise_exception(env, exception_null_dereference, NULL);
 		return 0;
 	}
 
@@ -683,7 +718,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 
 		if (!fieldData)
 		{
-			env->exception = exception_bad_variable_name;
+			env_raise_exception(env, exception_bad_variable_name, name);
 			return 0;
 		}
 
@@ -724,7 +759,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 		case lb_objectarray:
 			if (strcmp(name, "length"))
 			{
-				env->exception = exception_bad_variable_name;
+				env_raise_exception(env, exception_bad_variable_name, name);
 				return 0;
 			}
 			*data = (data_t *)&arr->length;
@@ -733,7 +768,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 			return 1;
 			break;
 		default:
-			env->exception = exception_bad_variable_name;
+			env_raise_exception(env, exception_bad_variable_name, name);
 			return 0;
 			break;
 		}
@@ -744,7 +779,7 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 {
 	if (!name)
 	{
-		env->exception = exception_function_not_found;
+		env_raise_exception(env, exception_function_not_found, name);
 		return 0;
 	}
 
@@ -763,7 +798,7 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 			byte_t type = TYPEOF(flags);
 			if (type != lb_object)
 			{
-				env->exception = exception_function_not_found;
+				env_raise_exception(env, exception_function_not_found, name);
 				return 0;
 			}
 			object_t *obj = (object_t *)data->ovalue;
@@ -778,14 +813,14 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 			class_t *clazz = vm_load_class(env->vm, name);
 			if (!clazz)
 			{
-				env->exception = exception_class_not_found;
+				env_raise_exception(env, exception_class_not_found, name);
 				return 0;
 			}
 			*end = '.';
 			result = class_get_function(clazz, funcname);
 			if (!result)
 			{
-				env->exception = exception_function_not_found;
+				env_raise_exception(env, exception_function_not_found, name);
 				return 0;
 			}
 			*function = result;
@@ -794,18 +829,18 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 	}
 	else
 	{
-		class_t *clazz = *((class_t **)env->rbp + 2);
+		class_t *clazz = CURR_FUNC(env)->parentClass;
 		result = class_get_function(clazz, name);
 		if (!result)
 		{
-			env->exception = exception_function_not_found;
+			env_raise_exception(env, exception_function_not_found, name);
 			return 0;
 		}
 		*function = result;
 		return 1;
 	}
 
-	env->exception = exception_function_not_found;
+	env_raise_exception(env, exception_function_not_found, name);
 	return 0;
 }
 
@@ -823,14 +858,14 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 	byte_t type = TYPEOF(*flags);
 	if (type != lb_object)
 	{
-		env->exception = exception_function_not_found;
+		env_raise_exception(env, exception_function_not_found, name);
 		return 0;
 	}
 
 	object_t *object = (object_t *)(*data)->ovalue;
 	if (!object)
 	{
-		env->exception = exception_null_dereference;
+		env_raise_exception(env, exception_null_dereference, name);
 		return 0;
 	}
 
@@ -838,7 +873,7 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 	*function = class_get_function(object->clazz, funcName);
 	if (!(*function))
 	{
-		env->exception = exception_function_not_found;
+		env_raise_exception(env, exception_function_not_found, name);
 		return 0;
 	}
 
@@ -852,14 +887,14 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		if (!function->location)
 		{
 			if (!try_link_function(env->vm, function))
-				return env->exception = exception_link_error;
+				return env_raise_exception(env, exception_link_error, function->name);
 		}
 
 		void *args = CALLOC(function->numargs + 2, sizeof(qword_t));
 
 			//MALLOC((function->numargs * sizeof(qword_t)) + (2 * sizeof(qword_t)));
 		if (!args)
-			return env->exception = exception_vm_error;
+			return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
 		
 		void **temp = (void **)args;
 		temp[0] = env;
@@ -869,7 +904,7 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		if (!types)
 		{
 			FREE(args);
-			return env->exception = exception_vm_error;
+			return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
 		}
 
 		if (function->numargs > 0)
@@ -967,11 +1002,11 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 	else
 	{
 		if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
-			return env->exception = exception_stack_overflow;
+			return env_raise_exception(env, exception_stack_overflow, NULL);
 
 		*((size_t *)env->rsp) = (size_t)env->rbp;
 		*((size_t *)env->rsp + 1) = (size_t)env->rip;
-		*((size_t *)env->rsp + 2) = (size_t)function->parentClass;
+		*((size_t *)env->rsp + 2) = (size_t)function;
 
 		env->rbp = env->rsp;
 		env->rsp = ((size_t *)env->rsp) + 3;
@@ -1008,11 +1043,11 @@ int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls
 	// push the arg list to the stack
 
 	if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
-		return env->exception = exception_stack_overflow;
+		return env_raise_exception(env, exception_stack_overflow, NULL);
 
 	*((size_t *)env->rsp) = (size_t)env->rbp;
 	*((size_t *)env->rsp + 1) = (size_t)env->rip;
-	*((size_t *)env->rsp + 2) = (size_t)function->parentClass;
+	*((size_t *)env->rsp + 2) = (size_t)function;
 
 	env->rbp = env->rsp;
 	env->rsp = ((size_t *)env->rsp) + 3;
@@ -1096,10 +1131,29 @@ array_t *env_new_string_array(env_t *env, unsigned int count, const char *const 
 	array_t *arr = manager_alloc_array(env->vm->manager, lb_objectarray, count);
 	if (!arr)
 		return NULL;
-	for (int i = 0; i < count; i++)
+	for (unsigned int i = 0; i < count; i++)
 		array_set_object(arr, i, env_new_string(env, strings[i]));
 
 	return arr;
+}
+
+int env_raise_exception(env_t *env, int exception, const char *message)
+{
+	size_t messagelen = strlen(message);
+	env->exceptionMessage = message ? new_exception_string("%s", message) : NULL;
+	env->exception = exception;
+	return exception;
+}
+
+int env_get_exception_data(env_t *env, function_t **function, void **location)
+{
+	if (!env->exception)
+		return 0;
+	
+	*function = CURR_FUNC(env);
+	*location = env->cmdStart;
+
+	return env->exception;
 }
 
 void env_free(env_t *env)
@@ -1137,6 +1191,8 @@ void env_free(env_t *env)
 		curr = curr->next;
 	}
 
+	free_exception_string(env->exceptionMessage);
+
 	FREE(env);
 }
 
@@ -1147,8 +1203,11 @@ class_t *class_load_ext(const char *classname, vm_t *vm)
 
 int env_run(env_t *env, void *location)
 {
-	env->rip = location;
-	byte_t *counter = env->rip;	// A counter on where we are currently executing
+	int __retVal;
+	byte_t *ripSave = env->rip;
+	env->rip = (byte_t *)location;
+	//env->rip = location;
+	//byte_t *counter = env->rip;	// A counter on where we are currently executing
 
 	const char *name;			// An arbitrary string to store a name
 	data_t *data;				// An arbitrary data_t pointer
@@ -1173,9 +1232,11 @@ int env_run(env_t *env, void *location)
 
 	while (1)
 	{
-		switch (*counter)
+		env->cmdStart = env->rip;
+		switch (*env->rip)
 		{
 		case lb_noop:
+			env->rip++;
 			break;
 
 		case lb_char:
@@ -1200,107 +1261,107 @@ int env_run(env_t *env, void *location)
 		case lb_floatarray:
 		case lb_doublearray:
 		case lb_objectarray:
-			type = *counter;
-			counter++;
-			name = counter;
+			type = *env->rip;
+			env->rip++;
+			name = env->rip;
 			if (!is_varname_avaliable(env, name))
-				return env->exception = exception_bad_variable_name;
-			counter += strlen(name) + 1;
+				EXIT_RUN(env_raise_exception(env, exception_bad_variable_name, name));
+			env->rip += strlen(name) + 1;
 			val.flags = 0;
 			val.lvalue = 0;
 			value_set_type(&val, type);
 			stackAllocLoc = stack_push(env, &val);
 			if (!stackAllocLoc)
-				return env->exception;
+				EXIT_RUN(env->exception);
 			map_insert((map_t *)env->variables->data, name, stackAllocLoc);
 			break;
 
 		case lb_setb:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			MEMCPY(data, counter, sizeof(byte_t));
-			counter += sizeof(byte_t);
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			MEMCPY(data, env->rip, sizeof(byte_t));
+			env->rip += sizeof(byte_t);
 			break;
 		case lb_setw:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			MEMCPY(data, counter, sizeof(word_t));
-			counter += sizeof(word_t);
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			MEMCPY(data, env->rip, sizeof(word_t));
+			env->rip += sizeof(word_t);
 			break;
 		case lb_setd:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			MEMCPY(data, counter, sizeof(dword_t));
-			counter += sizeof(dword_t);
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			MEMCPY(data, env->rip, sizeof(dword_t));
+			env->rip += sizeof(dword_t);
 			break;
 		case lb_setq:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			MEMCPY(data, counter, sizeof(qword_t));
-			counter += sizeof(qword_t);
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			MEMCPY(data, env->rip, sizeof(qword_t));
+			env->rip += sizeof(qword_t);
 			break;
 		case lb_setr4:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			MEMCPY(data, counter, sizeof(real4_t));
-			counter += sizeof(real4_t);
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			MEMCPY(data, env->rip, sizeof(real4_t));
+			env->rip += sizeof(real4_t);
 			break;
 		case lb_setr8:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			MEMCPY(data, counter, sizeof(real8_t));
-			counter += sizeof(real8_t);
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			MEMCPY(data, env->rip, sizeof(real8_t));
+			env->rip += sizeof(real8_t);
 			break;
 		case lb_seto:
-			counter++;
-			name = (const char *)counter;
+			env->rip++;
+			name = (const char *)env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			switch (*counter)
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			switch (*env->rip)
 			{
 			case lb_new:
-				counter++;
-				name2 = (const char *)counter;
+				env->rip++;
+				name2 = (const char *)env->rip;
 				clazz = vm_load_class(env->vm, name2); // This function will only load the class if it is not loaded
 				if (!clazz)
-					return env->exception = exception_class_not_found;
-				counter += strlen(name2) + 1;
+					EXIT_RUN(env_raise_exception(env, exception_class_not_found, name2));
+				env->rip += strlen(name2) + 1;
 				callFunc = class_get_function(clazz, "<init>(");
 				if (!callFunc)
-					return env->exception = exception_function_not_found;
-				counter += strlen((const char *)counter) + 1;
+					EXIT_RUN(env_raise_exception(env, exception_function_not_found, "<init>("));
+				env->rip += strlen((const char *)env->rip) + 1;
 				object = manager_alloc_object(env->vm->manager, clazz);
 				if (!object)
-					return env->exception = exception_out_of_memory;
+					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
 				if (env_run_func(env, callFunc, object))
-					return env->exception;
+					EXIT_RUN(env->exception);
 				data->ovalue = object;
 				break;
 			case lb_value:
-				counter++;
-				name2 = (const char *)counter;
+				env->rip++;
+				name2 = (const char *)env->rip;
 				if (!env_resolve_variable(env, name2, &data2, &flags2))
-					return env->exception;
-				counter += strlen(name2) + 1;
+					EXIT_RUN(env->exception);
+				env->rip += strlen(name2) + 1;
 				data->ovalue = data2->ovalue;
 				break;
 			case lb_char:
@@ -1315,108 +1376,108 @@ int env_run(env_t *env, void *location)
 			case lb_float:
 			case lb_double:
 			case lb_object:
-				type = (*counter) + 0x0c;
-				data->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++counter)));
+				type = (*env->rip) + 0x0c;
+				data->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++(env->rip))));
 				if (!data->ovalue)
-					return env->exception = exception_out_of_memory;
-				counter += 4;
+					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
+				env->rip += 4;
 				break;
 			case lb_string:
-				counter++;
-				data->ovalue = env_new_string(env, counter);
+				env->rip++;
+				data->ovalue = env_new_string(env, env->rip);
 				if (env->exception)
-					return env->exception;
-				counter += strlen(counter) + 1;
+					EXIT_RUN(env->exception);
+				env->rip += strlen(env->rip) + 1;
 				break;
 			case lb_null:
 				data->ovalue = NULL;
 				break;
 			default:
-				return env->exception = exception_bad_command;
+				EXIT_RUN(env_raise_exception(env, exception_bad_command, "seto"));
 				break;
 			}
 			break;
 		case lb_setv:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
-			name2 = counter;
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
+			name2 = env->rip;
 			if (!env_resolve_variable(env, name2, &data2, &flags2))
-				return env->exception;
-			counter += strlen(name2) + 1;
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name2) + 1;
 			static_set(data, flags, data2, flags2);
 			break;
 		case lb_setr:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
 			store_return(env, data, flags);
 			break;
 
 		case lb_ret:
-			return env_cleanup_call(env);
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_retb:
-			counter++;
-			env->bret = *(byte_t *)counter;
-			return env_cleanup_call(env);
+			env->rip++;
+			env->bret = *(byte_t *)env->rip;
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_retw:
-			counter++;
-			env->wret = *(word_t *)counter;
-			return env_cleanup_call(env);
+			env->rip++;
+			env->wret = *(word_t *)env->rip;
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_retd:
-			counter++;
-			env->dret = *(dword_t *)counter;
-			return env_cleanup_call(env);
+			env->rip++;
+			env->dret = *(dword_t *)env->rip;
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_retq:
-			counter++;
-			env->qret = *(qword_t *)counter;
-			return env_cleanup_call(env);
+			env->rip++;
+			env->qret = *(qword_t *)env->rip;
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_retr4:
-			counter++;
-			env->r4ret = *(real4_t *)counter;
-			return env_cleanup_call(env);
+			env->rip++;
+			env->r4ret = *(real4_t *)env->rip;
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_retr8:
-			counter++;
-			env->r8ret = *(real8_t *)counter;
-			return env_cleanup_call(env);
+			env->rip++;
+			env->r8ret = *(real8_t *)env->rip;
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_reto:
 			break;
 		case lb_retv:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
-				return env->exception;
+				EXIT_RUN(env->exception);
 			MEMCPY(&env->vret, data, value_sizeof((value_t *)&flags));
-			return env_cleanup_call(env);
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 		case lb_retr:
-			return env_cleanup_call(env);
+			EXIT_RUN(env_cleanup_call(env));
 			break;
 
 		case lb_static_call:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_function_name(env, name, &callFunc))
-				return env->exception;
-			counter += strlen(name) + 1;
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
 			
 			callFuncArgs = NULL;
 			callFuncArgSize = callFunc->argSize;
 
 			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
 			if (!callFuncArgs)
-				return env->exception = exception_vm_error;
+				EXIT_RUN(env_raise_exception(env, exception_vm_error, "static_call allocate call argmuments"));
 			cursor = callFuncArgs;
 
 			callArgPtr = callFuncArgs;
@@ -1426,46 +1487,46 @@ int env_run(env_t *env, void *location)
 			{
 				callArgType = (byte_t)mip->value;
 
-				switch (*counter)
+				switch (*(env->rip))
 				{
 				case lb_byte:
-					counter++;
-					*cursor = *counter;
+					env->rip++;
+					*cursor = *(env->rip);
 					cursor += 1;
-					counter += 1;
+					env->rip += 1;
 					break;
 				case lb_word:
-					counter++;
-					*((word_t *)cursor) = *((word_t *)counter);
+					env->rip++;
+					*((word_t *)cursor) = *((word_t *)env->rip);
 					cursor += 2;
-					counter += 2;
+					env->rip += 2;
 					break;
 				case lb_dword:
-					counter++;
-					*((dword_t *)cursor) = *((dword_t *)counter);
+					env->rip++;
+					*((dword_t *)cursor) = *((dword_t *)env->rip);
 					cursor += 4;
-					counter += 4;
+					env->rip += 4;
 					break;
 				case lb_qword:
-					counter++;
-					*((qword_t *)cursor) = *((qword_t *)counter);
+					env->rip++;
+					*((qword_t *)cursor) = *((qword_t *)env->rip);
 					cursor += 8;
-					counter += 8;
+					env->rip += 8;
 					break;
 				case lb_string:
-					counter++;
-					*((qword_t *)cursor) = (qword_t)env_new_string(env, counter);
+					env->rip++;
+					*((qword_t *)cursor) = (qword_t)env_new_string(env, env->rip);
 					if (env->exception)
-						return env->exception;
-					counter += strlen(counter) + 1;
+						EXIT_RUN(env->exception);
+					env->rip += strlen(env->rip) + 1;
 					cursor += 8;
 					break;
 				case lb_value:
-					counter++;
-					if (!env_resolve_variable(env, counter, &data, &flags))
+					env->rip++;
+					if (!env_resolve_variable(env, env->rip, &data, &flags))
 					{
 						FREE(callFuncArgs);
-						return env->exception;
+						EXIT_RUN(env->exception);
 					}
 					valueType = TYPEOF(flags);
 					switch (valueType)
@@ -1527,11 +1588,11 @@ int env_run(env_t *env, void *location)
 						cursor += 8;
 						break;
 					}
-					counter += strlen(counter) + 1;
+					env->rip += strlen(env->rip) + 1;
 					break;
 				default:
 					FREE(callFuncArgs);
-					return env->exception = exception_bad_command;
+					EXIT_RUN(env_raise_exception(env, exception_bad_command, "static_call"));
 					break;
 				}
 
@@ -1546,11 +1607,11 @@ int env_run(env_t *env, void *location)
 
 			break;
 		case lb_dynamic_call:
-			counter++;
-			name = counter;
+			env->rip++;
+			name = env->rip;
 			if (!env_resolve_dynamic_function_name(env, name, &callFunc, &data, &flags))
-				return env->exception;
-			counter += strlen(name) + 1;
+				EXIT_RUN(env->exception);
+			env->rip += strlen(name) + 1;
 
 			object = data->ovalue;
 
@@ -1559,7 +1620,7 @@ int env_run(env_t *env, void *location)
 
 			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
 			if (!callFuncArgs)
-				return env->exception = exception_vm_error;
+				EXIT_RUN(env_raise_exception(env, exception_vm_error, "dynamic_call allocate call argmuments"));
 			cursor = callFuncArgs;
 
 			callArgPtr = callFuncArgs;
@@ -1569,46 +1630,46 @@ int env_run(env_t *env, void *location)
 			{
 				callArgType = (byte_t)mip->value;
 
-				switch (*counter)
+				switch (*(env->rip))
 				{
 				case lb_byte:
-					counter++;
-					*cursor = *counter;
+					env->rip++;
+					*cursor = *(env->rip);
 					cursor += 1;
-					counter += 1;
+					env->rip += 1;
 					break;
 				case lb_word:
-					counter++;
-					*((word_t *)cursor) = *((word_t *)counter);
+					env->rip++;
+					*((word_t *)cursor) = *((word_t *)env->rip);
 					cursor += 2;
-					counter += 2;
+					env->rip += 2;
 					break;
 				case lb_dword:
-					counter++;
-					*((dword_t *)cursor) = *((dword_t *)counter);
+					env->rip++;
+					*((dword_t *)cursor) = *((dword_t *)env->rip);
 					cursor += 4;
-					counter += 4;
+					env->rip += 4;
 					break;
 				case lb_qword:
-					counter++;
-					*((qword_t *)cursor) = *((qword_t *)counter);
+					env->rip++;
+					*((qword_t *)cursor) = *((qword_t *)env->rip);
 					cursor += 8;
-					counter += 8;
+					env->rip += 8;
 					break;
 				case lb_string:
-					counter++;
-					*((qword_t *)cursor) = (qword_t)env_new_string(env, counter);
+					env->rip++;
+					*((qword_t *)cursor) = (qword_t)env_new_string(env, env->rip);
 					if (env->exception)
 						return env->exception;
-					counter += strlen(counter) + 1;
+					env->rip += strlen(env->rip) + 1;
 					cursor += 8;
 					break;
 				case lb_value:
-					counter++;
-					if (!env_resolve_variable(env, counter, &data, &flags))
+					env->rip++;
+					if (!env_resolve_variable(env, env->rip, &data, &flags))
 					{
 						FREE(callFuncArgs);
-						return env->exception;
+						EXIT_RUN(env->exception);
 					}
 					valueType = TYPEOF(flags);
 					switch (valueType)
@@ -1670,11 +1731,11 @@ int env_run(env_t *env, void *location)
 						//counter += 8;
 						break;
 					}
-					counter += strlen(counter) + 1;
+					env->rip += strlen(env->rip) + 1;
 					break;
 				default:
 					FREE(callFuncArgs);
-					return env->exception = exception_bad_command;
+					EXIT_RUN(env_raise_exception(env, exception_bad_command, "dynamic_call"));
 					break;
 				}
 
@@ -1690,73 +1751,76 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_add:
-			counter++;
-			if (!vmm_add(env, &counter))
+			env->rip++;
+			if (!vmm_add(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_sub:
-			counter++;
-			if (!vmm_sub(env, &counter))
+			env->rip++;
+			if (!vmm_sub(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_mul:
-			counter++;
-			if (!vmm_mul(env, &counter))
+			env->rip++;
+			if (!vmm_mul(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_div:
-			counter++;
-			if (!vmm_div(env, &counter))
+			env->rip++;
+			if (!vmm_div(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_mod:
-			counter++;
-			if (!vmm_mod(env, &counter))
+			env->rip++;
+			if (!vmm_mod(env, &env->rip))
 				return env->exception;
 			break;
 
 		case lb_while:
-			if (!vmc_compare(env, &counter))
+			if (!vmc_compare(env, &env->rip))
 			{
 				if (env->exception)
-					return env->exception;
-				counter = CURR_CLASS(env)->data + *((size_t *)counter);
+					EXIT_RUN(env->exception);
+				env->rip = CURR_FUNC(env)->parentClass->data + *((size_t *)env->rip);
 			}
 			else
-				counter += sizeof(size_t);
+				env->rip += sizeof(size_t);
 			break;
 
 		case lb_if:
-			if (handle_if(env, &counter))
-				return env->exception;
+			if (handle_if(env, &env->rip))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_else:
 		case lb_end:
-			counter++;
-			off = *((size_t *)counter);
+			env->rip++;
+			off = *((size_t *)env->rip);
 			if (off == (size_t)-1)
 			{
-				counter += sizeof(size_t);
+				env->rip += sizeof(size_t);
 			}
 			else
 			{
-				counter = CURR_CLASS(env)->data + off;
+				env->rip = CURR_FUNC(env)->parentClass->data + off;
 			}
 			break;
 
 		default:
-			env->exception = exception_bad_command;
-			env->exceptionDesc = *counter;
-			return env->exception;
+			EXIT_RUN(env_raise_exception(env, exception_bad_command, "unknown instruction"));
 		}
 	}
+
+done_call:
+
+	env->rip = ripSave;
+	return __retVal;
 }
 
 int env_cleanup_call(env_t *env)
 {
 	map_t *vars = (map_t *)env->variables->data;
 	if (!vars)
-		return env->exception = exception_illegal_state;
+		return env_raise_exception(env, exception_illegal_state, NULL);
 
 	map_free(vars, 0);
 
@@ -1784,7 +1848,7 @@ void *stack_push(env_t *env, value_t *value)
 	byte_t *end = stackPtr + size;
 	if ((size_t)(end - stack) >= env->vm->stackSize)
 	{
-		env->exception = exception_stack_overflow;
+		env_raise_exception(env, exception_stack_overflow, NULL);
 		return NULL;
 	}
 	MEMCPY(stackPtr, value, size);
@@ -1895,7 +1959,34 @@ void vm_start_routine(start_args_t *args)
 		{
 			int exception = env_run_func_static(env, func, args->args);
 			if (exception)
-				printf("Internal exception thrown: %d\n", exception);
+			{
+				putc('\n', stdout);
+				if (env->exceptionMessage)
+					printf("Internal exception %s raised with message \"%s\"\n", g_exceptionStrings[exception], env->exceptionMessage);
+				else
+					printf("Internal exception %s raised\n", g_exceptionStrings[exception]);
+				 
+				printf("Outputting known information up to exception:\n");
+				printf("Exception occurred during execution in environment %p\n", env);
+				printf("V I R T U A L   M A C H I N E\n\n");
+				printf("Variables of suspect environment:\n");
+				printf("rip = %p, cmdStart = %p, vm = %p\n", env->rip, env->cmdStart, env->vm);
+				printf("stack = %p, rsp = %p, rbp = %p\n", env->stack, env->rsp, env->rbp);
+				printf("variables = %p, exception = %d, exceptionMessage = %p\n", env->variables, env->exception, env->exceptionMessage);
+				printf("bret = %u, wret = %u, dret = %u\n", env->bret, env->wret, env->dret);
+				printf("qret = %llu, r4ret = %f, r8ret = %f\n", env->qret, (real8_t)env->r4ret, env->r8ret);
+				printf("vret = %p\n\n", env->vret);
+				function_t *exceptionFunc = CURR_FUNC(env);
+				printf("Top stack frame parameters of suspect environment:\n");
+				printf("(rbp + 0) (last stack frame rbp) = %p\n", *((size_t **)env->rbp));
+				printf("(rbp + 1) (last stack frame rip) = %p\n", *((size_t **)env->rbp + 1));
+				printf("(rbp + 2) (current function ptr) = %p\n\n", *((size_t **)env->rbp + 2));
+				printf("Top stack frame points to function %p -> {\n", exceptionFunc);
+				printf("\tname = \"%s\"\n", exceptionFunc->name);
+				printf("\tparentClass = \"%s\"\n", exceptionFunc->parentClass->name);
+				printf("\trelativeLocation = %p\n", (void *)((char *)exceptionFunc->location - (char *)exceptionFunc->parentClass->data));
+				printf("}\n");
+			}
 			env_free(env);
 		}
 	}

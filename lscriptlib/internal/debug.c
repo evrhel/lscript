@@ -38,7 +38,7 @@ debug_t *load_debug(const char *path)
 	obj->version = *((unsigned int *)obj->buf);
 	obj->srcFile = (char *)obj->buf + sizeof(unsigned int);
 	obj->first = (debug_elem_t *)(obj->srcFile + strlen(obj->srcFile) + 1);
-	obj->last = (char *)obj->buf + len - sizeof(debug_elem_t);
+	obj->last = (debug_elem_t *)((char *)obj->buf + len - sizeof(debug_elem_t));
 
 	return obj;
 }

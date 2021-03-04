@@ -234,7 +234,7 @@ int vmm_sub(env_t *env, byte_t **argLoc)
 int vmm_mul(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
+	//const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;

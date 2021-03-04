@@ -37,7 +37,7 @@ LEXPORT int LCALL ls_start_vm(int argc, const char *const argv[], void **threadH
 {
 	int result;
 	
-	result = vm_start(gCurrentVM, threadHandle, argc, argv);
+	result = vm_start(gCurrentVM, threadHandle != NULL, argc, argv);
 	if (threadHandle)
 		*threadHandle = gCurrentVM->hVMThread;
 	if (threadID)

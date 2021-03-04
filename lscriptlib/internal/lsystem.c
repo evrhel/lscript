@@ -36,10 +36,10 @@ LNIFUNC void LNICALL System_loadLibrary(LEnv venv, lclass vclazz, lobject lslibn
 
 LNIFUNC lobject LNICALL System_getProperty(LEnv venv, lclass vclazz, lobject lspropname)
 {
-
+	return NULL;
 }
 
 LNIFUNC lobject LNICALL System_setProperty(LEnv venv, lclass vclazz, lobject lspropname, lobject lspropvalue)
 {
-
+	return NULL;
 }

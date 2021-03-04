@@ -12,6 +12,8 @@
 #error Unsupported platform
 #endif
 
+#define MAX_EXCEPTION_STRING_LENGTH 100
+
 typedef struct vm_s vm_t;
 typedef struct env_s env_t;
 
@@ -56,7 +58,8 @@ struct vm_s
 
 struct env_s
 {
-	void *rip;
+	byte_t *rip;
+	byte_t *cmdStart;
 	vm_t *vm;
 
 	void *stack;
@@ -64,7 +67,8 @@ struct env_s
 
 	list_t *variables;
 
-	int exception, exceptionDesc;
+	int exception;
+	char *exceptionMessage;
 
 	union
 	{
@@ -77,6 +81,17 @@ struct env_s
 		void *vret;
 	};
 };
+
+char *new_exception_stringv(const char *format, va_list ls);
+inline char *new_exception_string(const char *format, ...)
+{
+	va_list ls;
+	va_start(ls, format);
+	char *result = new_exception_stringv(format, ls);
+	va_end(ls);
+	return result;
+}
+void free_exception_string(const char *exceptionString);
 
 vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount, const char *const paths[]);
 int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[]);
@@ -97,6 +112,8 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls);
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls);
 object_t *env_new_string(env_t *env, const char *cstring);
 array_t *env_new_string_array(env_t *env, unsigned int count, const char *const strings[]);
+int env_raise_exception(env_t *env, int exception, const char *message);
+int env_get_exception_data(env_t *env, function_t **function, void **location);
 
 inline int env_run_func_static(env_t *env, function_t *function, ...)
 {
@@ -117,6 +134,5 @@ inline int env_run_func(env_t *env, function_t *function, object_t *object, ...)
 }
 
 void env_free(env_t *env);
-
 
 #endif
