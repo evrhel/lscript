@@ -120,6 +120,8 @@ static inline int handle_if(env_t *env)
 			return env->exception;
 		class_t *c = CURR_FUNC(env)->parentClass;
 		env->rip = c->data + *((size_t *)(env->rip));
+		//env->rip += *((size_t *)(env->rip));
+		//env->rip += sizeof(size_t);
 	}
 	else
 		env->rip += sizeof(size_t);
@@ -634,20 +636,20 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 	size_t valsize;
 
 	// If we have a '[', we have an array we need to access
-	beg = strchr(name, '[');
-	if (beg)
+	char *indBeg = strchr(name, '[');
+	if (indBeg)
 	{
-		*beg = 0;
+		*indBeg = 0;
 		mapNode = map_find((map_t *)env->variables->data, name);
+		*indBeg = '[';
 		if (!mapNode)
 		{
-			*beg = '[';
+			
 			env_raise_exception(env, exception_bad_variable_name, name);
 			return 0;
 		}
-		*beg = '[';
 
-		char *num = beg + 1;
+		char *num = indBeg + 1;
 		char *numEnd = strchr(num, ']');
 		luint index;
 		if (!numEnd)
@@ -657,15 +659,24 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		}
 
 		*numEnd = 0;
-		if (!is_numeric(numEnd))
+		if (!is_numeric(num))
 		{
+			data_t *indexData;
+			flags_t indexFlags;
+			if (!env_resolve_variable(env, num, &indexData, &indexFlags))
+			{
+				*numEnd = ']';
+				env_raise_exception(env, exception_bad_variable_name, name);
+				return 0;
+			}
 			*numEnd = ']';
-			env_raise_exception(env, exception_bad_array_index, name);
-			return 0;
+			index = indexData->uivalue;
 		}
-
-		index = (luint)atoll(num);
-		*numEnd = ']';
+		else
+		{
+			index = (luint)atoll(num);
+			*numEnd = ']';
+		}
 
 		array_t *arr = (array_t *)(((value_t *)mapNode->value)->ovalue);
 		if (index >= arr->length)
@@ -762,7 +773,10 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 			return 0;
 		}
 
+		*bracEnd = ']';
+
 		byte_t elemType = value_typeof((value_t *)arr) - lb_object + lb_char - 1;
+		SET_TYPE(*flags, elemType);
 		size_t elemSize = sizeof_type(elemType);
 		*data = array_get_data(arr, index, elemSize);
 		return 1;
@@ -1856,7 +1870,7 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_if:
-			if (handle_if(env))
+ 			if (handle_if(env))
 				EXIT_RUN(env->exception);
 			break;
 		case lb_else:

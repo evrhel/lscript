@@ -49,6 +49,9 @@ break; \
 case lb_bool: \
 PUTFLAGS(lhsData, (rhs)->bvalue, resultPtr); \
 break; \
+default: \
+(*(resultPtr)) = -1; \
+break; \
 }
 
 #define COMPARE(lhs, lhf, rhs, rhf, resultPtr) \
@@ -87,6 +90,9 @@ break; \
 case lb_bool: \
 SUBCOMPARE((lhs)->bvalue, rhs, rhf, resultPtr); \
 break; \
+default: \
+(*(resultPtr)) = -1; \
+break; \
 };
 
 static int resolve_data(env_t *env, byte_t **counterPtr, data_t **data, flags_t *flags);
@@ -107,7 +113,7 @@ int vmc_compare(void *envPtr, byte_t **counterPtr)
 
     if (count == lb_one)
     {
-        (*counterPtr)++;
+       // (*counterPtr)++;
         return lhs->bvalue;
     }
     else if (count == lb_two)
@@ -120,6 +126,11 @@ int vmc_compare(void *envPtr, byte_t **counterPtr)
 
         int result = 0;
         COMPARE(lhs, lhf, rhs, rhf, &result);
+        if (result == -1)
+        {
+            env_raise_exception(env, exception_bad_command, "during compare");
+            return 0;
+        }
 
         switch (comparator)
         {
