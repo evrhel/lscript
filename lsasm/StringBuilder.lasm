@@ -1,0 +1,45 @@
+
+class StringBuilder
+
+	global static const chararray intMap null
+
+	global dynamic varying chararray chars
+	global dynamic varying uint stringLength
+
+	function dynamic interp <init>()
+		setd this.stringLength dword[0]
+		ret
+
+	function dynamic interp append(object String string)
+		static_call System.arraycopy(LObject;iLObject;ii) string.chars dword[0] this.chars dword[0] string.chars.length
+		add this.stringLength this.stringLength string.chars.length
+		
+		ret
+
+	function dynamic interp append(char c)
+		setv this.chars[this.stringLength] c
+		add this.stringLength this.stringLength c
+		ret
+
+	#function dynamic interp append(long num)
+	#	if num < long[0]
+	#		dynamic_call this.append(C) '-'
+	#		mul num num long[-1]
+	#	end
+	#	dynamic_call this.append(j) num
+	#	ret
+
+	#function dynamic interp append(ulong num)
+	#	ulong digit
+	#	while num > long[0]
+	#		mod num digit ulong[10]
+	#		dynamic_call this.append(C) StringBuilder.intMap[digit]
+	#	end
+	#	ret
+
+	function dynamic interp toString()
+		object result
+		seto result new String <init>()
+		setv result.chars this.chars
+		retv result
+

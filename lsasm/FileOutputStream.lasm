@@ -1,25 +1,25 @@
 
 class FileOutputStream
 	
-	global dynamic varying ulong handle
+	global dynamic varying object handle
 
 	function dynamic interp <init>()
 		ret
 
-	function dynamic interp <init>(ulong handle)
+	function dynamic interp <init>(object StdFileHandle handle)
 		setv this.handle handle
 		ret
 
 	function dynamic interp write(chararray data, int off, int length)
-		static_call fwrite(q[Cii) this.handle data off length
-		ret
+		dynamic_call this.handle.write([Cii) data off length
+		retr
 
 	function dynamic interp print(object String str)
-		static_call fwrite(q[Cii) this.handle str.chars dword[0] str.chars.length
+		dynamic_call this.handle.write([Cii) str.chars dword[0] str.chars.length
 		ret
 
 	function dynamic interp println()
-		static_call fputc(qC) this.handle byte[10]
+		dynamic_call this.handle.putc(C) byte[10]
 		ret
 
 	function dynamic interp println(object String str)
@@ -28,10 +28,6 @@ class FileOutputStream
 		ret
 
 	function dynamic interp close()
-		static_call fclose(q) this.handle
+		dynamic_call handle.close()
+		setq this.handle null
 		ret
-
-	function static native fopen(object String filepath, int mode)
-	function static native fclose(ulong handle)
-	function static native fputc(ulong handle, char c)
-	function static native fwrite(ulong handle, chararray data, uint off, uint length)

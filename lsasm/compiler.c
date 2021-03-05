@@ -1359,7 +1359,7 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 		isStatic = 1;
 	else if (!strcmp(tokens[1], "dynamic"))
 		isStatic = 0;
-	else
+	else 
 		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", tokens[1]);
 
 	if (!strcmp(tokens[2], "interp"))

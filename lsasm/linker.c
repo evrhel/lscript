@@ -393,6 +393,10 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 			case lb_real8:
 				off += sizeof(qword_t);
 				break;
+			case lb_value:
+				off++;
+				off += strlen(off) + 1;
+				break;
 			}
 			break;
 		}

@@ -230,8 +230,22 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount
 		return NULL;
 	}
 
+	class_t *stdFileHandleClass = vm_load_class(vm, "StdFileHandle");
+	if (!stdFileHandleClass)
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
 	class_t *fileoutputstreamClass = vm_load_class(vm, "FileOutputStream");
 	if (!fileoutputstreamClass)
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
+	class_t *fileinputstreamClass = vm_load_class(vm, "FileInputStream");
+	if (!fileinputstreamClass)
 	{
 		vm_free(vm, 0);
 		return NULL;
@@ -274,8 +288,27 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount
 	}
 	systemStderr->ovalue = stderrVal;
 
-	object_set_ulong(stdoutVal, "handle", (lulong)stdout);
-	object_set_ulong(stderrVal, "handle", (lulong)stderr);
+	object_t *stdinVal = manager_alloc_object(vm->manager, fileinputstreamClass);
+	if (!stdinVal)
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
+	object_t *stdHandles[3] =
+	{
+		manager_alloc_object(vm->manager, stdFileHandleClass),	// stdout
+		manager_alloc_object(vm->manager, stdFileHandleClass),	// stderr
+		manager_alloc_object(vm->manager, stdFileHandleClass)	// stdin
+	};
+
+	object_set_ulong(stdHandles[0], "nativeHandle", (lulong)stdout);
+	object_set_ulong(stdHandles[1], "nativeHandle", (lulong)stderr);
+	object_set_ulong(stdHandles[2], "nativeHandle", (lulong)stdin);
+
+	object_set_object(stdoutVal, "handle", stdHandles[0]);
+	object_set_object(stderrVal, "handle", stdHandles[1]);
+	object_set_object(stdinVal, "handle", stdHandles[2]);
 
 #if defined(_WIN32)
 	vm->hVMThread = NULL;

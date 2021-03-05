@@ -8,13 +8,17 @@ extern "C"
 {
 #endif
 
-	LNIFUNC lulong LNICALL FileOutputStream_fopen(LEnv, lclass, lobject, lint);
+	LNIFUNC lulong LNICALL StdFileHandle_fopen(LEnv, lclass, lobject, lint);
 
-	LNIFUNC void LNICALL FileOutputStream_fclose(LEnv, lclass, lulong);
+	LNIFUNC void LNICALL StdFileHandle_fclose(LEnv, lclass, lulong);
 
-	LNIFUNC void LNICALL FileOutputStream_fputc(LEnv, lclass, lulong, lchar);
+	LNIFUNC void LNICALL StdFileHandle_fputc(LEnv, lclass, lulong, lchar);
 
-	LNIFUNC luint LNICALL FileOutputStream_fwrite(LEnv, lclass, lulong, lchararray, luint, luint);
+	LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv, lclass, lulong, lchararray, luint, luint);
+
+	LNIFUNC luint LNICALL StdFileHandle_fread(LEnv, lclass, lulong, lchararray, luint, luint);
+
+	LNIFUNC luint LNICALL StdFileHandle_freadline(LEnv, lclass, lulong);
 
 #if defined(__cplusplus)
 }

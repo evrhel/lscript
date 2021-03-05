@@ -5,12 +5,12 @@
 #include "vm.h"
 #include "mem_debug.h"
 
-LNIFUNC lulong LNICALL FileOutputStream_fopen(LEnv venv, lclass vclazz, lobject filepath, lint mode)
+LNIFUNC lulong LNICALL StdFileHandle_fopen(LEnv venv, lclass vclazz, lobject filepath, lint mode)
 {
 	env_t *env = (env_t *)venv;
 	if (!filepath)
 	{
-		env->exception = exception_null_dereference;
+		env_raise_exception(env, exception_null_dereference, "filepath");
 		return 0;
 	}
 
@@ -33,7 +33,7 @@ LNIFUNC lulong LNICALL FileOutputStream_fopen(LEnv venv, lclass vclazz, lobject 
 		modestr = "wb";
 		break;
 	default:
-		env->exception = exception_illegal_state;
+		env_raise_exception(env, exception_illegal_state, "Illegal file mode %d", mode);
 		return 0;
 		break;
 	}
@@ -43,24 +43,24 @@ LNIFUNC lulong LNICALL FileOutputStream_fopen(LEnv venv, lclass vclazz, lobject 
 	return (lulong)handle;
 }
 
-LNIFUNC void LNICALL FileOutputStream_fclose(LEnv venv, lclass vclazz, lulong handle)
+LNIFUNC void LNICALL StdFileHandle_fclose(LEnv venv, lclass vclazz, lulong handle)
 {
 	fclose((FILE *)handle);
 }
 
-LNIFUNC void LNICALL FileOutputStream_fputc(LEnv venv, lclass vclazz, lulong handle, lchar c)
+LNIFUNC void LNICALL StdFileHandle_fputc(LEnv venv, lclass vclazz, lulong handle, lchar c)
 {
 	fputc(c, (FILE *)handle);
 }
 
-LNIFUNC luint LNICALL FileOutputStream_fwrite(LEnv venv, lclass vclazz, lulong handle, lchararray data, luint off, luint length)
+LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv venv, lclass vclazz, lulong handle, lchararray data, luint off, luint length)
 {
 
 	luint temp = off + length;
 	env_t *env = (env_t *)venv;
 	if (!data)
 	{
-		env->exception = exception_null_dereference;
+		env_raise_exception(env, exception_null_dereference, "data");
 		return 0;
 	}
 
@@ -68,4 +68,56 @@ LNIFUNC luint LNICALL FileOutputStream_fwrite(LEnv venv, lclass vclazz, lulong h
 	char *cdata = (char *)&arr->data;
 	luint result = (luint)fwrite(cdata, sizeof(char), arr->length, (FILE *)handle);
 	return result;
+}
+
+LNIFUNC luint LNICALL StdFileHandle_fread(LEnv venv, lclass vclazz, lulong handle, lchararray buf, luint off, luint length)
+{
+	env_t *env = (env_t *)venv;
+	if (!buf)
+	{
+		env_raise_exception(env, exception_null_dereference, "buf");
+		return 0;
+	}
+	
+	array_t *arr = (array_t *)buf;
+	luint readlen = length - off;
+	if (off + readlen >= arr->length)
+	{
+		env_raise_exception(env, exception_bad_array_index, "read will cause buffer overun");
+		return 0;
+	}
+
+	char *tempbuf = (char *)malloc(length);
+	if (!tempbuf)
+	{
+		env_raise_exception(env, exception_out_of_memory, "on allocate temp buffer size %u", length);
+		return 0;
+	}
+	luint result = (luint)fread_s(tempbuf, length, sizeof(char), length, (FILE *)handle);
+	memcpy((lchar *)(&arr->data) + off, tempbuf, length);
+	free(tempbuf);
+
+	return result;
+}
+
+LNIFUNC luint LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong handle)
+{
+	env_t *env = (env_t *)venv;
+	char buf[256];
+	if (!fgets(buf, sizeof(buf), (FILE *)handle))
+	{
+		env_raise_exception(env, exception_illegal_state, "fgets returned NULL");
+		return 0;
+	}
+	luint len = (luint)strlen(buf);
+	array_t *arr = manager_alloc_array(env->vm->manager, lb_chararray, len);
+	if (!arr)
+	{
+		env_raise_exception(env, exception_out_of_memory, "on alloc array length %u", len);
+		return 0;
+	}
+
+	memcpy(&arr->data, buf, len);
+
+	return len;
 }

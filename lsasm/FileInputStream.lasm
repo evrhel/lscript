@@ -1,0 +1,25 @@
+
+class FileInputStream
+
+	global dynamic varying object handle
+	
+	function dynamic interp <init>()
+		ret
+
+	function dynamic interp <init>(object StdFileHandle handle)
+		setv this.handle handle
+		ret
+
+	function dynamic interp read(chararray dst, int off, int length)
+		dynamic_call this.handle.read([Cii) dst off length
+		retr
+
+	function dynamic interp readLine()
+		dynamic_call this.handle.readLine()
+		retr
+
+	function dynamic interp close()
+		dynamic_call this.handle.close()
+		setq this.handle null
+		ret
+

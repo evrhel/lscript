@@ -39,6 +39,12 @@ class Main
 			add counter counter int[1]
 		end
 
+		dynamic_call System.stdout.print(LString;) "input: "
+		dynamic_call System.stdin.readLine()
+		object strresult
+		setr strresult
+		dynamic_call System.stdout.println(LString;) strresult
+
 		intarray array
 		seto array int dword[5]
 
