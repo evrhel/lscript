@@ -97,6 +97,7 @@ enum
 	lb_one,
 	lb_two,
 
+	lb_align = 0xfe,
 	lb_debug = 0xff
 };
 

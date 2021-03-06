@@ -26,6 +26,15 @@ buffer_t *put_double(buffer_t *buf, double d);
 
 buffer_t *put_mem(buffer_t *buf, const void *mem, size_t size);
 
+inline buffer_t *put_bytes(buffer_t *buf, char byte, size_t count)
+{
+	for (size_t i = 0; i < count; i++)
+	{
+		buf = put_char(buf, byte);
+	}
+	return buf;
+}
+
 inline buffer_t *put_uchar(buffer_t *buf, unsigned char c)
 {
 	return put_char(buf, (char)c);

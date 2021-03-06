@@ -16,8 +16,8 @@ struct line_s
 	int linenum;
 };
 
-static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version, int debug, input_file_t **outputFiles);
-static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version, int debug, buffer_t *debugOut);
+static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version, int debug, alignment_t alignment, input_file_t **outputFiles);
+static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version, int debug, alignment_t alignment, buffer_t *debugOut);
 static line_t *format_document(const char *data, size_t datalen);
 static void free_formatted(line_t *first);
 static byte_t get_command_byte(const char *string);
@@ -43,7 +43,8 @@ static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenC
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, int debug, msg_func_t messenger, input_file_t **outputFiles)
+compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, int debug,
+	alignment_t alignment, msg_func_t messenger, input_file_t **outputFiles)
 {
 	compile_error_t *errors = create_base_compile_error(messenger);
 	input_file_t *base = (input_file_t *)malloc(sizeof(input_file_t));
@@ -62,7 +63,7 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 
 		while (files)
 		{
-			errors = compile_file(files->filename, outputDirectory, errors, version, debug, &back);
+			errors = compile_file(files->filename, outputDirectory, errors, version, debug, alignment, &back);
 			files = files->next;
 		}
 	}
@@ -83,7 +84,8 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 	return errors;
 }
 
-compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back, unsigned int version, int debug, input_file_t **outputFiles)
+compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back,
+	unsigned int version, int debug, alignment_t alignment, input_file_t **outputFiles)
 {
 	FILE *in;
 
@@ -106,7 +108,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 	buffer_t *obuf = new_buffer(256);
 	buffer_t *dbuf = debug ? new_buffer(256) : NULL;
-	back = compile_data(buf, length, obuf, file, back, version, debug, dbuf);
+	back = compile_data(buf, length, obuf, file, back, version, debug, alignment, dbuf);
 
 	int hasWarnings = 0;
 	if (back)
@@ -221,9 +223,11 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	return back ? back->front : NULL;
 }
 
-compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version, int debug, buffer_t *debugOut)
+compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile,
+	compile_error_t *back, unsigned int version, int debug, alignment_t alignment, buffer_t *debugOut)
 {
 	line_t *formatted = format_document(data, datalen);
+	size_t alignAmount;
 
 	line_t *curr = formatted;
 	while (curr)
@@ -248,9 +252,13 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 				break;
 
 			case lb_global:
+				alignAmount = alignment.globalAlignment - ((size_t)(out->cursor - out->buf) % (size_t)alignment.globalAlignment);
+				out = put_bytes(out, lb_align, alignAmount);
 				back = handle_field_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 			case lb_function:
+				alignAmount = alignment.functionAlignment - ((size_t)(out->cursor - out->buf) % (size_t)alignment.functionAlignment);
+				out = put_bytes(out, lb_align, alignAmount);
 				back = handle_function_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 

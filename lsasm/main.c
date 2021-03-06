@@ -26,6 +26,9 @@ int main(int argc, char *argv[])
 	unsigned int version = 1;
 	int runCompiler = 1, runLinker = 1;
 	int compileDebug = 0;
+	alignment_t alignment;
+	alignment.functionAlignment = 32;
+	alignment.globalAlignment = 8;
 	for (int i = 1; i < argc; i++)
 	{
 		if (equals_ignore_case(argv[i], "-h"))
@@ -68,6 +71,30 @@ int main(int argc, char *argv[])
 			}
 			version = atoi(argv[i]);
 		}
+		else if (equals_ignore_case(argv[i], "-fa"))
+		{
+			i++;
+			if (i == argc)
+			{
+				display_help();
+				return RETURN_INVALID_ARGUMENT;
+			}
+			alignment.functionAlignment = (unsigned char)atoi(argv[i]);
+			if (alignment.functionAlignment == 0)
+				alignment.functionAlignment = 1;
+		}
+		else if (equals_ignore_case(argv[i], "-ga"))
+		{
+			i++;
+			if (i == argc)
+			{
+				display_help();
+				return RETURN_INVALID_ARGUMENT;
+			}
+			alignment.globalAlignment = (unsigned char)atoi(argv[i]);
+			if (alignment.globalAlignment == 0)
+				alignment.globalAlignment = 1;
+		}
 		else if (equals_ignore_case(argv[i], "-nc"))
 		{
 			runCompiler = 0;
@@ -92,7 +119,7 @@ int main(int argc, char *argv[])
 	if (runCompiler)
 	{
 		printf("[BEGIN COMPILE]\n");
-		errors = compile(files, outputDirectory, version, compileDebug, (msg_func_t)puts, &linkFiles);
+		errors = compile(files, outputDirectory, version, compileDebug, alignment, (msg_func_t)puts, &linkFiles);
 		if (are_errors(errors))
 			return RETURN_COMPILE_ERROR;
 		putc('\n', stdout);
@@ -145,6 +172,8 @@ void display_help()
 	printf("-o [directory] Optionally specifies an output directory. The default is the\n");
 	printf("               current working directory.\n");
 	printf("-s [version]   Sets the bytecode version to compile to. Default is 1.\n");
+	printf("-fa [value]    Sets the number of bytes to align functions to. Default is 32.\n");
+	printf("-ga [value]    Sets the number of bytes to align globals to. Default is 8.\n");
 	printf("-nc            Specifies not to run the compiler.\n");
 	printf("-nl            Specifies not to run the linker.\n");
 	printf("-d             Indicates debugging symbols should be compiled.\n\n");

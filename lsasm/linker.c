@@ -399,6 +399,9 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 				break;
 			}
 			break;
+		default:
+			off++; // This is potentially dangerous, but is here to skip over alignment bytes
+			break;
 		}
 	}
 	return off;
