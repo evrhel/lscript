@@ -18,7 +18,7 @@ extern "C"
 
 	LNIFUNC luint LNICALL StdFileHandle_fread(LEnv, lclass, lulong, lchararray, luint, luint);
 
-	LNIFUNC luint LNICALL StdFileHandle_freadline(LEnv, lclass, lulong);
+	LNIFUNC lchararray LNICALL StdFileHandle_freadline(LEnv, lclass, lulong);
 
 #if defined(__cplusplus)
 }

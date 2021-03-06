@@ -100,7 +100,7 @@ LNIFUNC luint LNICALL StdFileHandle_fread(LEnv venv, lclass vclazz, lulong handl
 	return result;
 }
 
-LNIFUNC luint LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong handle)
+LNIFUNC lchararray LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong handle)
 {
 	env_t *env = (env_t *)venv;
 	char buf[256];
@@ -109,7 +109,7 @@ LNIFUNC luint LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong h
 		env_raise_exception(env, exception_illegal_state, "fgets returned NULL");
 		return 0;
 	}
-	luint len = (luint)strlen(buf);
+	luint len = (luint)strlen(buf) - 1; // Subtract 1 to ignore the newline character
 	array_t *arr = manager_alloc_array(env->vm->manager, lb_chararray, len);
 	if (!arr)
 	{
@@ -119,5 +119,5 @@ LNIFUNC luint LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong h
 
 	memcpy(&arr->data, buf, len);
 
-	return len;
+	return arr;
 }

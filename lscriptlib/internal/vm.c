@@ -294,6 +294,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount
 		vm_free(vm, 0);
 		return NULL;
 	}
+	systemStdin->ovalue = stdinVal;
 
 	object_t *stdHandles[3] =
 	{

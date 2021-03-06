@@ -39,11 +39,27 @@ class Main
 			add counter counter int[1]
 		end
 
-		dynamic_call System.stdout.print(LString;) "input: "
-		dynamic_call System.stdin.readLine()
 		object strresult
+		bool compareResult
+
+		dynamic_call System.stdout.print(LString;) "input (type exit to exit): "
+		dynamic_call System.stdin.readLine()
 		setr strresult
-		dynamic_call System.stdout.println(LString;) strresult
+
+		dynamic_call strresult.equals(LString;) "exit"
+		setr compareResult
+
+		while compareResult == int[0]
+			dynamic_call System.stdout.print(LString;) "You typed: "
+			dynamic_call System.stdout.println(LString;) strresult
+
+			dynamic_call System.stdout.print(LString;) "input (type exit to exit): "
+			dynamic_call System.stdin.readLine()
+			setr strresult
+
+			dynamic_call strresult.equals(LString;) "exit"
+			setr compareResult
+		end 
 
 		intarray array
 		seto array int dword[5]
