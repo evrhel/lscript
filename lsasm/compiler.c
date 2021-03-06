@@ -1056,7 +1056,10 @@ byte_t *derive_function_args(const char *functionSig, size_t *argc)
 	*argc = 0;
 
 	while (*functionSig && *functionSig != '(')
+	{
 		functionSig++;
+	}
+	functionSig++;
 
 	if (!(*functionSig))
 	{
@@ -1067,6 +1070,8 @@ byte_t *derive_function_args(const char *functionSig, size_t *argc)
 	int isArray = 0;
 	while (*functionSig && *functionSig != ')')
 	{
+		if (argc)
+			(*argc)++;
 		switch (*functionSig)
 		{
 		case 'C':
@@ -1467,7 +1472,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	case lb_setv:
 		put_byte(out, lb_setv);
 		put_string(out, varname);
-		put_byte(out, lb_value);
+		//put_byte(out, lb_value);
 		put_string(out, tokens[2]);
 		break;
 	case lb_seto:
@@ -1486,9 +1491,9 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 			size_t argc;
 			byte_t *sig = derive_function_args(constructorSig, &argc);
 
-			for (size_t i = 0; i < argc; i++)
+			for (size_t i = 0, j = 5; i < argc; i++, j++)
 			{
-				const char *argstr = tokens[4 + i];
+				const char *argstr = tokens[j];
 
 				byte_t reqArgType;
 				size_t reqArgSize = get_type_properties(sig[i], &reqArgType);
@@ -1498,10 +1503,19 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 				int argIsAbsolute;
 				size_t argSize = evaluate_constant(argstr, &argData, &argType, &argIsAbsolute);
 
-				if (argSize)
+				if (argSize == 0)
 				{
-					put_byte(argbuf, lb_value);
-					put_string(argbuf, argstr);
+					if (tokens[j][0] == SIG_STRING_CHAR)
+					{
+						put_byte(argbuf, lb_string);
+						put_string(argbuf, tokens[j] + 1);
+					}
+					else
+					{
+						put_byte(argbuf, lb_value);
+						put_string(argbuf, tokens[j]);
+					}
+					continue;
 				}
 				else
 				{
@@ -1534,6 +1548,8 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 						break;
 					case lb_real8:
 						put_double(argbuf, argData.dvalue);
+						break;
+					case lb_object:
 						break;
 					default:
 						break;
@@ -1578,11 +1594,13 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 		}
 		else
 		{
-			put_byte(out, lb_seto);
+			/*put_byte(out, lb_seto);
 			put_string(out, varname);
 			put_byte(out, lb_value);
-			put_string(out, tokens[2]);
+			put_string(out, tokens[2]);*/
+			return add_compile_error(back, srcFile, srcLine, error_error, "Invalid usage of seto; must be initialization of object, array, string, or null");
 		}
+		
 		//else
 		//	return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token; expected \"new\" or \"null\"");
 		break;

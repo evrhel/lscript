@@ -4,17 +4,15 @@ class Main
 	
 	global static const int myNum dword[22]
 	global static varying uint myNum2 dword[19]
-
-	global dynamic varying int myField
-	global dynamic varying object myField2
-	global dynamic varying intarray array
 	
 	# main function
 	function static interp main(objectarray String args)
 		object myString
+		object myObject
 		seto myString "Hello World"
 
-		dynamic_call System.stdout.println(LString;) myString
+		seto myObject new Main <init>(LString;) myString
+		dynamic_call myObject.print()
 
 		if args.length == int[0]
 			dynamic_call System.stdout.println(LString;) "There are no arguments!"
@@ -67,6 +65,13 @@ class Main
 		retd dword[25]
 
 
-	function dynamic interp <init>()
+	global dynamic varying object myString
+	
+	function dynamic interp <init>(object String aString)
+		setv this.myString aString
+		ret
+
+	function dynamic interp print()
+		dynamic_call System.stdout.println(LString;) this.myString
 		ret
 

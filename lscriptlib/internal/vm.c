@@ -1327,6 +1327,7 @@ int env_run(env_t *env, void *location)
 	data_t *data;				// An arbitrary data_t pointer
 	flags_t flags;				// An arbitrary flags_t
 	const char *name2;			// An arbitrary string to store a name
+	const char *name3;			// An arbitrary string to store a name
 	data_t *data2;				// An arbitrary data_t pointer
 	flags_t flags2;				// An arbitrary flags_t
 	value_t val;				// An arbitrary value
@@ -1447,7 +1448,7 @@ int env_run(env_t *env, void *location)
 		case lb_seto:
 			env->rip++;
 			name = (const char *)env->rip;
-			if (!env_resolve_variable(env, name, &data, &flags))
+			if (!env_resolve_variable(env, name, &data2, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
 			switch (*env->rip)
@@ -1459,25 +1460,27 @@ int env_run(env_t *env, void *location)
 				if (!clazz)
 					EXIT_RUN(env_raise_exception(env, exception_class_not_found, name2));
 				env->rip += strlen(name2) + 1;
-				callFunc = class_get_function(clazz, "<init>(");
+				name3 = (const char *)env->rip;
+				callFunc = class_get_function(clazz, name3);
 				if (!callFunc)
-					EXIT_RUN(env_raise_exception(env, exception_function_not_found, "<init>("));
+					EXIT_RUN(env_raise_exception(env, exception_function_not_found, name3));
 				env->rip += strlen((const char *)env->rip) + 1;
 				object = manager_alloc_object(env->vm->manager, clazz);
 				if (!object)
 					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
-				if (env_run_func(env, callFunc, object))
-					EXIT_RUN(env->exception);
-				data->ovalue = object;
+				data2->ovalue = object;
+				goto handle_dynamic_call_after_resolve;
+				//if (env_run_func(env, callFunc, object))
+				//	EXIT_RUN(env->exception);
 				break;
-			case lb_value:
-				env->rip++;
-				name2 = (const char *)env->rip;
-				if (!env_resolve_variable(env, name2, &data2, &flags2))
-					EXIT_RUN(env->exception);
-				env->rip += strlen(name2) + 1;
-				data->ovalue = data2->ovalue;
-				break;
+			//case lb_value:
+			//	env->rip++;
+			//	name2 = (const char *)env->rip;
+			//	if (!env_resolve_variable(env, name2, &data2, &flags2))
+			//		EXIT_RUN(env->exception);
+			//	env->rip += strlen(name2) + 1;
+			//	data->ovalue = data2->ovalue;
+			//	break;
 			case lb_char:
 			case lb_uchar:
 			case lb_short:
@@ -1491,20 +1494,20 @@ int env_run(env_t *env, void *location)
 			case lb_double:
 			case lb_object:
 				type = (*env->rip) + 0x0c;
-				data->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++(env->rip))));
-				if (!data->ovalue)
+				data2->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++(env->rip))));
+				if (!data2->ovalue)
 					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
 				env->rip += 4;
 				break;
 			case lb_string:
 				env->rip++;
-				data->ovalue = env_new_string(env, env->rip);
+				data2->ovalue = env_new_string(env, env->rip);
 				if (env->exception)
 					EXIT_RUN(env->exception);
 				env->rip += strlen(env->rip) + 1;
 				break;
 			case lb_null:
-				data->ovalue = NULL;
+				data2->ovalue = NULL;
 				break;
 			default:
 				EXIT_RUN(env_raise_exception(env, exception_bad_command, "seto"));
@@ -1521,7 +1524,8 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name2, &data2, &flags2))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name2) + 1;
-			static_set(data, flags, data2, flags2);
+			if (!static_set(data, flags, data2, flags2))
+				EXIT_RUN(env_raise_exception(env, exception_bad_command, "On static set during setv"));
 			break;
 		case lb_setr:
 			env->rip++;
@@ -1729,6 +1733,8 @@ int env_run(env_t *env, void *location)
 			env->rip += strlen(name) + 1;
 
 			object = data->ovalue;
+
+			handle_dynamic_call_after_resolve:
 
 			callFuncArgs = NULL;
 			callFuncArgSize = callFunc->argSize;
@@ -2025,6 +2031,23 @@ int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 		break;
 	case lb_double:
 		return cast_double(&src->dvalue, dstType, dst);
+		break;
+	case lb_object:
+	case lb_boolarray:
+	case lb_chararray:
+	case lb_uchararray:
+	case lb_shortarray:
+	case lb_ushortarray:
+	case lb_intarray:
+	case lb_uintarray:
+	case lb_longarray:
+	case lb_ulongarray:
+	case lb_floatarray:
+	case lb_doublearray:
+	case lb_objectarray:
+		if (dstType != srcType)
+			return 0;
+		dst->ovalue = src->ovalue;
 		break;
 	default:
 		return 0;

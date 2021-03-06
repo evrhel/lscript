@@ -7,7 +7,7 @@ class String
 		ret
 
 	function dynamic interp <init>(chararray chars)
-		seto this.chars chars
+		setv this.chars chars
 		ret
 
 	function dynamic interp getChars()
