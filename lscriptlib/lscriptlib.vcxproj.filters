@@ -81,6 +81,9 @@
     <ClInclude Include="internal\debug.h">
       <Filter>Header Files\internal</Filter>
     </ClInclude>
+    <ClInclude Include="internal\lmath.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="internal\object.c">
@@ -128,10 +131,13 @@
     <ClCompile Include="internal\debug.c">
       <Filter>Source Files\internal</Filter>
     </ClCompile>
+    <ClCompile Include="internal\lmath.c">
+      <Filter>Source Files\internal</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="internal\hooks.asm">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\internal</Filter>
     </MASM>
   </ItemGroup>
 </Project>

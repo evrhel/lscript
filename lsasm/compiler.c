@@ -127,18 +127,21 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		}
 	}
 
-	size_t filenameSize = strlen(file) + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
+	size_t filenameSize = strlen(outputDirectory) + 1 + strlen(file) + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
 	char *nstr = (char *)malloc(filenameSize);
+	char *nameoff = nstr + strlen(outputDirectory) + 1;
 	if (!nstr)
 	{
 		free(buf);
 		return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
 	}
-	memcpy(nstr, file, filenameSize);
-	char *lastSep = strrchr(nstr, '\\');
+	memcpy(nstr, outputDirectory, strlen(outputDirectory));
+	*(nameoff - 1) = '\\';
+	memcpy(nameoff, file, filenameSize);
+	char *lastSep = strrchr(nameoff, '\\');
 	if (!lastSep)
-		lastSep = strrchr(nstr, '/');
-	char *fname = lastSep ? lastSep : nstr;
+		lastSep = strrchr(nameoff, '\\');
+	char *fname = lastSep ? lastSep : nameoff;
 	char *ext = strrchr(fname, '.');
 	if (ext)
 	{

@@ -8,17 +8,17 @@ extern "C"
 {
 #endif
 
-	LNIFUNC lulong LNICALL StdFileHandle_fopen(LEnv, lclass, lobject, lint);
+	LNIFUNC lulong LNICALL StdFileHandle_fopen(LEnv venv, lclass vclazz, lobject filepath, lint mode);
 
-	LNIFUNC void LNICALL StdFileHandle_fclose(LEnv, lclass, lulong);
+	LNIFUNC void LNICALL StdFileHandle_fclose(LEnv venv, lclass vclazz, lulong handle);
 
-	LNIFUNC void LNICALL StdFileHandle_fputc(LEnv, lclass, lulong, lchar);
+	LNIFUNC void LNICALL StdFileHandle_fputc(LEnv venv, lclass vclazz, lulong handle, lchar c);
 
-	LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv, lclass, lulong, lchararray, luint, luint);
+	LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv venv, lclass vclazz, lulong handle, lchararray data, luint off, luint length);
 
-	LNIFUNC luint LNICALL StdFileHandle_fread(LEnv, lclass, lulong, lchararray, luint, luint);
+	LNIFUNC luint LNICALL StdFileHandle_fread(LEnv venv, lclass vclazz, lulong handle, lchararray buf, luint off, luint count);
 
-	LNIFUNC lchararray LNICALL StdFileHandle_freadline(LEnv, lclass, lulong);
+	LNIFUNC lchararray LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong handle);
 
 #if defined(__cplusplus)
 }

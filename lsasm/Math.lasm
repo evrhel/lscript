@@ -1,0 +1,124 @@
+
+class Math
+
+	global static const double PI real8[3.1415926539]
+	global static const float PIF real4[3.1415926539]
+
+	function dynamic interp <init>()
+		ret
+
+	function static interp abs(double a)
+		if a < double[0.0]
+			sub a double[0.0] a
+		end
+		retv a
+
+	function static interp abs(float a)
+		if a < float[0.0]
+			sub a float[0.0] a
+		end
+		retv a
+
+	function static interp abs(int a)
+		if a < int[0]
+			sub a int[0] a
+		end
+		retv a
+
+	function static interp abs(long a)
+		if a < long[0]
+			sub a long[0] a
+		end
+		retv a
+
+	function static interp max(double a, double b)
+		if a > b
+			retv a
+		else
+			retv b
+		end
+
+	function static interp max(float a, float b)
+		if a > b
+			retv a
+		else
+			retv b
+		end
+
+	function static interp max(int a, int b)
+		if a > b
+			retv a
+		else
+			retv b
+		end
+
+	function static interp max(long a, long b)
+		if a > b
+			retv a
+		else
+			retv b
+		end
+
+	function static interp min(double a, double b)
+		if a < b
+			retv a
+		else
+			retv b
+		end
+
+	function static interp min(float a, float b)
+		if a < b
+			retv a
+		else
+			retv b
+		end
+
+	function static interp min(int a, int b)
+		if a < b
+			retv a
+		else
+			retv b
+		end
+
+	function static interp min(long a, long b)
+		if a < b
+			retv a
+		else
+			retv b
+		end
+
+	function static native round(double a)
+	function static native roundf(float a)
+
+	function static native floor(double a)
+	function static native floorf(float a)
+
+	function static native ceil(double a)
+	function static native ceilf(float a)
+
+	function static native sqrt(double a)
+	function static native sqrtf(float a)
+
+	function static native cbrt(double a)
+	function static native cbrtf(float a)
+
+	function static native exp(double a)
+	function static native expf(float a)
+
+	function static native exp2(double a)
+	function static native exp2f(float a)
+
+	function static native log(double a)
+	function static native logf(float a)
+
+	function static native log10(double a)
+	function static native log10f(float a)
+
+	function static native sin(double a)
+	function static native sinf(float a)
+
+	function static native cos(double a)
+	function static native cosf(float a)
+
+	function static native tan(double a)
+	function static native tanf(float a)
