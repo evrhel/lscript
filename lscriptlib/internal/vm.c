@@ -198,6 +198,8 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount
 			vm_add_path(vm, paths[i]);
 	}
 
+	vm_add_path(vm, ".\\lib\\");
+
 	vm->libraryCount = 4;
 #if defined(_WIN32)
 	vm->hLibraries = (HMODULE *)CALLOC(vm->libraryCount, sizeof(HMODULE));
