@@ -634,7 +634,10 @@ byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart, const char *sr
 unsigned char infer_argument_count(const char *qualname)
 {
 	unsigned char argCount = 0;
-	char *cursor = strchr(qualname, '(') + 1;
+	char *cursor = strchr(qualname, '(');
+	if (!cursor)
+		return 0;
+	cursor++;
 	while (*cursor)
 	{
 		if (*cursor == 'L')

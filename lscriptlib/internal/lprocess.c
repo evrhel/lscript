@@ -7,8 +7,10 @@
 typedef struct process_s process_t;
 struct process_s
 {
-	STARTUPINFO *si;
-	PROCESS_INFORMATION *pi;
+	LPSTARTUPINFOA si;
+	LPPROCESS_INFORMATION pi;
+
+	CHAR procName[MAX_PATH];
 
 	process_t *next;
 	process_t *prev;
@@ -41,20 +43,10 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 	array_t *commandLineCharArrayField = commandLine ? (array_t *)object_get_object((object_t *)commandLine, "chars") : NULL;
 	array_t *workingDirCharArrayField = workingDir ? (array_t *)object_get_object((object_t *)workingDir, "chars") : NULL;
 
-	char *cstrProcName, *cstrCommandLine, *cstrWorkingDir;
-
-	cstrProcName = (char *)malloc(processNameCharArrayField->length + 1U);
-	if (!cstrProcName)
-	{
-		env_raise_exception(env, exception_out_of_memory, "On allocate process name");
-		return 0;
-	}
-
-	cstrCommandLine = commandLineCharArrayField ? (char *)malloc(commandLineCharArrayField->length + 1U) : NULL;
-	cstrWorkingDir = workingDirCharArrayField ? (char *)malloc(workingDirCharArrayField->length + 1U) : NULL;
-
-	memcpy(cstrProcName, &processNameCharArrayField->data, processNameCharArrayField->length);
-	cstrProcName[processNameCharArrayField->length] = 0;
+	char *cstrCommandLine, *cstrWorkingDir;
+	
+	cstrCommandLine = commandLineCharArrayField ? (char *)malloc((size_t)commandLineCharArrayField->length + 1ULL) : NULL;
+	cstrWorkingDir = workingDirCharArrayField ? (char *)malloc((size_t)workingDirCharArrayField->length + 1ULL) : NULL;
 
 	if (cstrCommandLine)
 	{
@@ -71,7 +63,6 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 	process_t *procStruct = (process_t *)malloc(sizeof(process_t));
 	if (!procStruct)
 	{
-		free(cstrProcName);
 		if (cstrCommandLine)
 			free(cstrCommandLine);
 		if (cstrWorkingDir)
@@ -80,11 +71,10 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 		return 0;
 	}
 
-	procStruct->si = (STARTUPINFO *)malloc(sizeof(STARTUPINFO));
+	procStruct->si = (LPSTARTUPINFO)malloc(sizeof(STARTUPINFO));
 	if (!procStruct->si)
 	{
 		free(procStruct);
-		free(cstrProcName);
 		if (cstrCommandLine)
 			free(cstrCommandLine);
 		if (cstrWorkingDir)
@@ -93,12 +83,11 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 		return 0;
 	}
 
-	procStruct->pi = (PROCESS_INFORMATION *)malloc(sizeof(PROCESS_INFORMATION));
+	procStruct->pi = (LPPROCESS_INFORMATION)malloc(sizeof(PROCESS_INFORMATION));
 	if (!procStruct->pi)
 	{
 		free(procStruct->si);
 		free(procStruct);
-		free(cstrProcName);
 		if (cstrCommandLine)
 			free(cstrCommandLine);
 		if (cstrWorkingDir)
@@ -107,22 +96,25 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 		return 0;
 	}
 
+	memcpy(procStruct->procName, &processNameCharArrayField->data, processNameCharArrayField->length);
+	procStruct->procName[processNameCharArrayField->length] = 0;
+
 	procStruct->next = NULL;
 	procStruct->prev = NULL;
 
-	ZeroMemory(procStruct->si, sizeof(STARTUPINFO));
-	procStruct->si->cb = sizeof(STARTUPINFO);
-	ZeroMemory(procStruct->pi, sizeof(PROCESS_INFORMATION));
+	ZeroMemory(procStruct->si, sizeof(*(procStruct->si)));
+	procStruct->si->cb = sizeof(*(procStruct->si));
+	ZeroMemory(procStruct->pi, sizeof(*(procStruct->pi)));
 
 	if (!CreateProcessA(
-		cstrProcName,
-		cstrCommandLine,
+		NULL,
+		&procStruct->procName,
 		NULL,
 		NULL,
 		FALSE,
 		0,
 		NULL,
-		cstrWorkingDir,
+		NULL,
 		procStruct->si,
 		procStruct->pi
 	))
@@ -182,8 +174,10 @@ LNIFUNC lbool LNICALL Process_forceStop(LEnv venv, lclass vclazz, lulong nativeH
 LNIFUNC void LNICALL Process_freeProcessData(LEnv venv, lclass vclazz, lulong nativeHandle)
 {
 	process_t *curr = g_processes;
+	process_t *next;
 	while (curr)
 	{
+		next = curr->next;
 		if (curr = (process_t *)nativeHandle)
 		{
 			if (curr->next)
@@ -201,6 +195,6 @@ LNIFUNC void LNICALL Process_freeProcessData(LEnv venv, lclass vclazz, lulong na
 			free(curr->si);
 			free(curr);
 		}
-		curr = curr->next;
+		curr = next;
 	}
 }

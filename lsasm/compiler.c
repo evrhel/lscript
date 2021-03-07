@@ -633,7 +633,7 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 			if (inEscape)
 			{
 				inEscape = 0;
-				put_char(currstring, 0);
+				put_char(currstring, '\"');
 			}
 			else
 			{
@@ -646,7 +646,7 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 			if (inDoubleQuotes)
 			{
 				if (inEscape)
-					put_char(currstring, 0);
+					put_char(currstring, '\\');
 				inEscape = !inEscape;
 			}
 			else

@@ -62,6 +62,12 @@ class Main
 		intarray array
 		seto array int dword[5]
 
+		object process
+		static_call System.startProcess(LString;LString;LString;) "C:\\Windows\\notepad.exe" null null
+		if process != ulong[0]
+			dynamic_call process.wait(i) Process.INFINITE
+		end
+
 		retd dword[25]
 
 

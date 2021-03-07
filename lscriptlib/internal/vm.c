@@ -929,6 +929,13 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 		}
 		else
 		{
+			env->exception = 0;
+			if (env->exceptionMessage)
+			{
+				free_exception_string(env->exceptionMessage);
+				env->exceptionMessage = NULL;
+			}
+
 			funcname = end + 1;
 			class_t *clazz = vm_load_class(env->vm, name);
 			if (!clazz)
