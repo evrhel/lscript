@@ -32,9 +32,14 @@ class Process
 		static_call forceStop(q) this.nativeHandle
 		retr
 
+	function dynamic interp finalize()
+		static_call freeProcessData(q) this.nativeHandle
+		ret
+
 	function static native startProcess(object String processName, object String commandLine, object String workingDir)
 	function static native getPID(ulong nativeHandle)
 	function static native wait(ulong nativeHandle, uint length)
 	function static native isRunning(ulong nativeHandle)
 	function static native stop(ulong nativeHandle)
 	function static native forceStop(ulong nativeHandle)
+	function static native freeProcessData(ulong nativeHandle)

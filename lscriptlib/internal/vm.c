@@ -10,6 +10,7 @@
 #include "vm_compare.h"
 #include "string_util.h"
 #include "debug.h"
+#include "lprocess.h"
 
 //#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
 #define CURR_FUNC(env) (*(((function_t**)(env)->rbp)+2))
@@ -510,6 +511,8 @@ int vm_load_library(vm_t *vm, const char *libpath)
 
 void vm_free(vm_t *vm, unsigned long threadWaitTime)
 {
+	cleanup_processes();
+
 #if defined(_WIN32)
 	if (vm->hVMThread)
 	{
