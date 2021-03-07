@@ -153,6 +153,7 @@
     <ClInclude Include="internal\heap.h" />
     <ClInclude Include="internal\lb.h" />
     <ClInclude Include="internal\lmath.h" />
+    <ClInclude Include="internal\lprocess.h" />
     <ClInclude Include="internal\lstdio.h" />
     <ClInclude Include="internal\lsystem.h" />
     <ClInclude Include="internal\mem.h" />
@@ -173,6 +174,7 @@
     <ClCompile Include="internal\debug.c" />
     <ClCompile Include="internal\heap.c" />
     <ClCompile Include="internal\lmath.c" />
+    <ClCompile Include="internal\lprocess.c" />
     <ClCompile Include="internal\lscript.c" />
     <ClCompile Include="internal\lstdio.c" />
     <ClCompile Include="internal\lsystem.c" />

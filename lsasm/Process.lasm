@@ -1,0 +1,40 @@
+
+class Process
+
+	global static const uint INFINITE dword[-1]
+
+	global dynamic varying ulong nativeHandle
+
+	function dynamic interp <init>()
+		ret
+
+	function dynamic interp getPID()
+		static_call getPID(q) this.nativeHandle
+		retr
+
+	function dynamic interp wait(uint length)
+		static_call wait(qi) this.nativeHandle length
+		retr
+
+	function dynamic interp wait()
+		dynamic_call this.wait(i) Process.INFINITE
+		retr
+
+	function dynamic interp isRunning()
+		static_call isRunning(q) this.nativeHandle
+		retr
+
+	function dynamic interp stop()
+		static_call stop(q) this.nativeHandle
+		retr
+
+	function dynamic interp forceStop()
+		static_call forceStop(q) this.nativeHandle
+		retr
+
+	function static native startProcess(object String processName, object String commandLine, object String workingDir)
+	function static native getPID(ulong nativeHandle)
+	function static native wait(ulong nativeHandle, uint length)
+	function static native isRunning(ulong nativeHandle)
+	function static native stop(ulong nativeHandle)
+	function static native forceStop(ulong nativeHandle)
