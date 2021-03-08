@@ -4,6 +4,8 @@
 #include <Windows.h>
 #endif
 
+#include <stdio.h>
+
 static buffer_t *ensure_capacity(buffer_t *buf, size_t required);
 
 #if defined(_DEBUG)
@@ -32,7 +34,87 @@ static inline void check(buffer_t *buf)
 }
 #endif
 
-buffer_t *new_buffer(size_t size)
+#if defined(BUFFER_DEBUG)
+
+#define YELLOW (FOREGROUND_RED | FOREGROUND_GREEN)
+#define RED (FOREGROUND_RED)
+#define GREEN (FOREGROUND_GREEN)
+
+static inline void print_console(short color, const char *format, ...)
+{
+	short old;
+
+	
+
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	GetConsoleScreenBufferInfo(hConsole, &info);
+	old = info.wAttributes;
+	
+	SetConsoleTextAttribute(hConsole, color);
+
+	va_list ls;
+	va_start(ls, format);
+	vprintf(format, ls);
+	va_end(ls);
+
+	SetConsoleTextAttribute(hConsole, old);
+}
+
+buffer_t *__new_buffer_d(size_t size, const char *file, int line)
+{
+
+	return NULL;
+}
+
+void __free_buffer_d(buffer_t *buf, const char *file, int line)
+{
+}
+
+buffer_t *__put_char_d(buffer_t *buf, char c, const char *file, int line)
+{
+	return NULL;
+}
+
+buffer_t *__put_short_d(buffer_t *buf, short s, const char *file, int line)
+{
+	return NULL;
+}
+
+buffer_t *__put_int_d(buffer_t *buf, int i, const char *file, int line)
+{
+	return NULL;
+}
+
+buffer_t *__put_long_d(buffer_t *buf, long long l, const char *file, int line)
+{
+	return NULL;
+}
+
+buffer_t *__put_float_d(buffer_t *buf, float f, const char *file, int line)
+{
+	return NULL;
+}
+
+buffer_t *__put_double_d(buffer_t *buf, double d, const char *file, int line)
+{
+	return NULL;
+}
+
+buffer_t *__put_mem_d(buffer_t *buf, const void *mem, size_t size, const char *file, int line)
+{
+	return NULL;
+}
+
+buffer_t *__put_bytes_d(buffer_t *buf, char byte, size_t count, const char *file, int line)
+{
+	return NULL;
+}
+
+#endif
+
+buffer_t *__new_buffer(size_t size)
 {
 	buffer_t *buf = (buffer_t *)malloc(sizeof(buffer_t));
 	if (!buf)
@@ -48,7 +130,7 @@ buffer_t *new_buffer(size_t size)
 	return buf;
 }
 
-void free_buffer(buffer_t *buf)
+void __free_buffer(buffer_t *buf)
 {
 	if (buf)
 	{
@@ -57,7 +139,7 @@ void free_buffer(buffer_t *buf)
 	}
 }
 
-buffer_t *put_char(buffer_t *buf, char c)
+buffer_t *__put_char(buffer_t *buf, char c)
 {
 	buf = ensure_capacity(buf, sizeof(char));
 	*buf->cursor = c;
@@ -66,7 +148,7 @@ buffer_t *put_char(buffer_t *buf, char c)
 	return buf;
 }
 
-buffer_t *put_short(buffer_t *buf, short s)
+buffer_t *__put_short(buffer_t *buf, short s)
 {
 	buf = ensure_capacity(buf, sizeof(short));
 	short *sb = (short *)buf->cursor;
@@ -76,7 +158,7 @@ buffer_t *put_short(buffer_t *buf, short s)
 	return buf;
 }
 
-buffer_t *put_int(buffer_t *buf, int i)
+buffer_t *__put_int(buffer_t *buf, int i)
 {
 	buf = ensure_capacity(buf, sizeof(int));
 	int *ib = (int *)buf->cursor;
@@ -86,7 +168,7 @@ buffer_t *put_int(buffer_t *buf, int i)
 	return buf;
 }
 
-buffer_t *put_long(buffer_t *buf, long long l)
+buffer_t *__put_long(buffer_t *buf, long long l)
 {
 	buf = ensure_capacity(buf, sizeof(long long));
 	long long *lb = (long long *)buf->cursor;
@@ -96,7 +178,7 @@ buffer_t *put_long(buffer_t *buf, long long l)
 	return buf;
 }
 
-buffer_t *put_float(buffer_t *buf, float f)
+buffer_t *__put_float(buffer_t *buf, float f)
 {
 	buf = ensure_capacity(buf, sizeof(float));
 	float *fb = (float *)buf->cursor;
@@ -106,7 +188,7 @@ buffer_t *put_float(buffer_t *buf, float f)
 	return buf;
 }
 
-buffer_t *put_double(buffer_t *buf, double d)
+buffer_t *__put_double(buffer_t *buf, double d)
 {
 	buf = ensure_capacity(buf, sizeof(double));
 	double *db = (double *)buf->cursor;
@@ -116,7 +198,7 @@ buffer_t *put_double(buffer_t *buf, double d)
 	return buf;
 }
 
-buffer_t *put_mem(buffer_t *buf, const void *mem, size_t size)
+buffer_t *__put_mem(buffer_t *buf, const void *mem, size_t size)
 {
 	buf = ensure_capacity(buf, size);
 	memcpy(buf->cursor, mem, size);
@@ -125,7 +207,7 @@ buffer_t *put_mem(buffer_t *buf, const void *mem, size_t size)
 	return buf;
 }
 
-buffer_t *ensure_capacity(buffer_t *buf, size_t required)
+buffer_t *__ensure_capacity(buffer_t *buf, size_t required)
 {
 	size_t avaliable = (size_t)(buf->end - buf->cursor);
 	if (avaliable < required)
@@ -145,3 +227,4 @@ buffer_t *ensure_capacity(buffer_t *buf, size_t required)
 	}
 	return buf;
 }
+
