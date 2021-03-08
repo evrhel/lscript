@@ -6,8 +6,6 @@
 #include <string.h>
 #include <internal/types.h>
 
-#define BUFFER_DEBUG
-
 typedef struct buffer_s buffer_t;
 struct buffer_s
 {
@@ -16,7 +14,14 @@ struct buffer_s
 	char *end;
 };
 
-#if defined(BUFFER_DEBUG)
+#if defined(_DEBUG)
+
+void __begin_debug_d();
+
+void *__malloc_d(size_t size, const char *file, int line);
+void *__calloc_d(size_t count, size_t size, const char *file, int line);
+void *__memcpy_d(void *dst, const void *src, size_t size);
+void __free_d(void *block);
 
 buffer_t *__new_buffer_d(size_t size, const char *file, int line);
 void __free_buffer_d(buffer_t *buf, const char *file, int line);
@@ -31,22 +36,34 @@ buffer_t *__put_double_d(buffer_t *buf, double d, const char *file, int line);
 buffer_t *__put_mem_d(buffer_t *buf, const void *mem, size_t size, const char *file, int line);
 buffer_t *__put_bytes_d(buffer_t *buf, char byte, size_t count, const char *file, int line);
 
+void __end_debug_d();
 
-#define NEW_BUFFER(size) __new_buffer_d(size, strrchr(__FILE__, '\\'), __LINE__)
-#define FREE_BUFFER(buffer) __free_buffer_d(size, strrchr(__FILE__, '\\'), __LINE__)
-#define PUT_CHAR(buffer, c) __put_char_d(buffer, c, strrchr(__FILE__, '\\'), __LINE__)
+#define BEGIN_DEBUG() __begin_debug_d()
+
+#define MALLOC(size) __malloc_d(size, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define CALLOC(count, size) __calloc_d(count, size, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define MEMCPY(dst, src, size) __memcpy_d(dst, src, size, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define FREE(block) __free_d(block, strrchr(__FILE__, '\\') + 1, __LINE__)
+
+#define NEW_BUFFER(size) __new_buffer_d(size, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define FREE_BUFFER(buffer) __free_buffer_d(buffer, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define PUT_CHAR(buffer, c) __put_char_d(buffer, c, strrchr(__FILE__, '\\') + 1, __LINE__)
 #define PUT_UCHAR(buffer, uc) PUT_CHAR(buffer, (char)(uc))
-#define PUT_SHORT(buffer, s) __put_short_d(buffer, s, strrchr(__FILE__, '\\'), __LINE__)
+#define PUT_BYTE(buffer, b) PUT_CHAR(buffer, (char)(b))
+#define PUT_SHORT(buffer, s) __put_short_d(buffer, s, strrchr(__FILE__, '\\') + 1, __LINE__)
 #define PUT_USHORT(buffer, us) PUT_SHORT(buffer, (short)(us))
-#define PUT_INT(buffer, i) __put_int_d(buffer, c, strrchr(__FILE__, '\\'), __LINE__)
+#define PUT_INT(buffer, i) __put_int_d(buffer, i, strrchr(__FILE__, '\\') + 1, __LINE__)
 #define PUT_UINT(buffer, ui) PUT_INT(buffer, (int)(ui))
-#define PUT_LONG(buffer, l) __put_long_d(buffer, l, strrchr(__FILE__, '\\'), __LINE__)
+#define PUT_LONG(buffer, l) __put_long_d(buffer, l, strrchr(__FILE__, '\\') + 1, __LINE__)
 #define PUT_ULONG(buffer, ul) PUT_LONG(buffer, (long long)(ul))
-#define PUT_FLOAT(buffer, f) __put_float_d(buffer, f, strrchr(__FILE__, '\\'), __LINE__)
-#define PUT_DOUBLE(buffer, d) __put_double_d(buffer, d, strrchr(__FILE__, '\\'), __LINE__)
-#define PUT_MEM(buffer, mem, size) __put_mem_d(buffer, d, strrchr(__FILE__, '\\'), __LINE__)
-#define PUT_BYTES(buffer, byte, count) __put_bytes_d(buffer, byte, count, strrchr(__FILE__, '\\'), __LINE__)
+#define PUT_FLOAT(buffer, f) __put_float_d(buffer, f, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define PUT_DOUBLE(buffer, d) __put_double_d(buffer, d, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define PUT_MEM(buffer, mem, size) __put_mem_d(buffer, mem, size, strrchr(__FILE__, '\\') + 1, __LINE__)
+#define PUT_BUF(buffer, other) PUT_MEM(buffer, (other)->buf, (size_t)((other)->cursor - (other)->buf))
+#define PUT_BYTES(buffer, byte, count) __put_bytes_d(buffer, byte, count, strrchr(__FILE__, '\\') + 1, __LINE__)
 #define PUT_STRING(buffer, str) PUT_MEM(buffer, str, strlen(str) + 1)
+
+#define END_DEBUG() __end_debug_d()
 
 #else
 #define PUT_CHAR(buffer, c) __put_char(buffer, c)
@@ -71,7 +88,7 @@ inline buffer_t *__put_bytes(buffer_t *buf, char byte, size_t count)
 	if (!tmp)
 		return NULL;
 	memset(tmp, byte, count);
-	buf = put_mem(buf, tmp, count);
+	buf = __put_mem(buf, tmp, count);
 	free(tmp);
 	return buf;
 }

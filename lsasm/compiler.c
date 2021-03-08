@@ -46,8 +46,10 @@ static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t to
 compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, int debug,
 	alignment_t alignment, msg_func_t messenger, input_file_t **outputFiles)
 {
+	BEGIN_DEBUG();
+
 	compile_error_t *errors = create_base_compile_error(messenger);
-	input_file_t *base = (input_file_t *)malloc(sizeof(input_file_t));
+	input_file_t *base = (input_file_t *)MALLOC(sizeof(input_file_t));
 	if (!base)
 		return add_compile_error(errors, "", 0, error_error, "Allocation failure.");
 	base->next = NULL;
@@ -80,6 +82,8 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 		curr = curr->next;
 	}
 
+	END_DEBUG();
+
 	*outputFiles = front;
 	return errors;
 }
@@ -87,7 +91,7 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back,
 	unsigned int version, int debug, alignment_t alignment, input_file_t **outputFiles)
 {
-	FILE *in;
+	FILE *in = NULL;
 
 	back = add_compile_error(back, NULL, 0, error_info, "Build: %s", file);
 
@@ -97,7 +101,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	fseek(in, 0, SEEK_END);
 	long length = ftell(in);
 	fseek(in, 0, SEEK_SET);
-	char *buf = (char *)malloc(length);
+	char *buf = (char *)MALLOC(length);
 	if (!buf)
 	{
 		fclose(in);
@@ -106,8 +110,8 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	fread_s(buf, length, sizeof(char), length, in);
 	fclose(in);
 
-	buffer_t *obuf = new_buffer(256);
-	buffer_t *dbuf = debug ? new_buffer(256) : NULL;
+	buffer_t *obuf = NEW_BUFFER(256);
+	buffer_t *dbuf = debug ? NEW_BUFFER(256) : NULL;
 	back = compile_data(buf, length, obuf, file, back, version, debug, alignment, dbuf);
 
 	int hasWarnings = 0;
@@ -128,16 +132,16 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	}
 
 	size_t filenameSize = strlen(outputDirectory) + 1 + strlen(file) + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
-	char *nstr = (char *)malloc(filenameSize);
+	char *nstr = (char *)MALLOC(filenameSize);
 	char *nameoff = nstr + strlen(outputDirectory) + 1;
 	if (!nstr)
 	{
-		free(buf);
+		FREE(buf);
 		return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
 	}
-	memcpy(nstr, outputDirectory, strlen(outputDirectory));
+	MEMCPY(nstr, outputDirectory, strlen(outputDirectory));
 	*(nameoff - 1) = '\\';
-	memcpy(nameoff, file, filenameSize);
+	MEMCPY(nameoff, file, filenameSize);
 	char *lastSep = strrchr(nameoff, '\\');
 	if (!lastSep)
 		lastSep = strrchr(nameoff, '\\');
@@ -160,11 +164,11 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 	*outputFiles = add_file(*outputFiles, nstr);
 
-	FILE *out;
+	FILE *out = NULL;
 	fopen_s(&out, nstr, "wb");
 	if (!out)
 	{
-		free_buffer(obuf);
+		FREE_BUFFER(obuf);
 		//free(nstr);
 		return add_compile_error(back, file, 0, 0, "Failed to fopen for write", error_error);
 	}
@@ -173,18 +177,18 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	fwrite(obuf->buf, sizeof(char), (size_t)(obuf->cursor - obuf->buf), out);
 
 	fclose(out);
-	free_buffer(obuf);
+	FREE_BUFFER(obuf);
 
 	if (debug)
 	{
 		filenameSize++;
-		nstr = (char *)malloc(filenameSize);
+		nstr = (char *)MALLOC(filenameSize);
 		if (!nstr)
 		{
-			free(buf);
+			FREE(buf);
 			return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
 		}
-		memcpy(nstr, file, filenameSize);
+		MEMCPY(nstr, file, filenameSize);
 		lastSep = strrchr(nstr, '\\');
 		if (!lastSep)
 			lastSep = strrchr(nstr, '/');
@@ -213,9 +217,9 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		fputs(file, dfout);
 		fwrite(dbuf->buf, sizeof(char), (size_t)(dbuf->cursor - dbuf->buf), dfout);
 
-		free(nstr);
+		FREE(nstr);
 		fclose(dfout);
-		free_buffer(dbuf);
+		FREE_BUFFER(dbuf);
 	}
 
 	if (hasWarnings)
@@ -241,8 +245,8 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			if (debug)
 			{
 				unsigned int off = (unsigned int)(out->cursor - out->buf);
-				put_uint(debugOut, off);
-				put_int(debugOut, curr->linenum);
+				PUT_UINT(debugOut, off);
+				PUT_INT(debugOut, curr->linenum);
 			}
 
 			size_t tokenCount;
@@ -256,12 +260,12 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 
 			case lb_global:
 				alignAmount = alignment.globalAlignment - ((size_t)(out->cursor - out->buf) % (size_t)alignment.globalAlignment);
-				out = put_bytes(out, lb_align, alignAmount);
+				out = PUT_BYTES(out, lb_align, alignAmount);
 				back = handle_field_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 			case lb_function:
 				alignAmount = alignment.functionAlignment - ((size_t)(out->cursor - out->buf) % (size_t)alignment.functionAlignment);
-				out = put_bytes(out, lb_align, alignAmount);
+				out = PUT_BYTES(out, lb_align, alignAmount);
 				back = handle_function_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 
@@ -291,8 +295,8 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_objectarray:
 				if (tokenCount == 2)
 				{
-					out = put_byte(out, cmd);
-					out = put_string(out, tokens[1]);
+					out = PUT_BYTE(out, cmd);
+					out = PUT_STRING(out, tokens[1]);
 				}
 				else if (tokenCount == 1)
 				{
@@ -347,15 +351,15 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 				back = handle_if_style_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 			case lb_else:
-				out = put_byte(out, lb_else);
-				out = put_long(out, -1);
+				out = PUT_BYTE(out, lb_else);
+				out = PUT_LONG(out, -1);
 				//out = put_byte(out, tokenCount > 1);
 				if (tokenCount > 1)
 					back = handle_if_style_cmd(lb_if, tokens + 1, tokenCount - 1, out, srcFile, curr->linenum, back);
 				break;
 			case lb_end:
-				out = put_byte(out, cmd);
-				out = put_long(out, -1);
+				out = PUT_BYTE(out, cmd);
+				out = PUT_LONG(out, -1);
 				break;
 			default:
 				back = add_compile_error(back, srcFile, curr->linenum, error_error, "Unknown command \"%s\"", tokens[0]);
@@ -379,7 +383,7 @@ line_t *format_document(const char *data, size_t datalen)
 	line_t *front =  NULL;
 	line_t *curr = front;
 
-	buffer_t *linebuf = new_buffer(32);
+	buffer_t *linebuf = NEW_BUFFER(32);
 
 	int foundLineStart = 0;
 	int currline = 1;
@@ -397,20 +401,20 @@ line_t *format_document(const char *data, size_t datalen)
 			{
 				foundLineStart = 0;
 
-				put_char(linebuf, 0);			
+				PUT_CHAR(linebuf, 0);			
 
 				if (!curr)
 				{
-					front = curr = (line_t *)malloc(sizeof(line_t));
+					front = curr = (line_t *)MALLOC(sizeof(line_t));
 					if (!front)
 					{
-						free_buffer(linebuf);
+						FREE_BUFFER(linebuf);
 						return NULL;
 					}
 				}
 				else
 				{
-					curr->next = (line_t *)malloc(sizeof(line_t));
+					curr->next = (line_t *)MALLOC(sizeof(line_t));
 					if (!curr->next)
 					{
 						free_formatted(front);
@@ -418,12 +422,18 @@ line_t *format_document(const char *data, size_t datalen)
 					}
 					curr = curr->next;
 				}
-				curr->line = linebuf->buf;
+				curr->line = (char *)MALLOC((size_t)(linebuf->cursor - linebuf->buf));
+				if (!curr->line)
+				{
+					FREE_BUFFER(linebuf);
+					return NULL;
+				}
+				MEMCPY(curr->line, linebuf->buf, (size_t)(linebuf->cursor - linebuf->buf));
 				curr->linenum = currline;
 				curr->next = NULL;
 
-				free(linebuf);
-				linebuf = new_buffer(32);
+				FREE_BUFFER(linebuf);
+				linebuf = NEW_BUFFER(32);
 			}
 			currline++;
 			break;
@@ -433,28 +443,28 @@ line_t *format_document(const char *data, size_t datalen)
 		}
 
 		if (foundLineStart)
-			put_char(linebuf, *cursor);
+			PUT_CHAR(linebuf, *cursor);
 		cursor++;
 	}
 	if (foundLineStart)
 	{
-		put_char(linebuf, 0);
+		PUT_CHAR(linebuf, 0);
 
 		if (strlen(linebuf->buf) > 0)
 		{
 
 			if (!curr)
 			{
-				front = curr = (line_t *)malloc(sizeof(line_t));
+				front = curr = (line_t *)MALLOC(sizeof(line_t));
 				if (!front)
 				{
-					free_buffer(linebuf);
+					FREE_BUFFER(linebuf);
 					return NULL;
 				}
 			}
 			else
 			{
-				curr->next = (line_t *)malloc(sizeof(line_t));
+				curr->next = (line_t *)MALLOC(sizeof(line_t));
 				if (!curr->next)
 				{
 					free_formatted(front);
@@ -462,16 +472,24 @@ line_t *format_document(const char *data, size_t datalen)
 				}
 				curr = curr->next;
 			}
-			curr->line = linebuf->buf;
+			curr->line = (char *)MALLOC((size_t)(linebuf->cursor - linebuf->buf));
+			if (!curr->line)
+			{
+				FREE_BUFFER(linebuf);
+				return NULL;
+			}
+			MEMCPY(curr->line, linebuf->buf, (size_t)(linebuf->cursor - linebuf->buf));
 			curr->linenum = currline;
 			curr->next = NULL;
-			free(linebuf);
+
+			FREE_BUFFER(linebuf);
+			linebuf = NEW_BUFFER(32);
 		}
 		else
-			free_buffer(linebuf);
+			FREE_BUFFER(linebuf);
 	}
 	else
-		free(linebuf);
+		FREE_BUFFER(linebuf);
 
 
 	return front;
@@ -481,9 +499,9 @@ void free_formatted(line_t *first)
 {
 	if (first)
 	{
-		free(first->line);
+		FREE(first->line);
 		free_formatted(first->next);
-		free(first);
+		FREE(first);
 	}
 }
 
@@ -617,10 +635,10 @@ byte_t get_command_byte(const char *string)
 
 char **tokenize_string(const char *string, size_t *tokenCount)
 {
-	buffer_t *list = new_buffer(32);
+	buffer_t *list = NEW_BUFFER(32);
 	*tokenCount = 0;
 
-	buffer_t *currstring = new_buffer(32);
+	buffer_t *currstring = NEW_BUFFER(32);
 
 	int inDoubleQuotes = 0;
 	int inEscape = 0;
@@ -633,12 +651,12 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 			if (inEscape)
 			{
 				inEscape = 0;
-				put_char(currstring, '\"');
+				PUT_CHAR(currstring, '\"');
 			}
 			else
 			{
 				if (!inDoubleQuotes)
-					put_char(currstring, SIG_STRING_CHAR);
+					PUT_CHAR(currstring, SIG_STRING_CHAR);
 				inDoubleQuotes = !inDoubleQuotes;
 			}
 			break;
@@ -646,76 +664,82 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 			if (inDoubleQuotes)
 			{
 				if (inEscape)
-					put_char(currstring, '\\');
+					PUT_CHAR(currstring, '\\');
 				inEscape = !inEscape;
 			}
 			else
-				put_char(currstring, c);
+				PUT_CHAR(currstring, c);
 			break;
 		case 'n':
 			if (inDoubleQuotes)
 			{
 				if (inEscape)
-					put_char(currstring, '\n');
+					PUT_CHAR(currstring, '\n');
 				else
-					put_char(currstring, 'n');
+					PUT_CHAR(currstring, 'n');
 			}
 			else
-				put_char(currstring, 'n');
+				PUT_CHAR(currstring, 'n');
 			break;
 		case 'r':
 			if (inDoubleQuotes)
 			{
 				if (inEscape)
-					put_char(currstring, '\r');
+					PUT_CHAR(currstring, '\r');
 				else
-					put_char(currstring, 'r');
+					PUT_CHAR(currstring, 'r');
 			}
 			else
-				put_char(currstring, 'r');
+				PUT_CHAR(currstring, 'r');
 			break;
 		case 't':
 			if (inDoubleQuotes)
 			{
 				if (inEscape)
-					put_char(currstring, '\t');
+					PUT_CHAR(currstring, '\t');
 				else
-					put_char(currstring, 't');
+					PUT_CHAR(currstring, 't');
 			}
 			else
-				put_char(currstring, 't');
+				PUT_CHAR(currstring, 't');
 			break;
 		case '0':
 			if (inDoubleQuotes)
 			{
 				if (inEscape)
-					put_char(currstring, '\0');
+					PUT_CHAR(currstring, '\0');
 				else
-					put_char(currstring, '0');
+					PUT_CHAR(currstring, '0');
 			}
 			else
-				put_char(currstring, '0');
+				PUT_CHAR(currstring, '0');
 			break;
 		case ' ':
 			if (inDoubleQuotes)
 			{
-				put_char(currstring, ' ');
+				PUT_CHAR(currstring, ' ');
 			}
 			else
 			{
 				if (currstring->cursor > currstring->buf)
 				{
-					currstring = put_char(currstring, 0);
-					list = put_ulong(list, (size_t)currstring->buf);
+					currstring = PUT_CHAR(currstring, 0);
+					char *curbuf = (char *)MALLOC((size_t)(currstring->cursor - currstring->buf));
+					if (!curbuf)
+						return NULL;
+					MEMCPY(curbuf, currstring->buf, (size_t)(currstring->cursor - currstring->buf));
+
+
+					list = PUT_ULONG(list, (size_t)curbuf);
 					(*tokenCount)++;
 
-					free(currstring);
-					currstring = new_buffer(32);
+					FREE_BUFFER(currstring);
+					currstring = NEW_BUFFER(32);
 				}
 			}
 			break;
 		default:
-			currstring = put_char(currstring, c);
+			currstring = PUT_CHAR(currstring, c);
 			break;
 		}
 		string++;
@@ -723,34 +747,42 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 
 	if (currstring->cursor > currstring->buf)
 	{
-		currstring = put_char(currstring, 0);
-		list = put_ulong(list, (size_t)currstring->buf);
+		currstring = PUT_CHAR(currstring, 0);
+		char *curbuf = (char *)MALLOC((size_t)(currstring->cursor - currstring->buf));
+		if (!curbuf)
+			return NULL;
+		MEMCPY(curbuf, currstring->buf, (size_t)(currstring->cursor - currstring->buf));
+
+
+		list = PUT_ULONG(list, (size_t)curbuf);
 		(*tokenCount)++;
 	}
 
 	size_t buflen = list->cursor - list->buf;
-	char **result = (char **)malloc(buflen);
+	char **result = (char **)MALLOC(buflen);
 	if (!result)
 		return 0;
-	memcpy(result, list->buf, buflen);
+	MEMCPY(result, list->buf, buflen);
 	
 	// Free only the list structures, not their contents
-	free(list);
-	free(currstring);
+	//free(list);
+	//free(currstring);
+	FREE_BUFFER(list);
+	FREE_BUFFER(currstring);
 	
 	return result;
 }
 
-void free_tokenized_data(char **data, size_t tokenCount)
+void free_tokenized_data(const char *const *data, size_t tokenCount)
 {
 	if (data)
 	{
 		for (size_t i = 0; i < tokenCount; i++)
 		{
 			if (data[i])
-				free(data[i]);
+				FREE((void *)data[i]);
 		}
-		free(data);
+		FREE((void *)data);
 	}
 }
 
@@ -1019,10 +1051,10 @@ int is_valid_identifier(const char *string)
 
 char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTokenCount)
 {
-	buffer_t *temp = new_buffer(64);
+	buffer_t *temp = NEW_BUFFER(64);
 	for (size_t i = 0; i < tokenCount; i++)
 	{
-		put_string(temp, tokens[i]);
+		PUT_STRING(temp, tokens[i]);
 		temp->cursor--;
 		*(temp->cursor) = ' ';
 		temp->cursor++;
@@ -1048,14 +1080,14 @@ char **tokenize_function(char **tokens, size_t tokenCount, size_t *newTokenCount
 
 	char **result = tokenize_string(temp->buf, newTokenCount);
 
-	free_buffer(temp);
+	FREE_BUFFER(temp);
 
 	return result;
 }
 
 byte_t *derive_function_args(const char *functionSig, size_t *argc)
 {
-	buffer_t *buf = new_buffer(16);
+	buffer_t *buf = NEW_BUFFER(16);
 	*argc = 0;
 
 	while (*functionSig && *functionSig != '(')
@@ -1066,7 +1098,7 @@ byte_t *derive_function_args(const char *functionSig, size_t *argc)
 
 	if (!(*functionSig))
 	{
-		free_buffer(buf);
+		FREE_BUFFER(buf);
 		return NULL;
 	}
 
@@ -1078,50 +1110,50 @@ byte_t *derive_function_args(const char *functionSig, size_t *argc)
 		switch (*functionSig)
 		{
 		case 'C':
-			put_byte(buf, isArray ? lb_chararray : lb_char);
+			PUT_BYTE(buf, isArray ? lb_chararray : lb_char);
 			break;
 		case 'c':
-			put_byte(buf, isArray ? lb_uchararray : lb_uchar);
+			PUT_BYTE(buf, isArray ? lb_uchararray : lb_uchar);
 			break;
 		case 'S':
-			put_byte(buf, isArray ? lb_shortarray : lb_short);
+			PUT_BYTE(buf, isArray ? lb_shortarray : lb_short);
 			break;
 		case 's':
-			put_byte(buf, isArray ? lb_ushortarray : lb_ushort);
+			PUT_BYTE(buf, isArray ? lb_ushortarray : lb_ushort);
 			break;
 		case 'I':
-			put_byte(buf, isArray ? lb_intarray : lb_int);
+			PUT_BYTE(buf, isArray ? lb_intarray : lb_int);
 			break;
 		case 'i':
-			put_byte(buf, isArray ? lb_uintarray : lb_uint);
+			PUT_BYTE(buf, isArray ? lb_uintarray : lb_uint);
 			break;
 		case 'Q':
-			put_byte(buf, isArray ? lb_longarray : lb_long);
+			PUT_BYTE(buf, isArray ? lb_longarray : lb_long);
 			break;
 		case 'q':
-			put_byte(buf, isArray ? lb_ulongarray : lb_ulong);
+			PUT_BYTE(buf, isArray ? lb_ulongarray : lb_ulong);
 			break;
 		case 'B':
-			put_byte(buf, isArray ? lb_boolarray : lb_bool);
+			PUT_BYTE(buf, isArray ? lb_boolarray : lb_bool);
 			break;
 		case 'F':
-			put_byte(buf, isArray ? lb_floatarray : lb_float);
+			PUT_BYTE(buf, isArray ? lb_floatarray : lb_float);
 			break;
 		case 'D':
-			put_byte(buf, isArray ? lb_doublearray : lb_double);
+			PUT_BYTE(buf, isArray ? lb_doublearray : lb_double);
 			break;
 		case 'L':
-			put_byte(buf, isArray ? lb_objectarray : lb_object);
+			PUT_BYTE(buf, isArray ? lb_objectarray : lb_object);
 			while (*functionSig && *functionSig != ';' && *functionSig != ')')
 				functionSig++;
 			if (!(*functionSig))
 			{
-				free_buffer(buf);
+				FREE_BUFFER(buf);
 				return NULL;
 			}
 			else if (*functionSig == ')')
 			{
-				free_buffer(buf);
+				FREE_BUFFER(buf);
 				return NULL;
 			}
 			break;
@@ -1131,7 +1163,7 @@ byte_t *derive_function_args(const char *functionSig, size_t *argc)
 			continue;
 			break;
 		default:
-			free_buffer(buf);
+			FREE_BUFFER(buf);
 			return NULL;
 			break;
 		}
@@ -1139,14 +1171,22 @@ byte_t *derive_function_args(const char *functionSig, size_t *argc)
 		functionSig++;
 	}
 
-	byte_t *result = (byte_t *)buf->buf;
-	free(buf);
+	byte_t *result = (byte_t *)MALLOC((size_t)(buf->cursor - buf->buf));
+	if (!result)
+	{
+		FREE_BUFFER(buf);
+		return NULL;
+	}
+	MEMCPY(result, buf->buf, (size_t)(buf->cursor - buf->buf));
+	FREE_BUFFER(buf);
+		//(byte_t *)buf->buf;
+//	free(buf);
 	return result;
 }
 
 void free_derived_args(byte_t *args)
 {
-	free(args);
+	FREE(args);
 }
 
 byte_t get_comparator_byte(const char *comparatorString)
@@ -1215,8 +1255,8 @@ compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *ou
 		return add_compile_error(back, srcFile, srcLine, error_error, "Expected token class name declaration");
 	
 	const char *classname = tokens[1];
-	put_byte(out, lb_class);
-	put_string(out, classname);
+	PUT_BYTE(out, lb_class);
+	PUT_STRING(out, classname);
 	if (tokenCount > 2)
 	{
 		if (strcmp(tokens[2], "extends"))
@@ -1226,8 +1266,8 @@ compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *ou
 			return add_compile_error(back, srcFile, srcLine, error_error, "Expected token superclass name declaration");
 		else if (tokenCount == 4)
 		{
-			put_byte(out, lb_extends);
-			put_string(out, tokens[3]);
+			PUT_BYTE(out, lb_extends);
+			PUT_STRING(out, tokens[3]);
 		}
 		else
 			return add_compile_error(back, srcFile, srcLine, error_warning, "Uneceassary arguments following class declaration");
@@ -1290,7 +1330,7 @@ compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *ou
 		data_t data;
 		byte_t type;
 		int isAbsolute;
-		int initSize = evaluate_constant(tokens[5], &data, &type, &isAbsolute);
+		int initSize = (int)evaluate_constant(tokens[5], &data, &type, &isAbsolute);
 
 		if (!initSize)
 			return add_compile_error(back, srcFile, srcLine, error_error, "Initialization of globals to variables is not supported");
@@ -1304,31 +1344,31 @@ compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *ou
 		if (neededType != type)
 			back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
 
-		put_byte(out, lb_global);
-		put_string(out, name);
-		put_byte(out, isStatic ? lb_static : lb_dynamic);
-		put_byte(out, isVarying ? lb_varying : lb_const);
-		put_byte(out, 0); put_byte(out, 0); put_byte(out, 0); put_byte(out, 0); put_byte(out, 0);
-		put_byte(out, dataType);
+		PUT_BYTE(out, lb_global);
+		PUT_STRING(out, name);
+		PUT_BYTE(out, isStatic ? lb_static : lb_dynamic);
+		PUT_BYTE(out, isVarying ? lb_varying : lb_const);
+		PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0);
+		PUT_BYTE(out, dataType);
 		switch (neededType)
 		{
 		case lb_byte:
-			put_byte(out, data.cvalue);
+			PUT_BYTE(out, data.cvalue);
 			break;
 		case lb_word:
-			put_short(out, data.svalue);
+			PUT_SHORT(out, data.svalue);
 			break;
 		case lb_dword:
-			put_int(out, data.ivalue);
+			PUT_INT(out, data.ivalue);
 			break;
 		case lb_qword:
-			put_long(out, data.lvalue);
+			PUT_LONG(out, data.lvalue);
 			break;
 		case lb_real4:
-			put_float(out, data.fvalue);
+			PUT_FLOAT(out, data.fvalue);
 			break;
 		case lb_real8:
-			put_double(out, data.dvalue);
+			PUT_DOUBLE(out, data.dvalue);
 			break;
 		default:
 			// something went wrong!
@@ -1340,12 +1380,12 @@ compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *ou
 	}
 	else
 	{
-		put_byte(out, lb_global);
-		put_string(out, name);
-		put_byte(out, isStatic ? lb_static : lb_dynamic);
-		put_byte(out, isVarying ? lb_varying : lb_const);
-		put_byte(out, 0); put_byte(out, 0); put_byte(out, 0); put_byte(out, 0); put_byte(out, 0);
-		put_byte(out, dataType);
+		PUT_BYTE(out, lb_global);
+		PUT_STRING(out, name);
+		PUT_BYTE(out, isStatic ? lb_static : lb_dynamic);
+		PUT_BYTE(out, isVarying ? lb_varying : lb_const);
+		PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0);
+		PUT_BYTE(out, dataType);
 	}
 
 	return back;
@@ -1387,7 +1427,7 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 
 	size_t functionTokenCount;
 	char **functionData = tokenize_function(tokens + 3, tokenCount - 3, &functionTokenCount);
-	buffer_t *build = new_buffer(64);
+	buffer_t *build = NEW_BUFFER(64);
 
 	const char *name = functionData[0];
 	byte_t argCount = 0;
@@ -1397,7 +1437,7 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 		byte_t type = get_command_byte(functionData[i]);
 		if (type < lb_char || type > lb_objectarray)
 		{
-			free_buffer(build);
+			FREE_BUFFER(build);
 			return add_compile_error(back, srcFile, srcLine, error_error, "Illegal argument type");
 		}
 
@@ -1408,7 +1448,7 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 		{
 			if (i == functionTokenCount)
 			{
-				free_buffer(build);
+				FREE_BUFFER(build);
 				return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument object classname");
 			}
 
@@ -1417,38 +1457,38 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 			i++;
 			if (i == functionTokenCount)
 			{
-				free_buffer(build);
+				FREE_BUFFER(build);
 				return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument name");
 			}
 
 			argName = functionData[i];
 
-			put_byte(build, type);
-			put_string(build, classname);
-			put_string(build, argName);
+			PUT_BYTE(build, type);
+			PUT_STRING(build, classname);
+			PUT_STRING(build, argName);
 		}
 		else if (i == functionTokenCount)
 		{
-			free_buffer(build);
+			FREE_BUFFER(build);
 			return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument name");
 		}
 		else
 		{
 			argName = functionData[i];
 
-			put_byte(build, type);
-			put_string(build, argName);
+			PUT_BYTE(build, type);
+			PUT_STRING(build, argName);
 		}
 	}
 
-	put_byte(out, lb_function);
-	put_byte(out, isStatic ? lb_static : lb_dynamic);
-	put_byte(out, isInterp ? lb_interp : lb_native);
-	put_string(out, name);
-	put_byte(out, argCount);
-	put_buf(out, build);
+	PUT_BYTE(out, lb_function);
+	PUT_BYTE(out, isStatic ? lb_static : lb_dynamic);
+	PUT_BYTE(out, isInterp ? lb_interp : lb_native);
+	PUT_STRING(out, name);
+	PUT_BYTE(out, argCount);
+	PUT_BUF(out, build);
 
-	free_buffer(build);
+	FREE_BUFFER(build);
 	free_tokenized_data(functionData, functionTokenCount);
 
 	return back;
@@ -1473,10 +1513,10 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	switch (cmd)
 	{
 	case lb_setv:
-		put_byte(out, lb_setv);
-		put_string(out, varname);
+		PUT_BYTE(out, lb_setv);
+		PUT_STRING(out, varname);
 		//put_byte(out, lb_value);
-		put_string(out, tokens[2]);
+		PUT_STRING(out, tokens[2]);
 		break;
 	case lb_seto:
 		if (!strcmp(tokens[2], "new"))
@@ -1489,7 +1529,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 			char *classname = tokens[3];
 			char *constructorSig = tokens[4];
 
-			buffer_t *argbuf = new_buffer(16);
+			buffer_t *argbuf = NEW_BUFFER(16);
 
 			size_t argc;
 			byte_t *sig = derive_function_args(constructorSig, &argc);
@@ -1510,13 +1550,13 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 				{
 					if (tokens[j][0] == SIG_STRING_CHAR)
 					{
-						put_byte(argbuf, lb_string);
-						put_string(argbuf, tokens[j] + 1);
+						PUT_BYTE(argbuf, lb_string);
+						PUT_STRING(argbuf, tokens[j] + 1);
 					}
 					else
 					{
-						put_byte(argbuf, lb_value);
-						put_string(argbuf, tokens[j]);
+						PUT_BYTE(argbuf, lb_value);
+						PUT_STRING(argbuf, tokens[j]);
 					}
 					continue;
 				}
@@ -1524,33 +1564,33 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 				{
 					if (reqArgSize != argSize)
 					{
-						free_buffer(argbuf);
+						FREE_BUFFER(argbuf);
 						return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)argSize, (int)reqArgSize);
 					}
 
 					if (reqArgType != argType)
 						back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
 
-					put_byte(argbuf, reqArgType);
+					PUT_BYTE(argbuf, reqArgType);
 					switch (reqArgType)
 					{
 					case lb_byte:
-						put_char(argbuf, argData.cvalue);
+						PUT_CHAR(argbuf, argData.cvalue);
 						break;
 					case lb_word:
-						put_short(argbuf, argData.svalue);
+						PUT_SHORT(argbuf, argData.svalue);
 						break;
 					case lb_dword:
-						put_short(argbuf, argData.ivalue);
+						PUT_INT(argbuf, argData.ivalue);
 						break;
 					case lb_qword:
-						put_long(argbuf, argData.lvalue);
+						PUT_LONG(argbuf, argData.lvalue);
 						break;
 					case lb_real4:
-						put_float(argbuf, argData.fvalue);
+						PUT_FLOAT(argbuf, argData.fvalue);
 						break;
 					case lb_real8:
-						put_double(argbuf, argData.dvalue);
+						PUT_DOUBLE(argbuf, argData.dvalue);
 						break;
 					case lb_object:
 						break;
@@ -1563,37 +1603,37 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 			size_t sigend = strlen(constructorSig) - 1;
 			constructorSig[sigend] = 0;
 
-			put_byte(out, lb_seto);
-			put_string(out, varname);
-			put_byte(out, lb_new);
-			put_string(out, classname);
-			put_string(out, constructorSig);
-			put_buf(out, argbuf);
+			PUT_BYTE(out, lb_seto);
+			PUT_STRING(out, varname);
+			PUT_BYTE(out, lb_new);
+			PUT_STRING(out, classname);
+			PUT_STRING(out, constructorSig);
+			PUT_BUF(out, argbuf);
 
 			constructorSig[sigend] = ')';
 
 			free_derived_args(sig);
 
-			free_buffer(argbuf);
+			FREE_BUFFER(argbuf);
 		}
 		else if (!strcmp(tokens[2], "null"))
 		{
-			put_byte(out, lb_seto);
-			put_string(out, varname);
-			put_byte(out, lb_null);
+			PUT_BYTE(out, lb_seto);
+			PUT_STRING(out, varname);
+			PUT_BYTE(out, lb_null);
 		}
 		else if (get_primitive_type(tokens[2]))
 		{
-			put_byte(out, lb_seto);
-			put_string(out, varname);
+			PUT_BYTE(out, lb_seto);
+			PUT_STRING(out, varname);
 			back = handle_array_creation(&tokens[2], tokenCount - 2, out, srcFile, srcLine, back);
 		}
 		else if (tokens[2][0] == SIG_STRING_CHAR)
 		{
-			put_byte(out, lb_seto);
-			put_string(out, varname);
-			put_byte(out, lb_string);
-			put_string(out, tokens[2] + 1);
+			PUT_BYTE(out, lb_seto);
+			PUT_STRING(out, varname);
+			PUT_BYTE(out, lb_string);
+			PUT_STRING(out, tokens[2] + 1);
 		}
 		else
 		{
@@ -1608,12 +1648,12 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 		//	return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token; expected \"new\" or \"null\"");
 		break;
 	case lb_setr:
-		put_byte(out, lb_setr);
-		put_string(out, varname);
+		PUT_BYTE(out, lb_setr);
+		PUT_STRING(out, varname);
 		break;
 	default:
 		myType = cmd + (lb_byte - lb_setb);
-		myWidth = get_type_width(myType);
+		myWidth = (int)get_type_width(myType);
 		setWidth = evaluate_constant(tokens[2], &setData, &setType, &setIsAbsolute);
 
 		if (myWidth != setWidth)
@@ -1622,29 +1662,29 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 		if (myType != setType)
 			back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
 
-		put_byte(out, cmd);
-		put_string(out, varname);
+		PUT_BYTE(out, cmd);
+		PUT_STRING(out, varname);
 		//put_byte(out, myType);
 
 		switch (myType)
 		{
 		case lb_byte:
-			put_char(out, setData.cvalue);
+			PUT_CHAR(out, setData.cvalue);
 			break;
 		case lb_word:
-			put_short(out, setData.svalue);
+			PUT_SHORT(out, setData.svalue);
 			break;
 		case lb_dword:
-			put_int(out, setData.ivalue);
+			PUT_INT(out, setData.ivalue);
 			break;
 		case lb_qword:
-			put_long(out, setData.lvalue);
+			PUT_LONG(out, setData.lvalue);
 			break;
 		case lb_real4:
-			put_float(out, setData.fvalue);
+			PUT_FLOAT(out, setData.fvalue);
 			break;
 		case lb_real8:
-			put_double(out, setData.dvalue);
+			PUT_DOUBLE(out, setData.dvalue);
 			break;
 		}
 
@@ -1696,8 +1736,8 @@ compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_
 		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments in array initialization");
 	}
 
-	put_byte(out, type);
-	put_uint(out, argData.uivalue);
+	PUT_BYTE(out, type);
+	PUT_UINT(out, argData.uivalue);
 
 	return back;
 }
@@ -1710,7 +1750,7 @@ compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	{
 	case lb_ret:
 	case lb_retr:
-		put_byte(out, cmd);
+		PUT_BYTE(out, cmd);
 		if (tokenCount > 1)
 			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
 		break;
@@ -1718,8 +1758,8 @@ compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 		if (tokenCount < 2)
 			return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
 
-		put_byte(out, lb_retv);
-		put_string(out, tokens[1]);
+		PUT_BYTE(out, lb_retv);
+		PUT_STRING(out, tokens[1]);
 
 		if (tokenCount > 2)
 			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
@@ -1766,26 +1806,26 @@ compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 			if (retType != valueRetDesType)
 				back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
 
-			put_byte(out, cmd);
+			PUT_BYTE(out, cmd);
 			switch (retType)
 			{
 			case lb_byte:
-				put_char(out, retData.cvalue);
+				PUT_CHAR(out, retData.cvalue);
 				break;
 			case lb_word:
-				put_short(out, retData.svalue);
+				PUT_SHORT(out, retData.svalue);
 				break;
 			case lb_dword:
-				put_int(out, retData.ivalue);
+				PUT_INT(out, retData.ivalue);
 				break;
 			case lb_qword:
-				put_long(out, retData.lvalue);
+				PUT_LONG(out, retData.lvalue);
 				break;
 			case lb_real4:
-				put_float(out, retData.fvalue);
+				PUT_FLOAT(out, retData.fvalue);
 				break;
 			case lb_real8:
-				put_double(out, retData.dvalue);
+				PUT_DOUBLE(out, retData.dvalue);
 				break;
 			}
 		}
@@ -1805,7 +1845,7 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 
 	char *functionName = tokens[1];
 
-	buffer_t *argBuffer = new_buffer(32);
+	buffer_t *argBuffer = NEW_BUFFER(32);
 	
 	for (size_t i = 2; i < tokenCount; i++)
 	{
@@ -1818,13 +1858,13 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 		{
 			if (tokens[i][0] == SIG_STRING_CHAR)
 			{
-				put_byte(argBuffer, lb_string);
-				put_string(argBuffer, tokens[i] + 1);
+				PUT_BYTE(argBuffer, lb_string);
+				PUT_STRING(argBuffer, tokens[i] + 1);
 			}
 			else
 			{
-				put_byte(argBuffer, lb_value);
-				put_string(argBuffer, tokens[i]);
+				PUT_BYTE(argBuffer, lb_value);
+				PUT_STRING(argBuffer, tokens[i]);
 			}
 			continue;
 		}
@@ -1832,26 +1872,26 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 		if (isAbsoluteType)
 			get_type_properties(argType, &argType);
 
-		put_byte(argBuffer, argType);
+		PUT_BYTE(argBuffer, argType);
 		switch (argType)
 		{
 		case lb_byte:
-			put_char(argBuffer, argData.cvalue);
+			PUT_CHAR(argBuffer, argData.cvalue);
 			break;
 		case lb_word:
-			put_short(argBuffer, argData.svalue);
+			PUT_SHORT(argBuffer, argData.svalue);
 			break;
 		case lb_dword:
-			put_int(argBuffer, argData.ivalue);
+			PUT_INT(argBuffer, argData.ivalue);
 			break;
 		case lb_qword:
-			put_long(argBuffer, argData.lvalue);
+			PUT_LONG(argBuffer, argData.lvalue);
 			break;
 		case lb_real4:
-			put_float(argBuffer, argData.fvalue);
+			PUT_FLOAT(argBuffer, argData.fvalue);
 			break;
 		case lb_real8:
-			put_double(argBuffer, argData.dvalue);
+			PUT_DOUBLE(argBuffer, argData.dvalue);
 			break;
 		}
 	}
@@ -1859,13 +1899,13 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	size_t length = strlen(functionName);
 	functionName[length - 1] = 0;
 
-	put_byte(out, cmd);
-	put_string(out, functionName);
-	put_buf(out, argBuffer);
+	PUT_BYTE(out, cmd);
+	PUT_STRING(out, functionName);
+	PUT_BUF(out, argBuffer);
 
 	functionName[length - 1] = ')';
 
-	free_buffer(argBuffer);
+	FREE_BUFFER(argBuffer);
 
 	return back;
 }
@@ -1902,41 +1942,41 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 		return add_compile_error(back, srcFile, srcLine, error_error, "Arithmetic operation requires absolute type");
 	}
 
-	put_byte(out, cmd);
-	put_string(out, dstVar);
-	put_string(out, srcVar);
+	PUT_BYTE(out, cmd);
+	PUT_STRING(out, dstVar);
+	PUT_STRING(out, srcVar);
 
 	if (argSize == 0)
 	{
 		const char *srcVar2 = tokens[3];
-		put_byte(out, lb_value);
-		put_string(out, srcVar2);
+		PUT_BYTE(out, lb_value);
+		PUT_STRING(out, srcVar2);
 	}
 	else
 	{
-		put_byte(out, argType);
+		PUT_BYTE(out, argType);
 
 		byte_t type;
 		get_type_properties(argType, &type);
 		switch (type)
 		{
 		case lb_byte:
-			put_char(out, argData.cvalue);
+			PUT_CHAR(out, argData.cvalue);
 			break;
 		case lb_word:
-			put_short(out, argData.svalue);
+			PUT_SHORT(out, argData.svalue);
 			break;
 		case lb_dword:
-			put_int(out, argData.ivalue);
+			PUT_INT(out, argData.ivalue);
 			break;
 		case lb_qword:
-			put_long(out, argData.lvalue);
+			PUT_LONG(out, argData.lvalue);
 			break;
 		case lb_real4:
-			put_float(out, argData.fvalue);
+			PUT_FLOAT(out, argData.fvalue);
 			break;
 		case lb_real8:
-			put_double(out, argData.dvalue);
+			PUT_DOUBLE(out, argData.dvalue);
 			break;
 		}
 	}
@@ -1952,7 +1992,7 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 	if (tokenCount < 2)
 		return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
 
-	buffer_t *temp = new_buffer(32);
+	buffer_t *temp = NEW_BUFFER(32);
 	byte_t count = lb_one;
 
 	data_t lhsData;
@@ -1962,30 +2002,30 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 
 	if (lhsSize == 0)
 	{
-		put_byte(temp, lb_value);
-		put_string(temp, tokens[1]);
+		PUT_BYTE(temp, lb_value);
+		PUT_STRING(temp, tokens[1]);
 	}
 	else if (!lhsIsAbsolute)
 	{
-		free_buffer(temp);
+		FREE_BUFFER(temp);
 		return add_compile_error(back, srcFile, srcLine, error_error, "Compare operation requires absolute type");
 	}
 	else
 	{
-		put_byte(temp, lhsType);
+		PUT_BYTE(temp, lhsType);
 		switch (lhsSize)
 		{
 		case 1:
-			put_char(temp, lhsData.cvalue);
+			PUT_CHAR(temp, lhsData.cvalue);
 			break;
 		case 2:
-			put_short(temp, lhsData.svalue);
+			PUT_SHORT(temp, lhsData.svalue);
 			break;
 		case 4:
-			put_int(temp, lhsData.dvalue);
+			PUT_INT(temp, lhsData.ivalue);
 			break;
 		case 8:
-			put_long(temp, lhsData.lvalue);
+			PUT_LONG(temp, lhsData.lvalue);
 			break;
 		}
 	}
@@ -1996,14 +2036,14 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 		byte_t comparatorByte = get_comparator_byte(tokens[2]);
 		if (comparatorByte == 0)
 		{
-			free_buffer(temp);
+			FREE_BUFFER(temp);
 			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected comparator", tokens[2]);
 		}
-		put_byte(temp, comparatorByte);
+		PUT_BYTE(temp, comparatorByte);
 
 		if (tokenCount < 4)
 		{
-			free_buffer(temp);
+			FREE_BUFFER(temp);
 			return add_compile_error(back, srcFile, srcLine, error_error, "Expected compare argument");
 		}
 
@@ -2014,40 +2054,40 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 
 		if (rhsSize == 0)
 		{
-			put_byte(temp, lb_value);
-			put_string(temp, tokens[3]);
+			PUT_BYTE(temp, lb_value);
+			PUT_STRING(temp, tokens[3]);
 		}
 		else if (!rhsIsAbsolute)
 		{
-			free_buffer(temp);
+			FREE_BUFFER(temp);
 			return add_compile_error(back, srcFile, srcLine, error_error, "Compare operation requires absolute type");
 		}
 		else
 		{
-			put_byte(temp, rhsType);
+			PUT_BYTE(temp, rhsType);
 			switch (rhsSize)
 			{
 			case 1:
-				put_char(temp, rhsData.cvalue);
+				PUT_CHAR(temp, rhsData.cvalue);
 				break;
 			case 2:
-				put_short(temp, rhsData.svalue);
+				PUT_SHORT(temp, rhsData.svalue);
 				break;
 			case 4:
-				put_int(temp, rhsData.ivalue);
+				PUT_INT(temp, rhsData.ivalue);
 				break;
 			case 8:
-				put_long(temp, rhsData.lvalue);
+				PUT_LONG(temp, rhsData.lvalue);
 				break;
 			}
 		}
 	}
 
-	put_byte(out, cmd);
-	put_byte(out, count);
-	put_buf(out, temp);
-	put_long(out, -1);
-	free_buffer(temp);
+	PUT_BYTE(out, cmd);
+	PUT_BYTE(out, count);
+	PUT_BUF(out, temp);
+	PUT_LONG(out, -1);
+	FREE_BUFFER(temp);
 
 	return back;
 }
