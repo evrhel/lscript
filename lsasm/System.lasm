@@ -8,7 +8,8 @@ class System
 	function static interp startProcess(object String processName, object String commandLine, object String workingDir)
 		object procObj
 		seto procObj new Process <init>()
-		static_call Process.startProcess(LString;LString;LString;) processName commandLine workingDir
+		#static_call Process.startProcess(LString;LString;LString;) processName commandLine workingDir
+		static_call Process.test(I) dword[10]
 		setr procObj.nativeHandle
 		if procObj.nativeHandle == ulong[0]
 			reto null

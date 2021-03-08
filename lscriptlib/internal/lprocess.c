@@ -34,6 +34,40 @@ void cleanup_processes()
 	}
 }
 
+LNIFUNC void LNICALL Process_test(LEnv venv, lclass vclazz, lint var, lint var2, lint var3)
+{
+	STARTUPINFOA si;
+	PROCESS_INFORMATION pi;
+
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+
+	char buf[MAX_PATH] = "C:\\Windows\\notepad.exe";
+	// Start the child process. 
+	if (!CreateProcessA(buf,   // No module name (use command line)
+		NULL,        // Command line
+		NULL,           // Process handle not inheritable
+		NULL,           // Thread handle not inheritable
+		FALSE,          // Set handle inheritance to FALSE
+		0,              // No creation flags
+		NULL,           // Use parent's environment block
+		NULL,           // Use parent's starting directory 
+		&si,            // Pointer to STARTUPINFO structure
+		&pi)           // Pointer to PROCESS_INFORMATION structure
+		)
+	{
+		return 23;
+	}
+
+	// Wait until child process exits.
+	WaitForSingleObject(pi.hProcess, INFINITE);
+
+	// Close process and thread handles. 
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+}
+
 LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject processName, lobject commandLine, lobject workingDir)
 {
 	env_t *env = (env_t *)venv;
@@ -71,7 +105,7 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 		return 0;
 	}
 
-	procStruct->si = (LPSTARTUPINFO)malloc(sizeof(STARTUPINFO));
+	procStruct->si = (LPSTARTUPINFOA)malloc(sizeof(STARTUPINFOA));
 	if (!procStruct->si)
 	{
 		free(procStruct);
@@ -107,8 +141,8 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 	ZeroMemory(procStruct->pi, sizeof(*(procStruct->pi)));
 
 	if (!CreateProcessA(
-		NULL,
 		&procStruct->procName,
+		NULL,
 		NULL,
 		NULL,
 		FALSE,
@@ -133,7 +167,6 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 	{
 		g_processes = procStruct;
 	}
-
 	return (lulong)procStruct;
 }
 

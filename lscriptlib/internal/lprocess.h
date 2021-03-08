@@ -4,7 +4,7 @@
 #include "../lscript.h"
 
 void cleanup_processes();
-
+LNIFUNC void LNICALL Process_test(LEnv venv, lclass vclazz, lint var);
 LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject processName, lobject commandLine, lobject workingDir);
 LNIFUNC luint LNICALL Process_getPID(LEnv venv, lclass vclazz, lulong nativeHandle);
 LNIFUNC lint LNICALL Process_wait(LEnv venv, lclass vclazz, lulong nativeHandle, luint length);
