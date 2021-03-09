@@ -9,12 +9,41 @@
 static buffer_t *__ensure_capacity(buffer_t *buf, size_t required);
 
 #if defined(_DEBUG)
-#define CHECK(buffer) check((buffer))
-#else
-#define CHECK(buffer)
-#endif
 
-#if defined(_DEBUG)
+#define YELLOW (FOREGROUND_RED | FOREGROUND_GREEN)
+#define RED (FOREGROUND_RED)
+#define GREEN (FOREGROUND_GREEN)
+
+#define SAFETY_SIZE 16
+#define SAFETY_BYTE ((char)0xaf)
+
+#define CHECK(buffer) check((buffer))
+
+typedef struct block_link_s block_link_t;
+typedef struct buffer_link_s buffer_link_t;
+
+struct block_link_s
+{
+	void *block;
+	size_t size;
+	const char *file;
+	int line;
+	int freed;
+	block_link_t *next, *prev;
+};
+
+struct buffer_link_s
+{
+	buffer_t *buf;
+	const char *file;
+	int line;
+	int freed;
+	buffer_link_t *next, *prev;
+};
+
+static block_link_t *g_blockList = NULL;
+static buffer_link_t *g_bufferList = NULL;
+
 static inline void check(buffer_t *buf)
 {
 	if (buf->cursor > buf->end)
@@ -32,39 +61,6 @@ static inline void check(buffer_t *buf)
 #endif
 	}
 }
-#endif
-
-#if defined(_DEBUG)
-
-#define YELLOW (FOREGROUND_RED | FOREGROUND_GREEN)
-#define RED (FOREGROUND_RED)
-#define GREEN (FOREGROUND_GREEN)
-
-#define SAFETY_SIZE 16
-#define SAFETY_BYTE 0xaf
-
-typedef struct block_link_s block_link_t;
-typedef struct buffer_link_s buffer_link_t;
-
-struct block_link_s
-{
-	void *block;
-	size_t size;
-	const char *file;
-	int line;
-	buffer_link_t *next, *prev;
-};
-
-struct buffer_link_s
-{
-	buffer_t *buf;
-	const char *file;
-	int line;
-	buffer_link_t *next, *prev;
-};
-
-static block_link_t *g_blockList = NULL;
-static buffer_link_t *g_bufferList = NULL;
 
 static inline void print_console(short color, const char *format, ...)
 {
@@ -92,50 +88,61 @@ void __begin_debug_d()
 
 void *__malloc_d(size_t size, const char *file, int line)
 {
-	print_console(YELLOW, "MALLOC: size %ull at %s.%d\n", size, file, line);
 	char *block = (char *)malloc(size + (2 * SAFETY_SIZE));
 	if (!block)
 	{
 		print_console(RED, "MALLOC_ERROR: failed to allocate at %s.%d\n", file, line);
 		return NULL;
 	}
+	void *result = block + SAFETY_SIZE;
 
-	if (!g_bufferList)
+	print_console(YELLOW, "MALLOC: %p, size %ull at %s.%d\n", (void *)(block + SAFETY_SIZE), size, file, line);
+
+	if (!g_blockList)
 	{
 		g_blockList = (block_link_t *)malloc(sizeof(block_link_t));
 		if (!g_blockList)
-			return block;
-		g_blockList->block = block;
+			return result;
+		g_blockList->freed = 0;
+		g_blockList->size = size;
+		g_blockList->block = result;
 		g_blockList->file = file;
 		g_blockList->line = line;
-		g_blockList->next = g_blockList->prev = NULL;
+		g_blockList->next = NULL;
+		g_blockList->prev = NULL;
 	}
 	else
 	{
 		block_link_t *link = (block_link_t *)malloc(sizeof(block_link_t));
 		if (!link)
-			return block + SAFETY_SIZE;
+			return result;
+		link->freed = 0;
+		link->size = size;
 		link->file = file;
 		link->line = line;
-		g_blockList->prev = link;
-		link->next = g_bufferList;
+		link->next = g_blockList;
 		link->prev = NULL;
-		link->block = block;
+		link->block = result;
+		g_blockList->prev = link;
 		g_blockList = link;
 	}
 
 	memset(block, SAFETY_BYTE, SAFETY_SIZE);
 	memset(block + SAFETY_SIZE + size, SAFETY_BYTE, SAFETY_SIZE);
 
-	return block + SAFETY_SIZE;
+
+	return result;
 }
 
 void *__calloc_d(size_t count, size_t size, const char *file, int line)
 {
-	return __malloc_d(count * size, file, line);
+	void *result = __malloc_d(count * size, file, line);
+	if (result)
+		memset(result, 0, count * size);
+	return result;
 }
 
-void *__memcpy_d(void *dst, const void *src, size_t size)
+void *__memcpy_d(void *dst, const void *src, size_t size, const char *file, int line)
 {
 	return memcpy(dst, src, size);
 }
@@ -154,9 +161,15 @@ void __free_d(void *block, const char *file, int line)
 	{
 		next = curr->next;
 
-		if (curr->block == block)
+		if ((void *)curr->block == block)
 		{
-			curr->block = NULL;
+			if (curr->freed)
+			{
+				print_console(RED, "FREE_WARNING: Freeing block %p, size %ull which was already freed at %s.%d (from %s.%d)!\n", (void *)block, curr->size, file, line, curr->file, curr->line);
+				MessageBoxA(NULL, "Freeing block which was already freed", "Free Warning", MB_ICONERROR | MB_OK);
+				RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
+			}
+			curr->freed = 1;
 			found = 1;
 			break;
 		}
@@ -168,6 +181,8 @@ void __free_d(void *block, const char *file, int line)
 	{
 		print_console(RED, "FREE_WARNING: Freeing something which was not allocated properly!\n");
 		print_console(GREEN, "FREE: %p, at %s.%d (unknown source)\n", (void *)block, file, line);
+		MessageBoxA(NULL, "Freeing a block which was not allocated properly", "Free Warning", MB_ICONERROR | MB_OK);
+		RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
 		free(block);
 	}
 	else
@@ -179,7 +194,9 @@ void __free_d(void *block, const char *file, int line)
 			if (*cur != SAFETY_BYTE)
 			{
 				print_console(RED, "FREE_WARNING: Detected buffer underflow at %p, size %ull at %s.%d (from %s.%d)\n", (void *)block, curr->size, file, line, curr->file, curr->line);
-				return;
+				MessageBoxA(NULL, "Detected buffer underflow", "Block Corruption!", MB_ICONERROR | MB_OK);
+				RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
+				break;
 			}
 			cur++;
 		}
@@ -191,7 +208,9 @@ void __free_d(void *block, const char *file, int line)
 			if (*cur != SAFETY_BYTE)
 			{
 				print_console(RED, "FREE_WARNING: Detected buffer overflow at %p, size %ull at %s.%d (from %s.%d)\n", (void *)block, curr->size, file, line, curr->file, curr->line);
-				return;
+				MessageBoxA(NULL, "Detected buffer overflow", "Block Corruption!", MB_ICONERROR | MB_OK);
+				RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
+				break;
 			}
 			cur++;
 		}
@@ -215,6 +234,7 @@ buffer_t *__new_buffer_d(size_t size, const char *file, int line)
 		g_bufferList = (buffer_link_t *)malloc(sizeof(buffer_link_t));
 		if (!g_bufferList)
 			return buf;
+		g_bufferList->freed = 0;
 		g_bufferList->buf = buf;
 		g_bufferList->file = file;
 		g_bufferList->line = line;
@@ -225,6 +245,7 @@ buffer_t *__new_buffer_d(size_t size, const char *file, int line)
 		buffer_link_t *link = (buffer_link_t *)malloc(sizeof(buffer_link_t));
 		if (!link)
 			return buf;
+		link->freed = 0;
 		link->file = file;
 		link->line = line;
 		g_bufferList->prev = link;
@@ -249,7 +270,14 @@ void __free_buffer_d(buffer_t *buf, const char *file, int line)
 		next = curr->next;
 		if (curr->buf == buf)
 		{
-			curr->buf = NULL;
+			if (curr->freed)
+			{
+				print_console(RED, "FREE_BUFFER_WARNING: Freeing buffer %p, offset %ull, size %ull which was already freed at %s.%d (from %s.%d)!\n",
+					(void *)buf, (size_t)(buf->cursor - buf->buf), (size_t)(buf->end - buf->buf), file, line, curr->file, curr->line);
+				MessageBoxA(NULL, "Freeing a buffer which was already freed", "Buffer Warning", MB_ICONERROR | MB_OK);
+				RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
+			}
+			curr->freed = 1;
 			found = 1;
 			break;
 		}
@@ -261,6 +289,8 @@ void __free_buffer_d(buffer_t *buf, const char *file, int line)
 	{
 		print_console(RED, "FREE_BUFFER_WARNING: Freeing something which is not likely to be a buffer!\n");
 		print_console(GREEN, "FREE_BUFFER: %p, offset %ull, size %ull at %s.%d (unknown source)\n", (void *)buf, (size_t)(buf->cursor - buf->buf), (size_t)(buf->end - buf->buf), file, line);
+		MessageBoxA(NULL, "Freeing an unlikely buffer candidate", "Buffer Warning", MB_ICONERROR | MB_OK);
+		RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
 		check(buf);
 	}
 	else
@@ -324,7 +354,7 @@ void __end_debug_d()
 	{
 		bnext = bcurr->next;
 
-		if (bcurr->block != NULL)
+		if (!bcurr->freed)
 		{
 			print_console(RED, "END_DEBUG_WARNING: Block %p not freed properly, (from %s.%d).\n", (void *)bcurr->block, bcurr->file, bcurr->line);
 			count++;
@@ -353,7 +383,7 @@ void __end_debug_d()
 	{
 		next = curr->next;
 
-		if (curr->buf != NULL)
+		if (!curr->freed)
 		{
 			print_console(RED, "END_DEBUG_WARNING: Buffer %p not freed properly, (from %s.%d).\n", (void *)curr->buf, curr->file, curr->line);
 			count++;
@@ -372,6 +402,8 @@ void __end_debug_d()
 	}
 }
 
+#else
+#define CHECK(buffer)
 #endif
 
 buffer_t *__new_buffer(size_t size)

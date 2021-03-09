@@ -35,7 +35,7 @@ compile_error_t *link(input_file_t *files, unsigned int linkVersion, msg_func_t 
 		files = files->next;
 	}
 
-	return errors;
+	return errors ? errors->front : NULL;
 }
 
 compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned int linkVersion)
@@ -51,7 +51,7 @@ compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned
 	long len = ftell(file);
 	fseek(file, 0, SEEK_SET);
 
-	byte_t *data = (byte_t *)malloc(len);
+	byte_t *data = (byte_t *)MALLOC(len);
 	if (!data)
 		return add_compile_error(back, filepath, 0, error_error, "Failed to allocate buffer");
 
@@ -85,7 +85,7 @@ compile_error_t *link_file(const char *filepath, compile_error_t *back, unsigned
 
 	fclose(file);
 
-	free(data);
+	FREE(data);
 
 	if (hasWarnings)
 		back = add_compile_error(back, NULL, 0, error_info, "%s linked with warnings.", filepath);
@@ -99,8 +99,8 @@ compile_error_t *link_data(byte_t *data, size_t len, const char *srcFile, compil
 {
 	byte_t *counter = data;
 	byte_t *end = data + len;
-	size_t *linkLoc;
-	byte_t *controlEnd;
+	//size_t *linkLoc;
+	//byte_t *controlEnd;
 
 	counter += 5; // (unused) compressed bit and version number
 
@@ -473,7 +473,7 @@ perform_if_link:
 	if (exitLinkLoc && exitLoc)
 		*exitLinkLoc = exitLoc - start;
 
-	return failLinkLoc + 1; // Return start of next command
+	return (byte_t *)(failLinkLoc + 1); // Return start of next command
 }
 
 byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, const char *srcFile, compile_error_t **backPtr)
@@ -505,7 +505,7 @@ byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, 
 			off += sizeof(size_t);
 			if (level == 0 && searchType & search_end)
 			{
-				topLinkLoc = off - sizeof(size_t);
+				topLinkLoc = (size_t *)(off - sizeof(size_t));
 				failLoc = off;
 				if (searchType & search_no_link)
 					return off;
@@ -539,7 +539,7 @@ perform_while_link:
 	if (topLoc)
 		*topLinkLoc = topLoc - start;
 
-	return failLinkLoc + 1; // Return start of next command
+	return (byte_t *)(failLinkLoc + 1); // Return start of next command
 }
 
 byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart, const char *srcFile, compile_error_t **backPtr)

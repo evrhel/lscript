@@ -6,6 +6,7 @@
 
 #include "compiler.h"
 #include "linker.h"
+#include "buffer.h"
 
 #define LSASM_VERSION "1.0.0"
 
@@ -29,6 +30,10 @@ int main(int argc, char *argv[])
 	alignment_t alignment;
 	alignment.functionAlignment = 32;
 	alignment.globalAlignment = 8;
+
+	BEGIN_DEBUG();
+
+
 	for (int i = 1; i < argc; i++)
 	{
 		if (equals_ignore_case(argv[i], "-h"))
@@ -113,29 +118,48 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	compile_error_t *errors;
+	compile_error_t *errors = NULL;
 	input_file_t *linkFiles = NULL;
+	int freeLinkFiles = 0;
 	
 	if (runCompiler)
 	{
 		printf("[BEGIN COMPILE]\n");
 		errors = compile(files, outputDirectory, version, compileDebug, alignment, (msg_func_t)puts, &linkFiles);
+		free_file_list(files, 0);
+
 		if (are_errors(errors))
+		{
+			free_compile_error_list(errors);
+			END_DEBUG();
 			return RETURN_COMPILE_ERROR;
+		}
+		free_compile_error_list(errors);
 		putc('\n', stdout);
 	}
 
 	if (!linkFiles)
 		linkFiles = files;
+	else
+		freeLinkFiles = 1;
 
 	if (runLinker)
 	{
 		printf("[BEGIN LINK]\n");
 		errors = link(linkFiles, version, (msg_func_t)puts);
+
+		free_file_list(linkFiles, freeLinkFiles);
+
 		if (are_errors(errors))
+		{
+			free_compile_error_list(errors);
+			END_DEBUG();
 			return RETURN_LINK_ERROR;
+		}
+		free_compile_error_list(errors);
 	}
 
+	END_DEBUG();
 	return RETURN_NORMAL;
 }
 

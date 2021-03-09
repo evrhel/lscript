@@ -46,8 +46,6 @@ static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t to
 compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, int debug,
 	alignment_t alignment, msg_func_t messenger, input_file_t **outputFiles)
 {
-	BEGIN_DEBUG();
-
 	compile_error_t *errors = create_base_compile_error(messenger);
 	input_file_t *base = (input_file_t *)MALLOC(sizeof(input_file_t));
 	if (!base)
@@ -82,10 +80,8 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 		curr = curr->next;
 	}
 
-	END_DEBUG();
-
 	*outputFiles = front;
-	return errors;
+	return errors ? errors->front : NULL;
 }
 
 compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back,
@@ -131,8 +127,10 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		}
 	}
 
-	size_t filenameSize = strlen(outputDirectory) + 1 + strlen(file) + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
-	char *nstr = (char *)MALLOC(filenameSize);
+	size_t outputDirSize = strlen(outputDirectory);
+	size_t fileSize = strlen(file);
+	size_t fullnameSize = outputDirSize + 1 + fileSize + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
+	char *nstr = (char *)MALLOC(fullnameSize);
 	char *nameoff = nstr + strlen(outputDirectory) + 1;
 	if (!nstr)
 	{
@@ -141,7 +139,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	}
 	MEMCPY(nstr, outputDirectory, strlen(outputDirectory));
 	*(nameoff - 1) = '\\';
-	MEMCPY(nameoff, file, filenameSize);
+	MEMCPY(nameoff, file, fileSize + 1);
 	char *lastSep = strrchr(nameoff, '\\');
 	if (!lastSep)
 		lastSep = strrchr(nameoff, '\\');
@@ -181,14 +179,14 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 	if (debug)
 	{
-		filenameSize++;
-		nstr = (char *)MALLOC(filenameSize);
+		fullnameSize++;
+		nstr = (char *)MALLOC(fullnameSize);
 		if (!nstr)
 		{
 			FREE(buf);
 			return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
 		}
-		MEMCPY(nstr, file, filenameSize);
+		MEMCPY(nstr, file, fileSize + 1);
 		lastSep = strrchr(nstr, '\\');
 		if (!lastSep)
 			lastSep = strrchr(nstr, '/');
@@ -213,12 +211,16 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 		FILE *dfout;
 		fopen_s(&dfout, nstr, "wb");
-		fwrite(&version, sizeof(unsigned int), 1, dfout);
-		fputs(file, dfout);
-		fwrite(dbuf->buf, sizeof(char), (size_t)(dbuf->cursor - dbuf->buf), dfout);
-
+		if (dfout)
+		{
+			fwrite(&version, sizeof(unsigned int), 1, dfout);
+			fputs(file, dfout);
+			fwrite(dbuf->buf, sizeof(char), (size_t)(dbuf->cursor - dbuf->buf), dfout);
+			fclose(dfout);
+		}
+		else
+			return add_compile_error(back, file, 0, error_warning, "Failed to fopen for write debug information");
 		FREE(nstr);
-		fclose(dfout);
 		FREE_BUFFER(dbuf);
 	}
 
@@ -227,6 +229,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	else
 		back = add_compile_error(back, NULL, 0, error_info, "%s successfully built.", file);
 
+	FREE(buf);
 	return back ? back->front : NULL;
 }
 
@@ -486,11 +489,19 @@ line_t *format_document(const char *data, size_t datalen)
 			linebuf = NEW_BUFFER(32);
 		}
 		else
+		{
 			FREE_BUFFER(linebuf);
+			linebuf = NULL;
+		}
 	}
 	else
+	{
 		FREE_BUFFER(linebuf);
+		linebuf = NULL;
+	}
 
+	if (linebuf)
+		FREE_BUFFER(linebuf);
 
 	return front;
 }

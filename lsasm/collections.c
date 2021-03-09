@@ -4,9 +4,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "buffer.h"
+
 input_file_t *add_file(input_file_t *back, const char *filename)
 {
-	input_file_t *next = (input_file_t *)malloc(sizeof(input_file_t));
+	input_file_t *next = (input_file_t *)MALLOC(sizeof(input_file_t));
 	if (!next)
 		return NULL;
 	if (back)
@@ -23,21 +25,18 @@ input_file_t *add_file(input_file_t *back, const char *filename)
 
 void free_file_list(input_file_t *front, int freeData)
 {
-	input_file_t *curr = front;
-	input_file_t *next = NULL;
-	while (curr)
+	if (front)
 	{
-		next = curr->next;
+		free_file_list(front->next, freeData);
 		if (freeData)
-			free(curr->filename);
-		free(curr);
-		curr = next;
+			FREE((void *)front->filename);
+		FREE(front);
 	}
 }
 
 compile_error_t *create_base_compile_error(msg_func_t messenger)
 {
-	compile_error_t *next = (compile_error_t *)malloc(sizeof(compile_error_t));
+	compile_error_t *next = (compile_error_t *)MALLOC(sizeof(compile_error_t));
 	if (!next)
 		return NULL;
 	next->file = NULL;
@@ -52,7 +51,7 @@ compile_error_t *create_base_compile_error(msg_func_t messenger)
 
 compile_error_t *add_compile_error(compile_error_t *back, const char *file, int line, int type, const char *format, ...)
 {
-	compile_error_t *next = (compile_error_t *)malloc(sizeof(compile_error_t));
+	compile_error_t *next = (compile_error_t *)MALLOC(sizeof(compile_error_t));
 	if (!next)
 		return NULL;
 	if (back)
@@ -115,10 +114,9 @@ compile_error_t *add_compile_error(compile_error_t *back, const char *file, int 
 
 void free_compile_error_list(compile_error_t *front)
 {
-	compile_error_t *curr = front;
-	while (curr)
+	if (front)
 	{
-		curr = front->next;
-		free(front);
+		free_compile_error_list(front->next);
+		FREE(front);
 	}
 }

@@ -20,8 +20,8 @@ void __begin_debug_d();
 
 void *__malloc_d(size_t size, const char *file, int line);
 void *__calloc_d(size_t count, size_t size, const char *file, int line);
-void *__memcpy_d(void *dst, const void *src, size_t size);
-void __free_d(void *block);
+void *__memcpy_d(void *dst, const void *src, size_t size, const char *file, int line);
+void __free_d(void *block, const char *file, int line);
 
 buffer_t *__new_buffer_d(size_t size, const char *file, int line);
 void __free_buffer_d(buffer_t *buf, const char *file, int line);
@@ -66,7 +66,33 @@ void __end_debug_d();
 #define END_DEBUG() __end_debug_d()
 
 #else
+
+#define BEGIN_DEBUG()
+
+#define MALLOC(size) malloc(size)
+#define CALLOC(count, size) calloc(count, size)
+#define MEMCPY(dst, src, size) memcpy(dst, src, size)
+#define FREE(block) free(block)
+
+#define NEW_BUFFER(size) __new_buffer(size)
+#define FREE_BUFFER(buffer) __free_buffer(buffer)
 #define PUT_CHAR(buffer, c) __put_char(buffer, c)
+#define PUT_UCHAR(buffer, uc) PUT_CHAR(buffer, (char)(uc))
+#define PUT_BYTE(buffer, b) PUT_CHAR(buffer, (char)(b))
+#define PUT_SHORT(buffer, s) __put_short(buffer, s)
+#define PUT_USHORT(buffer, us) PUT_SHORT(buffer, (short)(us))
+#define PUT_INT(buffer, i) __put_int(buffer, i)
+#define PUT_UINT(buffer, ui) PUT_INT(buffer, (int)(ui))
+#define PUT_LONG(buffer, l) __put_long(buffer, l)
+#define PUT_ULONG(buffer, ul) PUT_LONG(buffer, (long long)(ul))
+#define PUT_FLOAT(buffer, f) __put_float(buffer, f)
+#define PUT_DOUBLE(buffer, d) __put_double(buffer, d)
+#define PUT_MEM(buffer, mem, size) __put_mem(buffer, mem, size)
+#define PUT_BUF(buffer, other) PUT_MEM(buffer, (other)->buf, (size_t)((other)->cursor - (other)->buf))
+#define PUT_BYTES(buffer, byte, count) __put_bytes(buffer, byte, count)
+#define PUT_STRING(buffer, str) PUT_MEM(buffer, str, strlen(str) + 1)
+
+#define END_DEBUG()
 
 #endif
 
@@ -93,39 +119,5 @@ inline buffer_t *__put_bytes(buffer_t *buf, char byte, size_t count)
 	return buf;
 }
 
-/*inline buffer_t *put_uchar(buffer_t *buf, unsigned char c)
-{
-	return put_char(buf, (char)c);
-}
-
-inline buffer_t *put_byte(buffer_t *buf, byte_t b)
-{
-	return put_char(buf, (char)b);
-}
-
-inline buffer_t *put_ushort(buffer_t *buf, unsigned short s)
-{
-	return put_short(buf, (short)s);
-}
-
-inline buffer_t *put_uint(buffer_t *buf, unsigned int i)
-{
-	return put_int(buf, (int)i);
-}
-
-inline buffer_t *put_ulong(buffer_t *buf, unsigned long long l)
-{
-	return put_long(buf, (long long)l);
-}
-
-inline buffer_t *put_buf(buffer_t *buf, const buffer_t *other)
-{
-	return put_mem(buf, other->buf, (size_t)(other->cursor - other->buf));
-}
-
-inline buffer_t *put_string(buffer_t *buf, const char *str)
-{
-	return put_mem(buf, str, strlen(str) + 1);
-}*/
 
 #endif
