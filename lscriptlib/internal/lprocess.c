@@ -4,6 +4,8 @@
 
 #include <Windows.h>
 
+#include <stdio.h>
+
 typedef struct process_s process_t;
 struct process_s
 {
@@ -39,7 +41,9 @@ LNIFUNC void LNICALL Process_test(LEnv venv, lclass vclazz, lint var, lint var2,
 	STARTUPINFOA si;
 	PROCESS_INFORMATION pi;
 
-	ZeroMemory(&si, sizeof(si));
+	printf("%p\n", (void *)venv);
+
+	/*ZeroMemory(&si, sizeof(si));
 	si.cb = sizeof(si);
 	ZeroMemory(&pi, sizeof(pi));
 
@@ -65,7 +69,7 @@ LNIFUNC void LNICALL Process_test(LEnv venv, lclass vclazz, lint var, lint var2,
 
 	// Close process and thread handles. 
 	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);
+	CloseHandle(pi.hThread);*/
 }
 
 LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject processName, lobject commandLine, lobject workingDir)

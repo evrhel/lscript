@@ -7,60 +7,60 @@ class Main
 	
 	# main function
 	function static interp main(objectarray String args)
-		object myString
-		object myObject
-		seto myString "Hello World"
+		#object myString
+		#object myObject
+		#seto myString "Hello World"
 
-		seto myObject new Main <init>(LString;) myString
-		dynamic_call myObject.print()
+		#seto myObject new Main <init>(LString;) myString
+		#dynamic_call myObject.print()
 
-		if args.length == int[0]
-			dynamic_call System.stdout.println(LString;) "There are no arguments!"
-		else if args.length == int[1]
-			dynamic_call System.stdout.println(LString;) "There is one argument!"
-		else
-			dynamic_call System.stdout.println(LString;) "There is more than one argument!"
-			bool result
-			dynamic_call args[0].equals(LString;) args[1]
-			setr result
-			if result
-				dynamic_call System.stdout.println(LString;) "First and second are equal"
-			else
-				dynamic_call System.stdout.println(LString;) "First and second are not equal"
-			end
-		end
+		#if args.length == int[0]
+		#	dynamic_call System.stdout.println(LString;) "There are no arguments!"
+		#else if args.length == int[1]
+		#	dynamic_call System.stdout.println(LString;) "There is one argument!"
+		#else
+		#	dynamic_call System.stdout.println(LString;) "There is more than one argument!"
+		#	bool result
+		#	dynamic_call args[0].equals(LString;) args[1]
+		#	setr result
+		#	if result
+		#		dynamic_call System.stdout.println(LString;) "First and second are equal"
+		#	else
+		#		dynamic_call System.stdout.println(LString;) "First and second are not equal"
+		#	end
+		#end
 
-		int counter
-		while counter < args.length
-			dynamic_call System.stdout.println(LString;) args[counter]
+		#int counter
+		#while counter < args.length
+		#	dynamic_call System.stdout.println(LString;) args[counter]
 			#dynamic_call System.stdout.println(LString;) args[counter]
-			add counter counter int[1]
-		end
+		#	add counter counter int[1]
+		#end
 
-		object strresult
-		bool compareResult
+		#object strresult
+		#bool compareResult
 
-		dynamic_call System.stdout.print(LString;) "input (type exit to exit): "
-		dynamic_call System.stdin.readLine()
-		setr strresult
+		#dynamic_call System.stdout.print(LString;) "input (type exit to exit): "
+		#dynamic_call System.stdin.readLine()
+		#setr strresult
 
-		dynamic_call strresult.equals(LString;) "exit"
-		setr compareResult
+		#dynamic_call strresult.equals(LString;) "exit"
+		#setr compareResult
 
-		while compareResult == int[0]
-			dynamic_call System.stdout.print(LString;) "You typed: "
-			dynamic_call System.stdout.println(LString;) strresult
+		#while compareResult == int[0]
+		#	dynamic_call System.stdout.print(LString;) "You typed: "
+		#	dynamic_call System.stdout.println(LString;) strresult
 
-			dynamic_call System.stdout.print(LString;) "input (type exit to exit): "
-			dynamic_call System.stdin.readLine()
-			setr strresult
+		#	dynamic_call System.stdout.print(LString;) "input (type exit to exit): "
+		#	dynamic_call System.stdin.readLine()
+		#	setr strresult
 
-			dynamic_call strresult.equals(LString;) "exit"
-			setr compareResult
-		end 
+		#	dynamic_call strresult.equals(LString;) "exit"
+		#	setr compareResult
+		#end 
 
-		intarray array
-		seto array int dword[5]
+		#intarray array
+		#seto array int dword[5]
 
 		object process
 		static_call System.startProcess(LString;LString;LString;) "C:\\Windows\\notepad.exe" "test1" "test2"

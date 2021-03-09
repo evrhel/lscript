@@ -36,7 +36,7 @@ class Process
 		static_call freeProcessData(q) this.nativeHandle
 		ret
 
-	function static native test(int var)
+	function static native test(int var, int var2, int var3)
 	function static native startProcess(object String processName, object String commandLine, object String workingDir)
 	function static native getPID(ulong nativeHandle)
 	function static native wait(ulong nativeHandle, uint length)

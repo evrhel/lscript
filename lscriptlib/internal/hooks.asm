@@ -47,7 +47,7 @@ vm_call_extern_asm PROC
 	; Put first argument in rcx
 	mov rcx, qword ptr[r10]
 	sub rax, 8
-	mov qword ptr[r13], rcx
+	;mov qword ptr[r13], rcx
 	add r13, 8
 	test rax, rax
 	je startCall
@@ -55,7 +55,7 @@ vm_call_extern_asm PROC
 	; Put second argument in rdx
 	mov rdx, qword ptr[r10 + 8]
 	sub rax, 8
-	mov qword ptr[r13], rdx
+	;mov qword ptr[r13], rdx
 	add r13, 8
 	test rax, rax
 	je startCall
@@ -63,7 +63,7 @@ vm_call_extern_asm PROC
 	; Put third argument in r8
 	mov r8, qword ptr[r10 + 16]
 	sub rax, 8
-	mov qword ptr[r13], r8
+	;mov qword ptr[r13], r8
 	add r13, 8
 	test rax, rax
 	je startCall
@@ -71,7 +71,7 @@ vm_call_extern_asm PROC
 	; Put fourth argument in r9
 	mov r9, qword ptr[r10 + 24]
 	sub rax, 8
-	mov qword ptr[r13], r9
+	;mov qword ptr[r13], r9
 	add r13, 8
 	test rax, rax
 	je startCall

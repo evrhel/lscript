@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <Windows.h>
+
 #include "mem_debug.h"
 #include "cast.h"
 #include "value.h"
@@ -1120,6 +1122,36 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		}
 
 		env->qret = vm_call_extern_asm(function->numargs + 2, NULL, args, function->location);
+
+		STARTUPINFOA si;
+		PROCESS_INFORMATION pi;
+		ZeroMemory(&si, sizeof(si));
+		si.cb = sizeof(si);
+		ZeroMemory(&pi, sizeof(pi));
+
+		char buf[MAX_PATH] = "C:\\Windows\\notepad.exe";
+		// Start the child process. 
+		if (!CreateProcessA(buf,   // No module name (use command line)
+			NULL,        // Command line
+			NULL,           // Process handle not inheritable
+			NULL,           // Thread handle not inheritable
+			FALSE,          // Set handle inheritance to FALSE
+			0,              // No creation flags
+			NULL,           // Use parent's environment block
+			NULL,           // Use parent's starting directory 
+			&si,            // Pointer to STARTUPINFO structure
+			&pi)           // Pointer to PROCESS_INFORMATION structure
+			)
+		{
+			return 23;
+		}
+
+		// Wait until child process exits.
+		WaitForSingleObject(pi.hProcess, INFINITE);
+
+		// Close process and thread handles. 
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
 
 		FREE(types);
 		FREE(args);
