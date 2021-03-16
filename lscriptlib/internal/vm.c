@@ -1911,6 +1911,42 @@ int env_run(env_t *env, void *location)
 			if (!vmm_mod(env, &env->rip))
 				return env->exception;
 			break;
+		case lb_and:
+			env->rip++;
+			if (!vmm_and(env, &env->rip))
+				return env->exception;
+			break;
+		case lb_or:
+			env->rip++;
+			if (!vmm_or(env, &env->rip))
+				return env->exception;
+			break;
+		case lb_xor:
+			env->rip++;
+			if (!vmm_xor(env, &env->rip))
+				return env->exception;
+			break;
+		case lb_lsh:
+			env->rip++;
+			if (!vmm_lsh(env, &env->rip))
+				return env->exception;
+			break;
+		case lb_rsh:
+			env->rip++;
+			if (!vmm_rsh(env, &env->rip))
+				return env->exception;
+			break;
+
+		case lb_neg:
+			env->rip++;
+			if (!vmm_neg(env, &env->rip))
+				return env->exception;
+			break;
+		case lb_not:
+			env->rip++;
+			if (!vmm_not(env, &env->rip))
+				return env->exception;
+			break;
 
 		case lb_while:
 			if (!vmc_compare(env, &env->rip))

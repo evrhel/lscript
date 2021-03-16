@@ -54,4 +54,18 @@ Handles the mod command
 */
 int vmm_mod(env_t *env, byte_t **argLoc);
 
+int vmm_neg(env_t *env, byte_t **argLoc);
+
+int vmm_and(env_t *env, byte_t **argLoc);
+
+int vmm_or(env_t *env, byte_t **argLoc);
+
+int vmm_xor(env_t *env, byte_t **argLoc);
+
+int vmm_lsh(env_t *env, byte_t **argLoc);
+
+int vmm_rsh(env_t *env, byte_t **argLoc);
+
+int vmm_not(env_t *env, byte_t **argLoc);
+
 #endif

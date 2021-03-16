@@ -41,6 +41,7 @@ static compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, 
 static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_unary_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
 compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, int debug,
@@ -346,7 +347,17 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_mul:
 			case lb_div:
 			case lb_mod:
+			case lb_and:
+			case lb_or:
+			case lb_xor:
+			case lb_lsh:
+			case lb_rsh:
 				back = handle_math_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				break;
+
+			case lb_neg:
+			case lb_not:
+				back = handle_unary_math_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 
 			case lb_if:
@@ -629,6 +640,21 @@ byte_t get_command_byte(const char *string)
 		return lb_div;
 	else if (!strcmp(string, "mod"))
 		return lb_mod;
+	else if (!strcmp(string, "and"))
+		return lb_and;
+	else if (!strcmp(string, "or"))
+		return lb_or;
+	else if (!strcmp(string, "xor"))
+		return lb_xor;
+	else if (!strcmp(string, "lsh"))
+		return lb_lsh;
+	else if (!strcmp(string, "rsh"))
+		return lb_rsh;
+
+	else if (!strcmp(string, "neg"))
+		return lb_neg;
+	else if (!strcmp(string, "not"))
+		return lb_not;
 
 	else if (!strcmp(string, "if"))
 		return lb_if;
@@ -1950,7 +1976,7 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 
 	if (!argIsAbsolute)
 	{
-		return add_compile_error(back, srcFile, srcLine, error_error, "Arithmetic operation requires absolute type");
+		return add_compile_error(back, srcFile, srcLine, error_error, "Operation requires absolute type");
 	}
 
 	PUT_BYTE(out, cmd);
@@ -1993,7 +2019,36 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	}
 
 	if (tokenCount > 4)
-		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following arithmetic operation");
+		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following operation");
+
+	return back;
+}
+
+compile_error_t *handle_unary_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	if (tokenCount < 3)
+	{
+		switch (tokenCount)
+		{
+		case 1:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected destination variable name");
+			break;
+		case 2:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected source variable name");
+			break;
+		}
+		return back;
+	}
+
+	const char *dstVar = tokens[1];
+	const char *srcVar = tokens[2];
+
+	PUT_BYTE(out, cmd);
+	PUT_STRING(out, dstVar);
+	PUT_STRING(out, srcVar);
+
+	if (tokenCount > 3)
+		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following unary operation");
 
 	return back;
 }

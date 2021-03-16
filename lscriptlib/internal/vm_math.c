@@ -168,6 +168,84 @@ case lb_double: \
 	break; \
 }
 
+/*
+Performs the requested unary operation a value.
+
+@param dstDataPtr A pointer to the data_t where the result will be stored
+@param srcDataPtr A pointer to the source data_t
+@param dataType The type of data to perform the operation on
+@param op The operation to perform (dst = [op] src)
+@param flopf The special floating point operation function for floats to use
+@param flopd The special floating point operation function for doubles to use
+*/
+#define DO_UNARY_OP(dstDataPtr, srcDataPtr, dataType, op, flopf, flopd) \
+switch (dataType) \
+{ \
+case lb_char: \
+	(dstDataPtr)->cvalue = op (srcDataPtr)->cvalue; \
+	break; \
+case lb_uchar: \
+	(dstDataPtr)->ucvalue = op (srcDataPtr)->ucvalue; \
+	break; \
+case lb_short: \
+	(dstDataPtr)->svalue = op (srcDataPtr)->svalue; \
+	break; \
+case lb_ushort: \
+	(dstDataPtr)->usvalue = op (srcDataPtr)->usvalue; \
+	break; \
+case lb_int: \
+	(dstDataPtr)->ivalue = op (srcDataPtr)->ivalue ; \
+	break; \
+case lb_uint: \
+	(dstDataPtr)->uivalue = op (srcDataPtr)->uivalue; \
+	break; \
+case lb_long: \
+	(dstDataPtr)->lvalue = op (srcDataPtr)->lvalue; \
+	break; \
+case lb_ulong: \
+	(dstDataPtr)->ulvalue = op (srcDataPtr)->ulvalue; \
+	break; \
+case lb_float: \
+	(dstDataPtr)->fvalue = flopf((srcDataPtr)->fvalue); \
+	break; \
+case lb_double: \
+	(dstDataPtr)->dvalue = flopd((srcDataPtr)->dvalue); \
+	break; \
+}
+
+/*
+Performs the requested unary operation on a signed value.
+
+@param dstDataPtr A pointer to the data_t where the result will be stored
+@param srcDataPtr A pointer to the source data_t
+@param dataType The type of data to perform the operation on
+@param op The operation to perform (dst = [op] src)
+@param flopf The special floating point operation function for floats to use
+@param flopd The special floating point operation function for doubles to use
+*/
+#define DO_SIGNED_UNARY_OP(dstDataPtr, srcDataPtr, dataType, op, flopf, flopd) \
+switch (dataType) \
+{ \
+case lb_char: \
+	(dstDataPtr)->cvalue = op (srcDataPtr)->cvalue; \
+	break; \
+case lb_short: \
+	(dstDataPtr)->svalue = op (srcDataPtr)->svalue; \
+	break; \
+case lb_int: \
+	(dstDataPtr)->ivalue = op (srcDataPtr)->ivalue ; \
+	break; \
+case lb_long: \
+	(dstDataPtr)->lvalue = op (srcDataPtr)->lvalue; \
+	break; \
+case lb_float: \
+	(dstDataPtr)->fvalue = flopf((srcDataPtr)->fvalue); \
+	break; \
+case lb_double: \
+	(dstDataPtr)->dvalue = flopd((srcDataPtr)->dvalue); \
+	break; \
+}
+
 int vmm_add(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
@@ -323,6 +401,214 @@ int vmm_mod(env_t *env, byte_t **argLoc)
 
 	// Perform the modulus operation, placing the result in the destination variable
 	DO_OP(dstData, &srcCast, &argCast, dstType, %, fmodf, fmod);
+
+	return 1;
+}
+
+int vmm_neg(env_t *env, byte_t **argLoc)
+{
+	const char *srcName = (const char *)argLoc;
+	const char *dstName;
+	data_t *srcData, *dstData;
+	flags_t srcFlags, dstFlags;
+	byte_t srcType, dstType;
+	data_t srcCast;
+
+	// Get the destination variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &dstName, &dstData, &dstType, &dstFlags);
+
+	// Get the source variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &srcName, &srcData, &srcType, &srcFlags);
+
+	// Cast the source value to the destination type
+	CAST(srcData, srcType, dstType, &srcCast);
+
+	// Perform the negation operation, placing the result in the destination variable
+	DO_SIGNED_UNARY_OP(dstData, &srcCast, dstType, -, -, -);
+
+	return 1;
+}
+
+int vmm_and(env_t *env, byte_t **argLoc)
+{
+	const char *srcName = (const char *)argLoc;
+	const char *argName;
+	const char *dstName;
+	data_t *srcData, *argData, *dstData;
+	flags_t srcFlags, argFlags, dstFlags;
+	byte_t srcType, argType, dstType;
+	data_t srcCast, argCast;
+
+	// Get the destination variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &dstName, &dstData, &dstType, &dstFlags);
+
+	// Get the source variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &srcName, &srcData, &srcType, &srcFlags);
+
+	// Get the type of the next argument in the mod command and fetch the data stored
+	// there, incrementing by the required number of bytes.
+	TRY_FETCH_ARG_DATA(env, argLoc, &argType, &argData, &argFlags);
+
+	// Cast the source value to the destination type
+	CAST(srcData, srcType, dstType, &srcCast);
+
+	// Cast the argument value to the destination type
+	CAST(argData, argType, dstType, &argCast);
+
+	// Perform the bitwise and operation, placing the result in the destination variable
+	DO_OP(dstData, &srcCast, &argCast, dstType, &, , );
+
+	return 1;
+}
+
+int vmm_or(env_t *env, byte_t **argLoc)
+{
+	const char *srcName = (const char *)argLoc;
+	const char *argName;
+	const char *dstName;
+	data_t *srcData, *argData, *dstData;
+	flags_t srcFlags, argFlags, dstFlags;
+	byte_t srcType, argType, dstType;
+	data_t srcCast, argCast;
+
+	// Get the destination variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &dstName, &dstData, &dstType, &dstFlags);
+
+	// Get the source variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &srcName, &srcData, &srcType, &srcFlags);
+
+	// Get the type of the next argument in the mod command and fetch the data stored
+	// there, incrementing by the required number of bytes.
+	TRY_FETCH_ARG_DATA(env, argLoc, &argType, &argData, &argFlags);
+
+	// Cast the source value to the destination type
+	CAST(srcData, srcType, dstType, &srcCast);
+
+	// Cast the argument value to the destination type
+	CAST(argData, argType, dstType, &argCast);
+
+	// Perform the bitwise or operation, placing the result in the destination variable
+	DO_OP(dstData, &srcCast, &argCast, dstType, |, , );
+
+	return 1;
+}
+
+int vmm_xor(env_t *env, byte_t **argLoc)
+{
+	const char *srcName = (const char *)argLoc;
+	const char *argName;
+	const char *dstName;
+	data_t *srcData, *argData, *dstData;
+	flags_t srcFlags, argFlags, dstFlags;
+	byte_t srcType, argType, dstType;
+	data_t srcCast, argCast;
+
+	// Get the destination variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &dstName, &dstData, &dstType, &dstFlags);
+
+	// Get the source variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &srcName, &srcData, &srcType, &srcFlags);
+
+	// Get the type of the next argument in the mod command and fetch the data stored
+	// there, incrementing by the required number of bytes.
+	TRY_FETCH_ARG_DATA(env, argLoc, &argType, &argData, &argFlags);
+
+	// Cast the source value to the destination type
+	CAST(srcData, srcType, dstType, &srcCast);
+
+	// Cast the argument value to the destination type
+	CAST(argData, argType, dstType, &argCast);
+
+	// Perform the bitwise xor operation, placing the result in the destination variable
+	DO_OP(dstData, &srcCast, &argCast, dstType, ^ , , );
+
+	return 1;
+}
+
+int vmm_lsh(env_t *env, byte_t **argLoc)
+{
+	const char *srcName = (const char *)argLoc;
+	const char *argName;
+	const char *dstName;
+	data_t *srcData, *argData, *dstData;
+	flags_t srcFlags, argFlags, dstFlags;
+	byte_t srcType, argType, dstType;
+	data_t srcCast, argCast;
+
+	// Get the destination variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &dstName, &dstData, &dstType, &dstFlags);
+
+	// Get the source variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &srcName, &srcData, &srcType, &srcFlags);
+
+	// Get the type of the next argument in the mod command and fetch the data stored
+	// there, incrementing by the required number of bytes.
+	TRY_FETCH_ARG_DATA(env, argLoc, &argType, &argData, &argFlags);
+
+	// Cast the source value to the destination type
+	CAST(srcData, srcType, dstType, &srcCast);
+
+	// Cast the argument value to the destination type
+	CAST(argData, argType, dstType, &argCast);
+
+	// Perform the bitwise xor operation, placing the result in the destination variable
+	DO_OP(dstData, &srcCast, &argCast, dstType, >>, , );
+
+	return 1;
+}
+
+int vmm_rsh(env_t *env, byte_t **argLoc)
+{
+	const char *srcName = (const char *)argLoc;
+	const char *argName;
+	const char *dstName;
+	data_t *srcData, *argData, *dstData;
+	flags_t srcFlags, argFlags, dstFlags;
+	byte_t srcType, argType, dstType;
+	data_t srcCast, argCast;
+
+	// Get the destination variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &dstName, &dstData, &dstType, &dstFlags);
+
+	// Get the source variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &srcName, &srcData, &srcType, &srcFlags);
+
+	// Get the type of the next argument in the mod command and fetch the data stored
+	// there, incrementing by the required number of bytes.
+	TRY_FETCH_ARG_DATA(env, argLoc, &argType, &argData, &argFlags);
+
+	// Cast the source value to the destination type
+	CAST(srcData, srcType, dstType, &srcCast);
+
+	// Cast the argument value to the destination type
+	CAST(argData, argType, dstType, &argCast);
+
+	// Perform the bitwise xor operation, placing the result in the destination variable
+	DO_OP(dstData, &srcCast, &argCast, dstType, << , , );
+
+	return 1;
+}
+
+int vmm_not(env_t *env, byte_t **argLoc)
+{
+	const char *srcName = (const char *)argLoc;
+	const char *dstName;
+	data_t *srcData, *dstData;
+	flags_t srcFlags, dstFlags;
+	byte_t srcType, dstType;
+	data_t srcCast;
+
+	// Get the destination variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &dstName, &dstData, &dstType, &dstFlags);
+
+	// Get the source variable and its type
+	TRY_FETCH_NEXT_VAR(env, argLoc, &srcName, &srcData, &srcType, &srcFlags);
+
+	// Cast the source value to the destination type
+	CAST(srcData, srcType, dstType, &srcCast);
+
+	// Perform the bitwsie not operation, placing the result in the destination variable
+	DO_UNARY_OP(dstData, &srcCast, dstType, ~, , );
 
 	return 1;
 }
