@@ -63,10 +63,17 @@ class Main
 		#seto array int dword[5]
 
 		object process
-		static_call System.startProcess(LString;LString;LString;) "C:\\Windows\\notepad.exe" "test1" "test2"
+		static_call System.startProcess(LString;LString;LString;) "C:\\Windows\\notepad.exe" null null
+		setr process
+
+
+		dynamic_call System.stdout.println(LString;) "Started process!"
+
 		if process != ulong[0]
 			dynamic_call process.wait(i) Process.INFINITE
 		end
+
+		dynamic_call System.stdout.println(LString;) "Process closed!"
 
 		retd dword[25]
 

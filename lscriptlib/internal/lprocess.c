@@ -6,6 +6,17 @@
 
 #include <stdio.h>
 
+#define CMD_LINE_PADDING 512ULL
+
+typedef struct process_start_params_s process_start_params_t;
+struct process_start_params_s
+{
+	env_t *env;
+	const char *processName;
+	char *commandLine;
+	const char *workingDir;
+};
+
 typedef struct process_s process_t;
 struct process_s
 {
@@ -18,7 +29,12 @@ struct process_s
 	process_t *prev;
 };
 
+static process_t *g_processReturn = NULL;
 static process_t *g_processes = NULL;
+static char g_commandLine[32767]; // A buffer for the command line when a process starts
+
+static void start_process_from_thread(process_start_params_t *startParams);
+static process_t *start_process(env_t *env, const char *processName, char *commandLine, const char *workingDir);
 
 void cleanup_processes()
 {
@@ -36,61 +52,45 @@ void cleanup_processes()
 	}
 }
 
-LNIFUNC void LNICALL Process_test(LEnv venv, lclass vclazz, lint var, lint var2, lint var3)
-{
-	STARTUPINFOA si;
-	PROCESS_INFORMATION pi;
-
-	printf("%p\n", (void *)venv);
-
-	/*ZeroMemory(&si, sizeof(si));
-	si.cb = sizeof(si);
-	ZeroMemory(&pi, sizeof(pi));
-
-	char buf[MAX_PATH] = "C:\\Windows\\notepad.exe";
-	// Start the child process. 
-	if (!CreateProcessA(buf,   // No module name (use command line)
-		NULL,        // Command line
-		NULL,           // Process handle not inheritable
-		NULL,           // Thread handle not inheritable
-		FALSE,          // Set handle inheritance to FALSE
-		0,              // No creation flags
-		NULL,           // Use parent's environment block
-		NULL,           // Use parent's starting directory 
-		&si,            // Pointer to STARTUPINFO structure
-		&pi)           // Pointer to PROCESS_INFORMATION structure
-		)
-	{
-		return 23;
-	}
-
-	// Wait until child process exits.
-	WaitForSingleObject(pi.hProcess, INFINITE);
-
-	// Close process and thread handles. 
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);*/
-}
-
 LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject processName, lobject commandLine, lobject workingDir)
 {
 	env_t *env = (env_t *)venv;
 	class_t *clazz = (class_t *)vclazz;
 
-	array_t *processNameCharArrayField = (array_t *)object_get_object((object_t *)processName, "chars");
+	array_t *processNameCharArrayField = processName ? (array_t *)object_get_object((object_t *)processName, "chars") : NULL;
 	array_t *commandLineCharArrayField = commandLine ? (array_t *)object_get_object((object_t *)commandLine, "chars") : NULL;
 	array_t *workingDirCharArrayField = workingDir ? (array_t *)object_get_object((object_t *)workingDir, "chars") : NULL;
 
-	char *cstrCommandLine, *cstrWorkingDir;
-	
-	cstrCommandLine = commandLineCharArrayField ? (char *)malloc((size_t)commandLineCharArrayField->length + 1ULL) : NULL;
+	process_start_params_t startParams;
+
+	char procName[MAX_PATH];
+	char *cstrWorkingDir;
+
 	cstrWorkingDir = workingDirCharArrayField ? (char *)malloc((size_t)workingDirCharArrayField->length + 1ULL) : NULL;
 
-	if (cstrCommandLine)
+	if (workingDirCharArrayField && !cstrWorkingDir)
 	{
-		memcpy(cstrCommandLine, &commandLineCharArrayField->data, commandLineCharArrayField->length);
-		cstrCommandLine[commandLineCharArrayField->length] = 0;
+		free(cstrWorkingDir);
+		env_raise_exception(env, exception_out_of_memory, "On allocate in startProcess");
+		return 0;
 	}
+
+	if (processNameCharArrayField)
+	{
+		ZeroMemory(procName, sizeof(procName));
+		memcpy(procName, &processNameCharArrayField->data, processNameCharArrayField->length);
+	}
+
+	if (commandLineCharArrayField)
+	{
+		ZeroMemory(g_commandLine, sizeof(g_commandLine));
+		memcpy(g_commandLine, &commandLineCharArrayField->data, commandLineCharArrayField->length);
+	}
+
+	startParams.env = env;
+	startParams.processName = processNameCharArrayField ? procName : NULL;
+	startParams.commandLine = g_commandLine;
+	startParams.workingDir = cstrWorkingDir;
 
 	if (cstrWorkingDir)
 	{
@@ -98,80 +98,27 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 		cstrWorkingDir[workingDirCharArrayField->length] = 0;
 	}
 
-	process_t *procStruct = (process_t *)malloc(sizeof(process_t));
-	if (!procStruct)
+	// For some reason the process can only be created on a separate thread...
+	// I have no idea why :P
+
+	HANDLE handle = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)start_process_from_thread, &startParams, 0, 0);
+	if (!handle)
 	{
-		if (cstrCommandLine)
-			free(cstrCommandLine);
-		if (cstrWorkingDir)
-			free(cstrWorkingDir);
-		env_raise_exception(env, exception_out_of_memory, "On allocate process structure");
+		free(cstrWorkingDir);
+		env_raise_exception(env, exception_illegal_state, "Failed to start thread to start process");
 		return 0;
 	}
 
-	procStruct->si = (LPSTARTUPINFOA)malloc(sizeof(STARTUPINFOA));
-	if (!procStruct->si)
-	{
-		free(procStruct);
-		if (cstrCommandLine)
-			free(cstrCommandLine);
-		if (cstrWorkingDir)
-			free(cstrWorkingDir);
-		env_raise_exception(env, exception_out_of_memory, "On allocate process startup info");
-		return 0;
-	}
+	// Wait for the process to be created
+	WaitForSingleObject(handle, INFINITE);
+	CloseHandle(handle);
 
-	procStruct->pi = (LPPROCESS_INFORMATION)malloc(sizeof(PROCESS_INFORMATION));
-	if (!procStruct->pi)
-	{
-		free(procStruct->si);
-		free(procStruct);
-		if (cstrCommandLine)
-			free(cstrCommandLine);
-		if (cstrWorkingDir)
-			free(cstrWorkingDir);
-		env_raise_exception(env, exception_out_of_memory, "On allocate process process info");
-		return 0;
-	}
+	process_t *processReturn = g_processReturn;
+	g_processReturn = NULL;
 
-	memcpy(procStruct->procName, &processNameCharArrayField->data, processNameCharArrayField->length);
-	procStruct->procName[processNameCharArrayField->length] = 0;
-
-	procStruct->next = NULL;
-	procStruct->prev = NULL;
-
-	ZeroMemory(procStruct->si, sizeof(*(procStruct->si)));
-	procStruct->si->cb = sizeof(*(procStruct->si));
-	ZeroMemory(procStruct->pi, sizeof(*(procStruct->pi)));
-
-	if (!CreateProcessA(
-		&procStruct->procName,
-		NULL,
-		NULL,
-		NULL,
-		FALSE,
-		0,
-		NULL,
-		NULL,
-		procStruct->si,
-		procStruct->pi
-	))
-	{
-		env_raise_exception(env, exception_illegal_state, "On CreateProcessA");
-		return 0;
-	}
-
-	if (g_processes)
-	{
-		g_processes->prev = procStruct;
-		procStruct->next = g_processes;
-		g_processes = procStruct;
-	}
-	else
-	{
-		g_processes = procStruct;
-	}
-	return (lulong)procStruct;
+	free(cstrWorkingDir);
+	
+	return (lulong)processReturn;
 }
 
 LNIFUNC luint LNICALL Process_getPID(LEnv venv, lclass vclazz, lulong nativeHandle)
@@ -234,4 +181,75 @@ LNIFUNC void LNICALL Process_freeProcessData(LEnv venv, lclass vclazz, lulong na
 		}
 		curr = next;
 	}
+}
+
+void start_process_from_thread(process_start_params_t *startParams)
+{
+	g_processReturn = start_process(startParams->env, startParams->processName, startParams->commandLine, startParams->workingDir);
+}
+
+process_t *start_process(env_t *env, const char *processName, char *commandLine, const char *workingDir)
+{
+	process_t *procStruct = (process_t *)malloc(sizeof(process_t));
+	if (!procStruct)
+	{
+		env_raise_exception(env, exception_out_of_memory, "On allocate process structure");
+		return NULL;
+	}
+
+	procStruct->si = (LPSTARTUPINFOA)malloc(sizeof(STARTUPINFOA));
+	if (!procStruct->si)
+	{
+		free(procStruct);
+		env_raise_exception(env, exception_out_of_memory, "On allocate process startup info");
+		return NULL;
+	}
+
+	procStruct->pi = (LPPROCESS_INFORMATION)malloc(sizeof(PROCESS_INFORMATION));
+	if (!procStruct->pi)
+	{
+		free(procStruct->si);
+		free(procStruct);
+		env_raise_exception(env, exception_out_of_memory, "On allocate process process info");
+		return NULL;
+	}
+
+	ZeroMemory(procStruct->procName, sizeof(procStruct->procName));
+	if (processName)
+		strcpy_s(procStruct->procName, sizeof(procStruct->procName), processName);
+	procStruct->next = NULL;
+	procStruct->prev = NULL;
+
+	ZeroMemory(procStruct->si, sizeof(*(procStruct->si)));
+	procStruct->si->cb = sizeof(*(procStruct->si));
+	ZeroMemory(procStruct->pi, sizeof(*(procStruct->pi)));
+
+	if (!CreateProcessA(
+		processName,
+		commandLine,
+		NULL,
+		NULL,
+		FALSE,
+		0,
+		NULL,
+		workingDir,
+		procStruct->si,
+		procStruct->pi
+	))
+	{
+		env_raise_exception(env, exception_illegal_state, "On CreateProcessA");
+		return NULL;
+	}
+
+	if (g_processes)
+	{
+		g_processes->prev = procStruct;
+		procStruct->next = g_processes;
+		g_processes = procStruct;
+	}
+	else
+	{
+		g_processes = procStruct;
+	}
+	return procStruct;
 }

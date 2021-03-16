@@ -49,6 +49,21 @@ break; \
 case lb_bool: \
 PUTFLAGS(lhsData, (rhs)->bvalue, resultPtr); \
 break; \
+case lb_object: \
+case lb_boolarray: \
+case lb_chararray: \
+case lb_uchararray: \
+case lb_shortarray: \
+case lb_ushortarray: \
+case lb_intarray: \
+case lb_uintarray: \
+case lb_longarray: \
+case lb_ulongarray: \
+case lb_floatarray: \
+case lb_doublearray: \
+case lb_objectarray: \
+PUTFLAGS(lhsData, (size_t)(rhs)->ovalue, resultPtr); \
+break; \
 default: \
 (*(resultPtr)) = -1; \
 break; \
@@ -89,6 +104,21 @@ SUBCOMPARE((lhs)->dvalue, rhs, rhf, resultPtr); \
 break; \
 case lb_bool: \
 SUBCOMPARE((lhs)->bvalue, rhs, rhf, resultPtr); \
+break; \
+case lb_object: \
+case lb_boolarray: \
+case lb_chararray: \
+case lb_uchararray: \
+case lb_shortarray: \
+case lb_ushortarray: \
+case lb_intarray: \
+case lb_uintarray: \
+case lb_longarray: \
+case lb_ulongarray: \
+case lb_floatarray: \
+case lb_doublearray: \
+case lb_objectarray: \
+SUBCOMPARE((size_t)(lhs)->ovalue, rhs, rhf, resultPtr); \
 break; \
 default: \
 (*(resultPtr)) = -1; \
