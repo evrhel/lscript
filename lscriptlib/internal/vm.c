@@ -17,7 +17,7 @@
 #define WORD_SIZE sizeof(size_t)
 
 //#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
-#define CURR_FUNC(env) (*(((function_t**)(env)->rbp)+2))
+#define CURR_FUNC(env) (*(((function_t**)(env)->rbp)-1))
 
 #define EXIT_RUN(val) {__retVal=(val);goto done_call;}
 
@@ -1133,8 +1133,8 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 	}
 	else
 	{
-		if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
-			return env_raise_exception(env, exception_stack_overflow, NULL);
+		//if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
+		//	return env_raise_exception(env, exception_stack_overflow, NULL);
 
 		size_t *stackframe = stack_alloc(env, 3);
 		if (!stackframe)
@@ -1144,8 +1144,12 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		*(stackframe + 1) = (size_t)env->rip;
 		*(stackframe + 2) = (size_t)function;
 
-		env->rbp = (byte_t *)stackframe;
-		env->rsp = ((size_t *)env->rsp) + 3;
+		env->rbp = (byte_t *)(stackframe + 3);
+		//env->rbp = 
+			//(byte_t *)stackframe;
+		//env->rsp = (byte_t *)stackframe;
+			
+			//((size_t *)env->rsp) + 3;
 
 		env->variables->next = list_create();
 		env->variables->next->prev = env->variables;
@@ -1187,8 +1191,10 @@ int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls
 	*(stackframe + 1) = (size_t)env->rip;
 	*(stackframe + 2) = (size_t)function;
 
-	env->rbp = (byte_t *)stackframe;
-	env->rsp = ((size_t *)env->rsp) + 3;
+	env->rbp = (byte_t *)(stackframe + 3);
+	//env->rbp = env->rsp;
+	//env->rsp = (byte_t *)stackframe;
+		//((size_t *)env->rsp) + 3;
 
 	env->variables->next = list_create();
 	env->variables->next->prev = env->variables;
@@ -2013,28 +2019,32 @@ int env_cleanup_call(env_t *env)
 	env->variables->next = NULL;
 
 	// Restore the fake registers from the previous call
+	size_t *stackframe = (size_t *)env->rbp - 3;
+	
 	env->rsp = env->rbp;
-	env->rbp = *((void **)env->rbp);
-	env->rip = ((byte_t *)env->rbp) + sizeof(void *);
+	env->rbp = (byte_t *)(*stackframe);
+	env->rip = (byte_t *)(*(stackframe + 1));
+	//env->rip = ((byte_t *)env->rbp) + sizeof(void *);
 
 	return exception_none;
 }
 
 void *stack_push(env_t *env, value_t *value)
 {
-	void *mem = stack_alloc(env, 1);
+	size_t *mem = (size_t *)stack_alloc(env, 2);
 	if (!mem)
 		return NULL;
-	MEMCPY(mem, value, value_sizeof(value));
+	*mem = value->flags;
+	MEMCPY(mem + 1, &value->ovalue, value_sizeof(value));
 	return mem;
 }
 
 void *stack_alloc(env_t *env, size_t words)
 {
-	env->rsp -= sizeof(size_t);
+	env->rsp -= words * sizeof(size_t);
 	if (env->rsp <= env->stack)
 	{
-		env->rsp += sizeof(size_t);
+		env->rsp += words * sizeof(size_t);
 		env_raise_exception(env, exception_stack_overflow, NULL);
 		return NULL;
 	}
