@@ -62,8 +62,8 @@ struct env_s
 	byte_t *cmdStart;
 	vm_t *vm;
 
-	void *stack;
-	void *rsp, *rbp;
+	byte_t *stack;
+	byte_t *rsp, *rbp;
 
 	list_t *variables;
 

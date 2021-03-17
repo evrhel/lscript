@@ -14,6 +14,8 @@
 #include "debug.h"
 #include "lprocess.h"
 
+#define WORD_SIZE sizeof(size_t)
+
 //#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
 #define CURR_FUNC(env) (*(((function_t**)(env)->rbp)+2))
 
@@ -49,6 +51,7 @@ static int env_run(env_t *env, void *location);
 static int env_cleanup_call(env_t *env);
 
 static void *stack_push(env_t *env, value_t *value);
+static void *stack_alloc(env_t *env, size_t words);
 static int stack_pop(env_t *env, flags_t type);
 
 static int is_varname_avaliable(env_t *env, const char *name);
@@ -580,7 +583,7 @@ env_t *env_create(vm_t *vm)
 		FREE(env);
 		return NULL;
 	}
-	env->rsp = env->stack;
+	env->rsp = env->stack + vm->stackSize;
 	env->rbp = env->rsp;
 
 	env->variables = list_create();
@@ -1133,11 +1136,15 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
 			return env_raise_exception(env, exception_stack_overflow, NULL);
 
-		*((size_t *)env->rsp) = (size_t)env->rbp;
-		*((size_t *)env->rsp + 1) = (size_t)env->rip;
-		*((size_t *)env->rsp + 2) = (size_t)function;
+		size_t *stackframe = stack_alloc(env, 3);
+		if (!stackframe)
+			return env->exception;
 
-		env->rbp = env->rsp;
+		*(stackframe) = (size_t)env->rbp;
+		*(stackframe + 1) = (size_t)env->rip;
+		*(stackframe + 2) = (size_t)function;
+
+		env->rbp = (byte_t *)stackframe;
 		env->rsp = ((size_t *)env->rsp) + 3;
 
 		env->variables->next = list_create();
@@ -1171,14 +1178,16 @@ int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls
 {
 	// push the arg list to the stack
 
-	if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
-		return env_raise_exception(env, exception_stack_overflow, NULL);
+	size_t *stackframe = stack_alloc(env, 3);
+	if (!stackframe)
+		return env->exception;
 
-	*((size_t *)env->rsp) = (size_t)env->rbp;
-	*((size_t *)env->rsp + 1) = (size_t)env->rip;
-	*((size_t *)env->rsp + 2) = (size_t)function;
 
-	env->rbp = env->rsp;
+	*(stackframe) = (size_t)env->rbp;
+	*(stackframe + 1) = (size_t)env->rip;
+	*(stackframe + 2) = (size_t)function;
+
+	env->rbp = (byte_t *)stackframe;
 	env->rsp = ((size_t *)env->rsp) + 3;
 
 	env->variables->next = list_create();
@@ -2013,19 +2022,23 @@ int env_cleanup_call(env_t *env)
 
 void *stack_push(env_t *env, value_t *value)
 {
-	byte_t *stack, *stackPtr;
-	stack = (byte_t *)env->stack;
-	stackPtr = (byte_t *)env->rsp;
-	size_t size = value_sizeof(value) + sizeof(value->flags);
-	byte_t *end = stackPtr + size;
-	if ((size_t)(end - stack) >= env->vm->stackSize)
+	void *mem = stack_alloc(env, 1);
+	if (!mem)
+		return NULL;
+	MEMCPY(mem, value, value_sizeof(value));
+	return mem;
+}
+
+void *stack_alloc(env_t *env, size_t words)
+{
+	env->rsp -= sizeof(size_t);
+	if (env->rsp <= env->stack)
 	{
+		env->rsp += sizeof(size_t);
 		env_raise_exception(env, exception_stack_overflow, NULL);
 		return NULL;
 	}
-	MEMCPY(stackPtr, value, size);
-	env->rsp = end;
-	return stackPtr;
+	return env->rsp;
 }
 
 int stack_pop(env_t *env, flags_t type)
