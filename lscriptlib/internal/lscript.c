@@ -124,7 +124,7 @@ LEXPORT lvoid LCALL ls_call_static_void_functionv(LEnv env, lfunction function, 
 
 LEXPORT luint LCALL ls_get_array_length(lobject array)
 {
-	return ls_get_array_length(array);
+	return ((array_t *)array)->length;
 }
 
 int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)

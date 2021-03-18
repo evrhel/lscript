@@ -224,6 +224,13 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount
 #else
 #endif
 
+	class_t *objectClass = vm_load_class(vm, "Object");
+	if (!objectClass)
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
 	class_t *stringClass = vm_load_class(vm, "String");
 	if (!stringClass)
 	{
@@ -2121,6 +2128,7 @@ int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 		if (dstType != srcType)
 			return 0;
 		dst->ovalue = src->ovalue;
+		return 1;
 		break;
 	default:
 		return 0;

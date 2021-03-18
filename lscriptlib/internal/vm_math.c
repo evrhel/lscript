@@ -280,7 +280,6 @@ int vmm_add(env_t *env, byte_t **argLoc)
 int vmm_sub(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;
@@ -344,7 +343,6 @@ int vmm_mul(env_t *env, byte_t **argLoc)
 int vmm_div(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;
@@ -376,7 +374,6 @@ int vmm_div(env_t *env, byte_t **argLoc)
 int vmm_mod(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;
@@ -432,7 +429,6 @@ int vmm_neg(env_t *env, byte_t **argLoc)
 int vmm_and(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;
@@ -464,7 +460,6 @@ int vmm_and(env_t *env, byte_t **argLoc)
 int vmm_or(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;
@@ -496,7 +491,6 @@ int vmm_or(env_t *env, byte_t **argLoc)
 int vmm_xor(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;
@@ -528,7 +522,6 @@ int vmm_xor(env_t *env, byte_t **argLoc)
 int vmm_lsh(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;
@@ -560,7 +553,6 @@ int vmm_lsh(env_t *env, byte_t **argLoc)
 int vmm_rsh(env_t *env, byte_t **argLoc)
 {
 	const char *srcName = (const char *)argLoc;
-	const char *argName;
 	const char *dstName;
 	data_t *srcData, *argData, *dstData;
 	flags_t srcFlags, argFlags, dstFlags;

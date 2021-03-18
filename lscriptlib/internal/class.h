@@ -25,14 +25,15 @@ typedef struct class_s class_t;
 
 struct function_s
 {
-	const char *name;
-	void *location;
-	function_flags_t flags;
-	size_t numargs;
-	const char **args;
-	map_t *argTypes;
-	class_t *parentClass;
-	size_t argSize;
+	const char *name;			// The name of the function
+	void *location;				// The location of the function in memory after its declaration
+	function_flags_t flags;		// The functions's flags
+	size_t numargs;				// The number of arguments this function takes
+	const char **args;			// The name of each argument in order
+	map_t *argTypes;			// A map from a function argument's name to its type
+	class_t *parentClass;		// The function's parent class
+	size_t argSize;				// The total number of bytes all the arguments will take up
+	size_t references;			// The number of references there are to this function
 };
 
 struct class_s

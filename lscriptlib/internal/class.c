@@ -91,6 +91,18 @@ class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, voi
 		}
 		result->super = superclass;
 
+		if (!result->functions)
+			result->functions = map_create(CLASS_HASHTABLE_ENTRIES, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
+		map_iterator_t *mit = map_create_iterator(superclass->functions);
+		while (mit->node)
+		{
+			function_t *func = (function_t *)mit->value;
+			func->references++;
+			map_insert(result->functions, mit->key, func);
+			mit = map_iterator_next(mit);
+		}
+		map_iterator_free(mit);
+
 		curr += strlen(superclassName) + 1;
 	}
 
@@ -120,28 +132,34 @@ void class_free(class_t *clazz, int freedata)
 	map_iterator_t *it = map_create_iterator(clazz->functions);
 
 	while (it->node)
-	{
-		FREE(it->key);
+	{	
 		function_t *func = (function_t *)it->value;
-		map_t *argTypes = func->argTypes;
-
-		FREE(func->args);
-
-		map_iterator_t *ait = map_create_iterator(argTypes);
-		while (ait->node)
+		func->references--;
+		if (func->references == 0)
 		{
-			ait->node->value = 0;
-			ait = map_iterator_next(ait);
-		}
-		map_iterator_free(ait);
+			map_t *argTypes = func->argTypes;
 
-		map_free(argTypes, 1);
+			FREE(func->args);
+
+			map_iterator_t *ait = map_create_iterator(argTypes);
+			while (ait->node)
+			{
+				ait->node->value = 0;
+				ait = map_iterator_next(ait);
+			}
+			map_iterator_free(ait);
+
+			map_free(argTypes, 1);
+
+			FREE(it->key);
+			FREE(func);
+		}
 
 		it = map_iterator_next(it);
 	}
 	map_iterator_free(it);
 
-	map_free(clazz->functions, 1); // need to free each element individually here
+	map_free(clazz->functions, 0); // need to free each element individually here
 	map_free(clazz->staticFields, 0);
 	map_free(clazz->fields, 1);
 
@@ -364,6 +382,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				func->parentClass = clazz;
 				func->flags = 0;
 				func->argSize = argSize;
+				func->references = 1;
 
 				if (isStatic)
 					func->flags |= FUNCTION_FLAG_STATIC;

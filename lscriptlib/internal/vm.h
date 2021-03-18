@@ -118,7 +118,7 @@ inline int env_raise_exception(env_t *env, int exception, const char *format, ..
 {
 	va_list ls;
 	va_start(ls, format);
-	char *result = env_raise_exceptionv(env, exception, format, ls);
+	int result = env_raise_exceptionv(env, exception, format, ls);
 	va_end(ls);
 	return result;
 }

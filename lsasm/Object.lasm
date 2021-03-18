@@ -1,0 +1,21 @@
+
+class Object extends null
+
+	function dynamic interp <init>()
+		ret
+
+	function dynamic interp getClass()
+		static_call getClass(LObject;) this
+		retr
+
+	function dynamic interp threadEntry()
+		ret
+
+	function dynamic interp toString()
+		ret
+
+	function dynamic interp hashCode()
+		retv this
+
+	function static native getClass(object Object obj)
+

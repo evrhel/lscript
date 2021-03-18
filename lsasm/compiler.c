@@ -1303,11 +1303,19 @@ compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *ou
 			return add_compile_error(back, srcFile, srcLine, error_error, "Expected token superclass name declaration");
 		else if (tokenCount == 4)
 		{
-			PUT_BYTE(out, lb_extends);
-			PUT_STRING(out, tokens[3]);
+			if (strcmp(tokens[3], "null"))
+			{
+				PUT_BYTE(out, lb_extends);
+				PUT_STRING(out, tokens[3]);
+			}
 		}
 		else
 			return add_compile_error(back, srcFile, srcLine, error_warning, "Uneceassary arguments following class declaration");
+	}
+	else
+	{
+		PUT_BYTE(out, lb_extends);
+		PUT_STRING(out, "Object");
 	}
 	return back;
 }
