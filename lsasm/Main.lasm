@@ -66,7 +66,10 @@ class Main
 		static_call System.startProcess(LString;LString;LString;) "C:\\Windows\\notepad.exe" null null
 		setr process
 
-
+		dynamic_call process.toString()
+		dynamic_call System.stdout.println(LString;) ret
+		
+		
 		dynamic_call System.stdout.println(LString;) "Started process!"
 
 		if process != ulong[0]

@@ -1908,8 +1908,15 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 			}
 			else
 			{
-				PUT_BYTE(argBuffer, lb_value);
-				PUT_STRING(argBuffer, tokens[i]);
+				if (!strcmp(tokens[i], "ret"))
+				{
+					PUT_BYTE(argBuffer, lb_ret);
+				}
+				else
+				{
+					PUT_BYTE(argBuffer, lb_value);
+					PUT_STRING(argBuffer, tokens[i]);
+				}
 			}
 			continue;
 		}

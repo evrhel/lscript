@@ -442,6 +442,17 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 #endif
 	FREE(tempName);
 
+	function_t *staticinit;
+	if (result)
+	{
+		if (staticinit = class_get_function(result, "<staticinit>("))
+		{
+			env_t *env = env_create(vm);
+			env_run_func_static(env, staticinit);
+			env_free(env);
+		}
+	}
+
 	return result;
 }
 
@@ -631,6 +642,8 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 {
 	map_node_t *mapNode;
 	char *beg = strchr(name, '.');
+	char *indBeg;
+	size_t valsize;
 
 	// If we have a '.', we need to access the variable as an object fetching its field(s)
 	if (beg)
@@ -672,22 +685,86 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 			}
 			else
 			{
-				fieldVal = class_get_static_field(clazz, beg);
-				if (!fieldVal)
+				indBeg = strchr(name, '[');
+				if (indBeg)
 				{
-					env_raise_exception(env, exception_bad_variable_name, name);
-					return 0;
+					*indBeg = 0;
+					fieldVal = class_get_static_field(clazz, beg);
+					if (!fieldVal)
+					{
+						env_raise_exception(env, exception_bad_variable_name, name);
+						return 0;
+					}
+					*indBeg = '[';
+
+					char *num = indBeg + 1;
+					char *numEnd = strchr(num, ']');
+					luint index;
+					if (!numEnd)
+					{
+						env_raise_exception(env, exception_bad_variable_name, name);
+						return 0;
+					}
+
+					*numEnd = 0;
+					if (!is_numeric(num))
+					{
+						data_t *indexData;
+						flags_t indexFlags;
+						if (!env_resolve_variable(env, num, &indexData, &indexFlags))
+						{
+							*numEnd = ']';
+							env_raise_exception(env, exception_bad_variable_name, name);
+							return 0;
+						}
+						*numEnd = ']';
+						index = indexData->uivalue;
+					}
+					else
+					{
+						index = (luint)atoll(num);
+						*numEnd = ']';
+					}
+
+					array_t *arr = (array_t *)(fieldVal->ovalue);
+					if (!arr)
+					{
+						env_raise_exception(env, exception_null_dereference, name);
+						return 0;
+					}
+
+					if (index >= arr->length)
+					{
+						env_raise_exception(env, exception_bad_array_index, "%s at %u", name, index);
+						return 0;
+					}
+
+					byte_t elemType = value_typeof((value_t *)arr) - lb_object + lb_char - 1;
+					valsize = sizeof_type(elemType);
+					*flags = 0;
+					value_set_type((value_t *)flags, elemType);
+					*data = (data_t *)((byte_t *)&arr->data + (valsize * index));
+					return 1;
 				}
-				*data = (data_t *)&fieldVal->ovalue;
-				*flags = fieldVal->flags;
-				return 1;
+				else
+				{
+
+					fieldVal = class_get_static_field(clazz, beg);
+					if (!fieldVal)
+					{
+						env_raise_exception(env, exception_bad_variable_name, name);
+						return 0;
+					}
+					*data = (data_t *)&fieldVal->ovalue;
+					*flags = fieldVal->flags;
+					return 1;
+				}
 			}
 		}	
 	}
-	size_t valsize;
 
 	// If we have a '[', we have an array we need to access
-	char *indBeg = strchr(name, '[');
+	indBeg = strchr(name, '[');
 	if (indBeg)
 	{
 		*indBeg = 0;
@@ -730,9 +807,16 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		}
 
 		array_t *arr = (array_t *)(((value_t *)mapNode->value)->ovalue);
+		if (!arr)
+		{
+			env_raise_exception(env, exception_null_dereference, name);
+			return 0;
+		}
+
+
 		if (index >= arr->length)
 		{
-			env_raise_exception(env, exception_bad_array_index, name);
+			env_raise_exception(env, exception_bad_array_index, "%s at %u", name, index);
 			return 0;
 		}
 
@@ -817,10 +901,15 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 		*data = (data_t *)((byte_t *)&object->data + (size_t)fieldData->offset);
 		*flags = 0;
 		array_t *arr = (array_t *)(*data)->ovalue;
+		if (!arr)
+		{
+			env_raise_exception(env, exception_null_dereference, name);
+			return 0;
+		}
 		
 		if (!ARRAY_INDEX_INBOUNDS(arr, index))
 		{
-			env_raise_exception(env, exception_bad_array_index, "%u", index);
+			env_raise_exception(env, exception_bad_array_index, "%s at %u", name, index);
 			return 0;
 		}
 
@@ -1181,6 +1270,17 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 			map_insert((map_t *)env->variables->data, argname, loc);
 		}
 
+		// Register static variables
+		map_iterator_t *sfieldIt = map_create_iterator(function->parentClass->staticFields);
+		while (sfieldIt->node)
+		{
+			const char *fieldName = (const char *)sfieldIt->key;
+			if (!map_find((map_t *)env->variables->data, fieldName))
+				map_insert((map_t *)env->variables->data, fieldName, sfieldIt->value);
+			sfieldIt = map_iterator_next(sfieldIt);
+		}
+		map_iterator_free(sfieldIt);
+
 		return env_run(env, function->location);
 	}
 }
@@ -1225,6 +1325,17 @@ int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls
 
 		map_insert((map_t *)env->variables->data, argname, loc);
 	}
+
+	// Register static variables
+	map_iterator_t *sfieldIt = map_create_iterator(function->parentClass->staticFields);
+	while (sfieldIt->node)
+	{
+		const char *fieldName = (const char *)sfieldIt->key;
+		if (!map_find((map_t *)env->variables->data, fieldName))
+			map_insert((map_t *)env->variables->data, fieldName, sfieldIt->value);
+		sfieldIt = map_iterator_next(sfieldIt);
+	}
+	map_iterator_free(sfieldIt);
 
 	// Register "this" variable
 	void *thisLoc;
@@ -1812,6 +1923,50 @@ int env_run(env_t *env, void *location)
 					*((qword_t *)cursor) = *((qword_t *)env->rip);
 					cursor += 8;
 					env->rip += 8;
+					break;
+				case lb_ret:
+					env->rip++;
+					switch (callArgType)
+					{
+					case lb_bool:
+					case lb_char:
+					case lb_uchar:
+						*((byte_t *)cursor) = env->bret;
+						cursor += 1;
+						break;
+					case lb_short:
+					case lb_ushort:
+						*((word_t *)cursor) = env->wret;
+						cursor += 2;
+						break;
+					case lb_int:
+					case lb_uint:
+					case lb_float:
+						*((dword_t *)cursor) = env->dret;
+						break;
+					case lb_long:
+					case lb_ulong:
+					case lb_double:
+					case lb_object:
+					case lb_boolarray:
+					case lb_chararray:
+					case lb_uchararray:
+					case lb_shortarray:
+					case lb_ushortarray:
+					case lb_intarray:
+					case lb_uintarray:
+					case lb_longarray:
+					case lb_ulongarray:
+					case lb_floatarray:
+					case lb_doublearray:
+					case lb_objectarray:
+						*((qword_t *)cursor) = env->qret;
+						break;
+					default:
+						FREE(callFuncArgs);
+						EXIT_RUN(env_raise_exception(env, exception_bad_command, "dynamic_call"));
+						break;
+					}
 					break;
 				case lb_string:
 					env->rip++;
