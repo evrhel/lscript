@@ -12,7 +12,8 @@ class Object extends null
 		ret
 
 	function dynamic interp toString()
-		ret
+		static_call Long.toString(Q) this
+		retr
 
 	function dynamic interp hashCode()
 		retv this
