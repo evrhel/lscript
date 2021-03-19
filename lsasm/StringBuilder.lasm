@@ -5,16 +5,16 @@ class StringBuilder
 
 	function static interp <staticinit>()
 		seto intMap char dword[10]
-		setb intMap[0] byte[48]
-		setb intMap[1] byte[49]
-		setb intMap[2] byte[50]
-		setb intMap[3] byte[51]
-		setb intMap[4] byte[52]
-		setb intMap[5] byte[53]
-		setb intMap[6] byte[54]
-		setb intMap[7] byte[55]
-		setb intMap[8] byte[56]
-		setb intMap[9] byte[57]
+		setb intMap[0] '0'
+		setb intMap[1] '1'
+		setb intMap[2] '2'
+		setb intMap[3] '3'
+		setb intMap[4] '4'
+		setb intMap[5] '5'
+		setb intMap[6] '6'
+		setb intMap[7] '7'
+		setb intMap[8] '8'
+		setb intMap[9] '9'
 		ret
 
 	global dynamic varying chararray chars
@@ -26,14 +26,21 @@ class StringBuilder
 		ret
 
 	function dynamic interp append(object String string)
-		static_call System.arraycopy(LObject;iLObject;ii) string.chars dword[0] this.chars dword[0] string.chars.length
+		uint tmp
+		add tmp stringLength string.chars.length
+		if tmp >= chars.length
+			dynamic_call this.grow(i) string.chars.length
+		end
+		static_call System.arraycopy(LObject;iLObject;ii) this.chars dword[0] string.chars dword[0] string.chars.length
 		add this.stringLength this.stringLength string.chars.length
-		
 		ret
 
 	function dynamic interp append(char c)
+		if this.stringLength == chars.length
+			dynamic_call this.grow(i) dword[1]
+		end
 		setv this.chars[this.stringLength] c
-		add this.stringLength this.stringLength c
+		add this.stringLength this.stringLength 1
 		ret
 
 	function dynamic interp append(long num)
@@ -50,6 +57,18 @@ class StringBuilder
 			mod digit num ulong[10]
 			dynamic_call this.append(C) intMap[digit]
 			div num num ulong[10]
+		end
+		ret
+
+	function dynamic interp grow(uint required)
+		chararray newarr
+		uint newlen
+		mul newlen this.stringLength uint[2]
+		seto newarr char newlen
+		static_call System.arraycopy(LObject;iLObject;ii) newarr dword[0] this.chars dword[0] this.stringLength
+		setv this.chars newarr
+		if newlen < required
+			dynamic_call this.grow(i) required
 		end
 		ret
 

@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #define SIG_STRING_CHAR ((char)0x01)
+#define SIG_CHAR_CHAR ((char)0x02)
 
 typedef struct line_s line_t;
 struct line_s
@@ -678,6 +679,7 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 	buffer_t *currstring = NEW_BUFFER(32);
 
 	int inDoubleQuotes = 0;
+	int inSingleQuotes = 0;
 	int inEscape = 0;
 	while (*string)
 	{
@@ -695,6 +697,19 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 				if (!inDoubleQuotes)
 					PUT_CHAR(currstring, SIG_STRING_CHAR);
 				inDoubleQuotes = !inDoubleQuotes;
+			}
+			break;
+		case '\'':
+			if (inEscape)
+			{
+				inEscape = 0;
+				PUT_CHAR(currstring, '\'');
+			}
+			else
+			{
+				if (!inSingleQuotes)
+					PUT_CHAR(currstring, SIG_CHAR_CHAR);
+				inSingleQuotes = !inSingleQuotes;
 			}
 			break;
 		case '\\':

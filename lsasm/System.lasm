@@ -20,3 +20,4 @@ class System
 	function static native loadLibrary(object String libname)
 	function static native getProperty(object String propName)
 	function static native setProperty(object String propName, object String value)
+	function static native arraycopy(object Object dst, uint dstOff, object Object src, uint srcOff, uint len)
