@@ -844,23 +844,21 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *is
 	char *lBracket = strchr(mString, '[');
 	if (!lBracket)
 	{
+		*isAbsoluteType = 0;
 		if (!strcmp(mString, "true"))
 		{
-			*isAbsoluteType = 0;
 			data->bvalue = 1;
 			*type = lb_byte;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "false"))
 		{
-			*isAbsoluteType = 0;
 			data->bvalue = 0;
 			*type = lb_byte;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "null"))
 		{
-			*isAbsoluteType = 0;
 			data->ovalue = NULL;
 			*type = lb_qword;
 			return sizeof(qword_t);
@@ -1714,7 +1712,17 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	default:
 		myType = cmd + (lb_byte - lb_setb);
 		myWidth = (int)get_type_width(myType);
-		setWidth = evaluate_constant(tokens[2], &setData, &setType, &setIsAbsolute);
+
+		if (tokens[2][0] == SIG_CHAR_CHAR)
+		{
+			setData.cvalue = tokens[2][1];
+			setWidth = sizeof(lchar);
+			setType = lb_byte;
+		}
+		else
+		{
+			setWidth = evaluate_constant(tokens[2], &setData, &setType, &setIsAbsolute);
+		}
 
 		if (myWidth != setWidth)
 			return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)setWidth, (int)myWidth);
@@ -1769,10 +1777,15 @@ compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_
 	size_t argSize = evaluate_constant(tokens[1], &argData, &argType, &argIsAbsolute);
 	if (argIsAbsolute)
 		return add_compile_error(back, srcFile, srcLine, error_error, "Array initialization does not support absolute type");
-	else if (argSize == 0)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Invalid array length specifier");
+	////else if (argSize == 0)
+		//return add_compile_error(back, srcFile, srcLine, error_error, "Invalid array length specifier");
 	switch (argSize)
 	{
+	case 0:
+		PUT_BYTE(out, lb_value);
+		PUT_STRING(out, tokens[1]);
+		goto post_init_array;
+		break;
 	case lb_byte:
 		argData.uivalue = (luint)argData.ucvalue;
 		break;
@@ -1791,13 +1804,14 @@ compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_
 		break;
 	}
 
+	PUT_BYTE(out, type);
+	PUT_UINT(out, argData.uivalue);
+
+	post_init_array:
 	if (tokenCount > 2)
 	{
 		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments in array initialization");
 	}
-
-	PUT_BYTE(out, type);
-	PUT_UINT(out, argData.uivalue);
 
 	return back;
 }
@@ -1921,6 +1935,11 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 				PUT_BYTE(argBuffer, lb_string);
 				PUT_STRING(argBuffer, tokens[i] + 1);
 			}
+			else if (tokens[i][0] == SIG_CHAR_CHAR)
+			{
+				PUT_BYTE(argBuffer, lb_char);
+				PUT_BYTE(argBuffer, tokens[i][1]);
+			}
 			else
 			{
 				if (!strcmp(tokens[i], "ret"))
@@ -2002,11 +2021,23 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	data_t argData;
 	byte_t argType;
 	int argIsAbsolute;
-	size_t argSize = evaluate_constant(tokens[3], &argData, &argType, &argIsAbsolute);
-
-	if (!argIsAbsolute)
+	size_t argSize;
+	
+	if (tokens[3][0] = SIG_CHAR_CHAR)
 	{
-		return add_compile_error(back, srcFile, srcLine, error_error, "Operation requires absolute type");
+		argData.cvalue = tokens[3][1];
+		argType = lb_char;
+		argIsAbsolute = 1;
+		argSize = sizeof(lchar);
+	}
+	else
+	{
+		argSize = evaluate_constant(tokens[3], &argData, &argType, &argIsAbsolute);
+
+		if (!argIsAbsolute)
+		{
+			return add_compile_error(back, srcFile, srcLine, error_error, "Operation requires absolute type");
+		}
 	}
 
 	PUT_BYTE(out, cmd);
