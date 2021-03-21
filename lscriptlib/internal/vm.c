@@ -149,7 +149,7 @@ void free_exception_string(const char *exceptionString)
 		free((void *)exceptionString);
 }
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount, const char *const paths[])
+vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int verboseErrors, int pathCount, const char *const paths[])
 {
 	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
 	if (!vm)
@@ -223,6 +223,8 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount
 	vm->dwVMThreadID = 0;
 #else
 #endif
+
+	vm->verboseErrors = 1;
 
 	class_t *objectClass = vm_load_class(vm, "Object");
 	if (!objectClass)
@@ -2315,8 +2317,9 @@ void vm_start_routine(start_args_t *args)
 	class_t *clazz = NULL;
 	function_t *func = NULL;
 	map_iterator_t *mit;
+	vm_t *vm = args->vm;
 
-	mit = map_create_iterator(args->vm->classes);
+	mit = map_create_iterator(vm->classes);
 	while (mit->node)
 	{
 		clazz = (class_t *)mit->value;
@@ -2329,7 +2332,7 @@ void vm_start_routine(start_args_t *args)
 
 	if (func)
 	{
-		env_t *env = env_create(args->vm);
+		env_t *env = env_create(vm);
 		if (env)
 		{
 			int exception = env_run_func_static(env, func, args->args);
@@ -2343,14 +2346,7 @@ void vm_start_routine(start_args_t *args)
 				 
 				printf("Outputting known information up to exception:\n");
 				printf("Exception occurred during execution in environment %p\n", env);
-				/*printf("V I R T U A L   M A C H I N E\n\n");
-				printf("Variables of suspect environment:\n");
-				printf("rip = %p, cmdStart = %p, vm = %p\n", env->rip, env->cmdStart, env->vm);
-				printf("stack = %p, rsp = %p, rbp = %p\n", env->stack, env->rsp, env->rbp);
-				printf("variables = %p, exception = %d, exceptionMessage = %p\n", env->variables, env->exception, env->exceptionMessage);
-				printf("bret = %u, wret = %u, dret = %u\n", env->bret, env->wret, env->dret);
-				printf("qret = %llu, r4ret = %f, r8ret = %f\n", env->qret, (real8_t)env->r4ret, env->r8ret);
-				printf("vret = %p\n\n", env->vret);*/
+				
 				function_t *exceptionFunc = CURR_FUNC(env);
 				/*printf("Top stack frame parameters of suspect environment:\n");
 				printf("(rbp + 0) (last stack frame rbp) = %p\n", *((size_t **)env->rbp));
@@ -2363,6 +2359,24 @@ void vm_start_routine(start_args_t *args)
 				printf("\trelativeLocation = %p\n", (void *)((char *)exceptionFunc->location - (char *)exceptionFunc->parentClass->data));
 				printf("}\n");
 
+				if (vm->verboseErrors)
+				{
+					printf("\nVariables of suspect execution environment:\n");
+					printf("rip = %p, cmdStart = %p, vm = %p\n", env->rip, env->cmdStart, env->vm);
+					printf("stack = %p, rsp = %p, rbp = %p\n", env->stack, env->rsp, env->rbp);
+					printf("variables = %p, exception = %d, exceptionMessage = %p\n", env->variables, env->exception, env->exceptionMessage);
+					printf("bret = %u, wret = %u, dret = %u\n", env->bret, env->wret, env->dret);
+					printf("qret = %llu, r4ret = %f, r8ret = %f\n", env->qret, (real8_t)env->r4ret, env->r8ret);
+					printf("vret = %p\n\n", env->vret);
+
+					printf("Variables of virtual machine:\n");
+					printf("VM address: %p\n", vm);
+					printf("envs = %p, envsLast = %p, classes = %p\n", vm->envs, vm->envsLast, vm->classes);
+					printf("manager = %p, stackSize = %llu, properties = %p\n", vm->manager, vm->stackSize, vm->properties);
+					printf("paths = %p, hLibraries = %p, hVMThread = %p\n", vm->paths, vm->hLibraries, vm->hVMThread);
+					printf("dwPadding = %u, libraryCount = %llu, verboseErrors = %d\n\n", vm->dwPadding, vm->libraryCount, vm->verboseErrors);
+				}
+
 				printf("Searching for debug information on classpath...\n");
 				char targetName[MAX_PATH];
 				char fullPath[MAX_PATH];
@@ -2370,11 +2384,10 @@ void vm_start_routine(start_args_t *args)
 				sprintf_s(targetName, MAX_PATH, "%s.lds", exceptionFunc->parentClass->name);
 
 				debug_t *debug = NULL;
-				vm_t *vm = env->vm;
 				list_t *curr = vm->paths;
 				while (curr)
 				{
-					sprintf_s(fullPath, MAX_PATH, "%s\\%s", (char *)curr->data, targetName);
+					sprintf_s(fullPath, MAX_PATH, "%s%s", (char *)curr->data, targetName);
 					FILE *dummy;
 					fopen_s(&dummy, fullPath, "rb");
 					if (dummy)
@@ -2394,7 +2407,7 @@ void vm_start_routine(start_args_t *args)
 					debug_elem_t *start = debug->first;
 					while (start < debug->last)
 					{
-						if (start->binOff <= binOffInt)
+						if (start->binOff >= binOffInt)
 						{
 							printf("Exception occured around: %s.%d\n", debug->srcFile, start->srcLine);
 							break;

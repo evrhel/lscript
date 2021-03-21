@@ -54,6 +54,8 @@ struct vm_s
 #else
 #endif
 	size_t libraryCount;
+
+	int verboseErrors;
 };
 
 struct env_s
@@ -93,7 +95,7 @@ inline char *new_exception_string(const char *format, ...)
 }
 void free_exception_string(const char *exceptionString);
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int pathCount, const char *const paths[]);
+vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int verboseErrors, int pathCount, const char *const paths[]);
 int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[]);
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
