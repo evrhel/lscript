@@ -5,6 +5,7 @@
 
 #include "collection.h"
 #include "value.h"
+#include "debug.h"
 
 typedef signed long long class_flags_t;
 typedef signed long long function_flags_t;
@@ -45,6 +46,7 @@ struct class_s
 	map_t *functions;		// Maps the function names to its location in memory
 	map_t *staticFields;	// Maps the static field name to its value in memory
 	map_t *fields;			// Maps the field name to its offset
+	debug_t *debug;			// A pointer to debug information about this class
 	size_t size;			// Stores the total size this object will allocate
 };
 

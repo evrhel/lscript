@@ -50,6 +50,8 @@ class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, voi
 	result->name = curr;
 	curr += strlen(result->name) + 1;
 
+	result->debug = NULL;
+
 	if (curr >= end)
 	{
 		if (!register_functions(result, curr, end))
@@ -162,6 +164,9 @@ void class_free(class_t *clazz, int freedata)
 	map_free(clazz->functions, 0); // need to free each element individually here
 	map_free(clazz->staticFields, 0);
 	map_free(clazz->fields, 1);
+
+	if (clazz->debug)
+		free_debug(clazz->debug);
 
 	if (freedata)
 		FREE((byte_t *)clazz->data);

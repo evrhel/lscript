@@ -10,9 +10,9 @@ struct vm_args_s
 {
 	size_t heapSize;
 	size_t stackSize;
+	vm_flags_t flags;
 	const char *const *argv;
 	int argc;
-	int verboseErrors;
 	const char *paths[MAX_PATHS];
 };
 
@@ -30,7 +30,7 @@ LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILi
 	vm_args_t args;
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
-	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.verboseErrors, MAX_PATHS, args.paths);
+	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths);
 	return gCurrentVM = vm;
 }
 
@@ -51,7 +51,7 @@ LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], voi
 	vm_args_t args;
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
-	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.verboseErrors, MAX_PATHS, args.paths);
+	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths);
 	gCurrentVM = vm;
 	if (!gCurrentVM)
 		return NULL;
@@ -144,9 +144,17 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 		{
 
 		}
+		else if (equals_ignore_case("-verbose", argv[i]))
+		{
+			argStruct->flags |= vm_flag_verbose;
+		}
+		else if (equals_ignore_case("-nodebug", argv[i]))
+		{
+			argStruct->flags |= vm_flag_no_load_debug;
+		}
 		else if (equals_ignore_case("-verr", argv[i]))
 		{
-			argStruct->verboseErrors = 1;
+			argStruct->flags |= vm_flag_verbose_errors;
 		}
 		else if (equals_ignore_case("-path", argv[i]))
 		{

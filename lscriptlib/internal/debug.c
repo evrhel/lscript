@@ -43,16 +43,16 @@ debug_t *load_debug(const char *path)
 	return obj;
 }
 
-int find_line(debug_t *debug, unsigned int off)
+debug_elem_t *find_debug_elem(debug_t *debug, unsigned int off)
 {
 	debug_elem_t *curr = debug->first;
 	while (curr < debug->last)
 	{
-		if (curr->binOff == off)
-			return curr->srcLine;
+		if (curr->binOff >= off)
+			return curr;
 		curr++;
 	}
-	return -1;
+	return curr > debug->last ? NULL : curr;
 }
 
 void free_debug(debug_t *debug)

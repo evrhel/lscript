@@ -20,7 +20,7 @@ struct debug_elem_s
 };
 
 debug_t *load_debug(const char *path);
-int find_line(debug_t *debug, unsigned int off);
+debug_elem_t *find_debug_elem(debug_t *debug, unsigned int off);
 void free_debug(debug_t *debug);
 
 #endif

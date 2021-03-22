@@ -18,6 +18,9 @@
 
 //#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
 #define CURR_FUNC(env) (*(((function_t**)(env)->rbp)-1))
+#define FRAME_FUNC(rbp) (*(((function_t**)(rbp))-1))
+#define FRAME_RIP(rbp) (*(((byte_t**)(rbp))-2))
+#define PREV_FRAME(rbp) (*(((byte_t**)(rbp))-3))
 
 #define EXIT_RUN(val) {__retVal=(val);goto done_call;}
 
@@ -61,6 +64,8 @@ static int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFla
 static int try_link_function(vm_t *vm, function_t *func);
 
 static void vm_start_routine(start_args_t *args);
+
+static void print_stack_trace(FILE *file, env_t *env, int printVars);
 
 /*
 Implemented in hooks.asm
@@ -149,7 +154,7 @@ void free_exception_string(const char *exceptionString)
 		free((void *)exceptionString);
 }
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int verboseErrors, int pathCount, const char *const paths[])
+vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[])
 {
 	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
 	if (!vm)
@@ -224,7 +229,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int verboseEr
 #else
 #endif
 
-	vm->verboseErrors = 1;
+	vm->flags = flags;
 
 	class_t *objectClass = vm_load_class(vm, "Object");
 	if (!objectClass)
@@ -440,6 +445,30 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 		}
 
 		curr = curr->next;
+	}
+
+	if (result && !(vm->flags & vm_flag_no_load_debug))
+	{
+		curr = vm->paths;
+
+		while (curr)
+		{
+			fullpath[0] = 0;
+			char *pathString = (char *)curr->data;
+			pathlen = strlen(pathString);
+			strcat_s(fullpath, sizeof(fullpath), pathString);
+			strcat_s(fullpath, sizeof(fullpath), tempName);
+			strcat_s(fullpath, sizeof(fullpath), ".lds");
+			fopen_s(&dummy, fullpath, "rb");
+			if (dummy)
+			{
+				fclose(dummy);
+				result->debug = load_debug(fullpath);
+				break;
+			}
+
+			curr = curr->next;
+		}
 	}
 #endif
 	FREE(tempName);
@@ -1467,7 +1496,7 @@ class_t *class_load_ext(const char *classname, vm_t *vm)
 int env_run(env_t *env, void *location)
 {
 	int __retVal;
-	byte_t *ripSave = env->rip;
+	//byte_t *ripSave = env->rip;
 	env->rip = (byte_t *)location;
 	//env->rip = location;
 	//byte_t *counter = env->rip;	// A counter on where we are currently executing
@@ -2163,7 +2192,6 @@ int env_run(env_t *env, void *location)
 
 done_call:
 
-	env->rip = ripSave;
 	return __retVal;
 }
 
@@ -2185,9 +2213,10 @@ int env_cleanup_call(env_t *env)
 	// Restore the fake registers from the previous call
 	size_t *stackframe = (size_t *)env->rbp - 3;
 	
+	env->rip = FRAME_RIP(env->rbp);
 	env->rsp = env->rbp;
 	env->rbp = (byte_t *)(*stackframe);
-	env->rip = (byte_t *)(*(stackframe + 1));
+		//(byte_t *)(*(stackframe + 1));
 	//env->rip = ((byte_t *)env->rbp) + sizeof(void *);
 
 	return exception_none;
@@ -2359,7 +2388,9 @@ void vm_start_routine(start_args_t *args)
 				printf("\trelativeLocation = %p\n", (void *)((char *)exceptionFunc->location - (char *)exceptionFunc->parentClass->data));
 				printf("}\n");
 
-				if (vm->verboseErrors)
+				print_stack_trace(stdout, env, (vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors));
+
+				if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
 				{
 					printf("\nVariables of suspect execution environment:\n");
 					printf("rip = %p, cmdStart = %p, vm = %p\n", env->rip, env->cmdStart, env->vm);
@@ -2374,10 +2405,10 @@ void vm_start_routine(start_args_t *args)
 					printf("envs = %p, envsLast = %p, classes = %p\n", vm->envs, vm->envsLast, vm->classes);
 					printf("manager = %p, stackSize = %llu, properties = %p\n", vm->manager, vm->stackSize, vm->properties);
 					printf("paths = %p, hLibraries = %p, hVMThread = %p\n", vm->paths, vm->hLibraries, vm->hVMThread);
-					printf("dwPadding = %u, libraryCount = %llu, verboseErrors = %d\n\n", vm->dwPadding, vm->libraryCount, vm->verboseErrors);
+					printf("dwPadding = %u, libraryCount = %llu, flags = %llu\n\n", vm->dwPadding, vm->libraryCount, vm->flags);
 				}
 
-				printf("Searching for debug information on classpath...\n");
+				/*printf("Searching for debug information on classpath...\n");
 				char targetName[MAX_PATH];
 				char fullPath[MAX_PATH];
 
@@ -2404,7 +2435,12 @@ void vm_start_routine(start_args_t *args)
 					printf("Found debug information for class \"%s\"\n", exceptionFunc->parentClass->name);
 					printf("Exception occurred in source file %s\n", debug->srcFile);
 					unsigned int binOffInt = (unsigned int)(env->cmdStart - exceptionFunc->parentClass->data);
-					debug_elem_t *start = debug->first;
+					debug_elem_t *elem = find_debug_elem(debug, binOffInt);
+					if (elem)
+						printf("Exception occured around: %s.%d\n", debug->srcFile, elem->srcLine);
+					else
+						printf("Could not find mapping from exception location to source location.\n");
+					/*debug_elem_t *start = debug->first;
 					while (start < debug->last)
 					{
 						if (start->binOff >= binOffInt)
@@ -2420,9 +2456,45 @@ void vm_start_routine(start_args_t *args)
 				else
 				{
 					printf("Could not find debug information for class \"%s\"\n", exceptionFunc->parentClass->name);
-				}
+				}*/
 			}
 			env_free(env);
 		}
+	}
+}
+
+void print_stack_trace(FILE *file, env_t *env, int printVars)
+{
+	byte_t *bottomStack = env->stack + env->vm->stackSize;
+	byte_t *rbp = env->rbp;
+	function_t *func;
+	class_t *clazz;
+	unsigned int intOff;
+	debug_elem_t *elem;
+
+	while (rbp < bottomStack)
+	{
+		func = FRAME_FUNC(rbp);
+		clazz = func->parentClass;
+
+		if (clazz->debug)
+		{
+			intOff = (unsigned int)(FRAME_RIP(rbp) - clazz->data);
+			elem = find_debug_elem(clazz->debug, intOff);
+			if (elem)
+			{
+				fprintf(file, "%s.%d\n", clazz->debug->srcFile, elem->srcLine);
+			}
+			else
+			{
+				fprintf(file, "<class %s>.<unknown>\n", clazz->name);
+			}
+		}
+		else
+		{
+			fprintf(file, "<class %s>.<unknown>\n", clazz->name);
+		}
+
+		rbp = PREV_FRAME(rbp);
 	}
 }

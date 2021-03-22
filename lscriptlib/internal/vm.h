@@ -16,6 +16,7 @@
 
 typedef struct vm_s vm_t;
 typedef struct env_s env_t;
+typedef unsigned long long vm_flags_t;
 
 enum
 {
@@ -32,6 +33,13 @@ enum
 	exception_bad_variable_name,
 	exception_bad_array_index,
 	exception_link_error
+};
+
+enum
+{
+	vm_flag_verbose =			0x1,
+	vm_flag_no_load_debug =		0x2,
+	vm_flag_verbose_errors =	0x4
 };
 
 struct vm_s
@@ -55,7 +63,7 @@ struct vm_s
 #endif
 	size_t libraryCount;
 
-	int verboseErrors;
+	vm_flags_t flags;
 };
 
 struct env_s
@@ -95,7 +103,7 @@ inline char *new_exception_string(const char *format, ...)
 }
 void free_exception_string(const char *exceptionString);
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, int verboseErrors, int pathCount, const char *const paths[]);
+vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[]);
 int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[]);
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
