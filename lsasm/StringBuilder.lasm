@@ -27,20 +27,20 @@ class StringBuilder
 
 	function dynamic interp append(object String string)
 		uint tmp
-		add tmp stringLength string.chars.length
+		#add tmp stringLength string.chars.length
 		if tmp >= chars.length
 			dynamic_call this.grow(i) string.chars.length
 		end
 		static_call System.arraycopy(LObject;iLObject;ii) this.chars dword[0] string.chars dword[0] string.chars.length
-		add this.stringLength this.stringLength string.chars.length
+		#add this.stringLength this.stringLength string.chars.length
 		ret
 
 	function dynamic interp append(char c)
-		if this.stringLength == chars.length
+		if this.stringLength == this.chars.length
 			dynamic_call this.grow(i) dword[1]
 		end
 		setv this.chars[this.stringLength] c
-		add this.stringLength this.stringLength 1
+		add this.stringLength this.stringLength uint[1]
 		ret
 
 	function dynamic interp append(long num)

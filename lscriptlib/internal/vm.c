@@ -1523,6 +1523,31 @@ int env_run(env_t *env, void *location)
 	size_t off;					// An arbitrary value for storing an offset
 	byte_t type;				// An arbitrary value for storing a type
 
+	/*if (env->vm->flags & vm_flag_verbose)
+	{
+		list_t *curr = env->variables->prev;
+		while (curr->prev)
+		{
+			putc(' ', stdout);
+			curr = curr->prev;
+		}
+
+		function_t *currfunc = CURR_FUNC(env);
+		debug_t *currdebug = currfunc->parentClass->debug;
+		if (currdebug)
+		{
+			debug_elem_t *elem = find_debug_elem(currdebug, (unsigned int)(env->rip - currfunc->parentClass->data));
+			if (elem)
+				printf("%s.%s.%u\n", currdebug->srcFile, CURR_FUNC(env)->name, elem->srcLine);
+			else
+				printf("%s.%s\n", currdebug->srcFile, CURR_FUNC(env)->name);
+		}
+		else
+		{
+			printf("<class %s>.%s\n", currfunc->parentClass->name, CURR_FUNC(env)->name);
+		}
+	}*/
+
 	while (1)
 	{
 		env->cmdStart = env->rip;

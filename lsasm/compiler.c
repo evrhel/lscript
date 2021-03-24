@@ -2027,7 +2027,7 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	int argIsAbsolute;
 	size_t argSize;
 	
-	if (tokens[3][0] = SIG_CHAR_CHAR)
+	if (tokens[3][0] == SIG_CHAR_CHAR)
 	{
 		argData.cvalue = tokens[3][1];
 		argType = lb_char;

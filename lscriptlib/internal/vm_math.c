@@ -3,6 +3,7 @@
 #include "cast.h"
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 #define FADD(a, b) a + b
 #define FSUB(a, b) a - b
