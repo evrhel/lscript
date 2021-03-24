@@ -67,7 +67,7 @@ LNIFUNC lobject LNICALL System_arraycopy(LEnv venv, lclass vclazz, lobject dst, 
 		return NULL;
 	}
 
-	if (dstOff + len >= dstarr->length || srcOff + len >= srcarr->length)
+	if (dstOff + len > dstarr->length || srcOff + len > srcarr->length)
 	{
 		env_raise_exception(env, exception_bad_array_index, "Copy out of array bounds");
 		return NULL;

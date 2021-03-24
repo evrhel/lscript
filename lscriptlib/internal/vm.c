@@ -1168,11 +1168,10 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 
 		if (function->numargs > 0)
 		{
-			map_iterator_t *mit = map_create_iterator(function->argTypes);
-			size_t i = 0;
-			while (mit->node)
+			size_t i;
+			for (i = 0; i < function->numargs; i++)
 			{
-				switch ((byte_t)mit->value)
+				switch ((byte_t)map_at(function->argTypes, function->args[i]))
 				{
 				case lb_char:
 				case lb_uchar:
@@ -1211,10 +1210,7 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 					types[i] = lb_real8;
 					break;
 				}
-				mit = map_iterator_next(mit);
-				i++;
 			}
-			map_iterator_free(mit);
 		}
 
 		size_t *outArgsCursor = (size_t *)args;

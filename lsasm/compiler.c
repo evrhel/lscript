@@ -771,7 +771,7 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 				PUT_CHAR(currstring, '0');
 			break;
 		case ' ':
-			if (inDoubleQuotes)
+			if (inDoubleQuotes || inSingleQuotes)
 			{
 				PUT_CHAR(currstring, ' ');
 			}
@@ -1941,7 +1941,7 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 			}
 			else if (tokens[i][0] == SIG_CHAR_CHAR)
 			{
-				PUT_BYTE(argBuffer, lb_char);
+				PUT_BYTE(argBuffer, lb_byte);
 				PUT_BYTE(argBuffer, tokens[i][1]);
 			}
 			else
@@ -2027,7 +2027,11 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	int argIsAbsolute;
 	size_t argSize;
 	
-	if (tokens[3][0] == SIG_CHAR_CHAR)
+	if (tokens[3][0] == SIG_STRING_CHAR)
+	{
+		return add_compile_error(back, srcFile, srcLine, error_error, "Operation requires integral or floating point type");
+	}
+	else if (tokens[3][0] == SIG_CHAR_CHAR)
 	{
 		argData.cvalue = tokens[3][1];
 		argType = lb_char;
@@ -2038,7 +2042,7 @@ compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	{
 		argSize = evaluate_constant(tokens[3], &argData, &argType, &argIsAbsolute);
 
-		if (!argIsAbsolute)
+		if (argSize != 0 && !argIsAbsolute)
 		{
 			return add_compile_error(back, srcFile, srcLine, error_error, "Operation requires absolute type");
 		}

@@ -78,6 +78,16 @@ class Main
 
 		dynamic_call System.stdout.println(LString;) "Process closed!"
 
+		object builder
+		seto builder new StringBuilder <init>()
+		dynamic_call builder.append(LString;) "Hello"
+		dynamic_call builder.append(C) ' '
+		dynamic_call builder.append(LString;) "World"
+		dynamic_call builder.append(C) ' '
+		dynamic_call builder.append(q) qword[12]
+		dynamic_call builder.toString()
+		dynamic_call System.stdout.println(LString;) ret
+
 		retd dword[25]
 
 

@@ -27,12 +27,12 @@ class StringBuilder
 
 	function dynamic interp append(object String string)
 		uint tmp
-		#add tmp stringLength string.chars.length
-		if tmp >= chars.length
+		add tmp this.stringLength string.chars.length
+		if tmp >= this.chars.length
 			dynamic_call this.grow(i) string.chars.length
 		end
-		static_call System.arraycopy(LObject;iLObject;ii) this.chars dword[0] string.chars dword[0] string.chars.length
-		#add this.stringLength this.stringLength string.chars.length
+		static_call System.arraycopy(LObject;iLObject;ii) this.chars this.stringLength string.chars dword[0] string.chars.length
+		add this.stringLength this.stringLength string.chars.length
 		ret
 
 	function dynamic interp append(char c)
@@ -52,12 +52,36 @@ class StringBuilder
 		ret
 
 	function dynamic interp append(ulong num)
+		uintarray digits
 		ulong digit
+		int i
+		int j
+
+		setd i dword[0]
+
+		# length 20 for the max number of base-10 digits in 64-bit integer
+		seto digits uchar dword[20]
+
 		while num > ulong[0]
 			mod digit num ulong[10]
-			dynamic_call this.append(C) intMap[digit]
+			setv digits[i] digit
+			add i i int[1]
 			div num num ulong[10]
 		end
+
+		sub i i int[1]
+		setv j i
+		while j > int[-1]
+			setv digit digits[j]
+			dynamic_call this.append(C) intMap[digit]
+			sub j j int[1]
+		end
+
+		#while num > ulong[0]
+		#	mod digit num ulong[10]
+		#	dynamic_call this.append(C) intMap[digit]
+		#	div num num ulong[10]
+		#end
 		ret
 
 	function dynamic interp grow(uint required)
