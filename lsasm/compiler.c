@@ -967,7 +967,7 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *is
 	{
 		*isAbsoluteType = 1;
 		*type = lb_int;
-		data->ivalue = (lushort)atoll(dataStart);
+		data->ivalue = (lint)atoll(dataStart);
 		size = sizeof(lint);
 	}
 	else if (!strcmp(mString, "uint"))

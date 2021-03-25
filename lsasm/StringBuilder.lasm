@@ -76,12 +76,6 @@ class StringBuilder
 			dynamic_call this.append(C) intMap[digit]
 			sub j j int[1]
 		end
-
-		#while num > ulong[0]
-		#	mod digit num ulong[10]
-		#	dynamic_call this.append(C) intMap[digit]
-		#	div num num ulong[10]
-		#end
 		ret
 
 	function dynamic interp grow(uint required)
