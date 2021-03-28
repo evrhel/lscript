@@ -17,12 +17,15 @@
 #define WORD_SIZE sizeof(size_t)
 
 //#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
-#define CURR_FUNC(env) (*(((function_t**)(env)->rbp)-1))
-#define FRAME_FUNC(rbp) (*(((function_t**)(rbp))-1))
-#define FRAME_RIP(rbp) (*(((byte_t**)(rbp))-2))
-#define PREV_FRAME(rbp) (*(((byte_t**)(rbp))-3))
+#define CURR_FLAGS(env) (**(((frame_flags_t**)(env)->rbp)-1))
+#define CURR_FUNC(env) (*(((function_t**)(env)->rbp)-2))
+#define FRAME_FUNC(rbp) (*(((function_t**)(rbp))-2))
+#define FRAME_RIP(rbp) (*(((byte_t**)(rbp))-3))
+#define PREV_FRAME(rbp) (*(((byte_t**)(rbp))-4))
 
 #define EXIT_RUN(val) {__retVal=(val);goto done_call;}
+
+typedef unsigned long long frame_flags_t;
 
 static const char *const g_exceptionStrings[] =
 {
@@ -48,13 +51,19 @@ struct start_args_s
 	array_t *args;
 };
 
+enum
+{
+	frame_flag_return_no_cleanup = 0x1,
+	frame_flag_return_native = 0x2
+};
+
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
 static int env_run(env_t *env, void *location);
 static int env_cleanup_call(env_t *env);
 
-static int env_handle_static_function_callv(env_t *env, function_t *function, va_list ls);
-static int env_handle_dynamic_function_callv(env_t *env, function_t *function, object_t *object, va_list ls);
+static int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls);
+static int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_flags_t flags, object_t *object, va_list ls);
 
 static void *stack_push(env_t *env, value_t *value);
 static void *stack_alloc(env_t *env, size_t words);
@@ -1301,6 +1310,8 @@ int env_run(env_t *env, void *location)
 	size_t off;					// An arbitrary value for storing an offset
 	byte_t type;				// An arbitrary value for storing a type
 
+	__retVal = exception_none;
+
 	/*if (env->vm->flags & vm_flag_verbose)
 	{
 		list_t *curr = env->variables->prev;
@@ -1326,7 +1337,7 @@ int env_run(env_t *env, void *location)
 		}
 	}*/
 
-	while (1)
+	while (env->rip)
 	{
 		env->cmdStart = env->rip;
 		switch (*env->rip)
@@ -2031,7 +2042,7 @@ int env_cleanup_call(env_t *env)
 	return exception_none;
 }
 
-int env_handle_static_function_callv(env_t *env, function_t *function, va_list ls)
+int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls)
 {
 	if (function->flags & FUNCTION_FLAG_NATIVE)
 	{
@@ -2151,15 +2162,16 @@ int env_handle_static_function_callv(env_t *env, function_t *function, va_list l
 		//if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
 		//	return env_raise_exception(env, exception_stack_overflow, NULL);
 
-		size_t *stackframe = stack_alloc(env, 3);
+		size_t *stackframe = stack_alloc(env, 4);
 		if (!stackframe)
 			return env->exception;
 
 		*(stackframe) = (size_t)env->rbp;
 		*(stackframe + 1) = (size_t)env->rip;
 		*(stackframe + 2) = (size_t)function;
+		*(stackframe + 3) = (size_t)flags;
 
-		env->rbp = (byte_t *)(stackframe + 3);
+		env->rbp = (byte_t *)(stackframe + 4);
 		//env->rbp = 
 			//(byte_t *)stackframe;
 		//env->rsp = (byte_t *)stackframe;
@@ -2205,11 +2217,11 @@ int env_handle_static_function_callv(env_t *env, function_t *function, va_list l
 	}
 }
 
-int env_handle_dynamic_function_callv(env_t *env, function_t *function, object_t *object, va_list ls)
+int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_flags_t flags, object_t *object, va_list ls)
 {
 	// push the arg list to the stack
 
-	size_t *stackframe = stack_alloc(env, 3);
+	size_t *stackframe = stack_alloc(env, 4);
 	if (!stackframe)
 		return env->exception;
 
@@ -2217,8 +2229,9 @@ int env_handle_dynamic_function_callv(env_t *env, function_t *function, object_t
 	*(stackframe) = (size_t)env->rbp;
 	*(stackframe + 1) = (size_t)env->rip;
 	*(stackframe + 2) = (size_t)function;
+	*(stackframe + 3) = (size_t)flags;
 
-	env->rbp = (byte_t *)(stackframe + 3);
+	env->rbp = (byte_t *)(stackframe + 4);
 	//env->rbp = env->rsp;
 	//env->rsp = (byte_t *)stackframe;
 		//((size_t *)env->rsp) + 3;
