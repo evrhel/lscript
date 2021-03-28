@@ -53,6 +53,9 @@ static class_t *class_load_ext(const char *classname, vm_t *vm);
 static int env_run(env_t *env, void *location);
 static int env_cleanup_call(env_t *env);
 
+static int env_handle_static_function_callv(env_t *env, function_t *function, va_list ls);
+static int env_handle_dynamic_function_callv(env_t *env, function_t *function, object_t *object, va_list ls);
+
 static void *stack_push(env_t *env, value_t *value);
 static void *stack_alloc(env_t *env, size_t words);
 static int stack_pop(env_t *env, flags_t type);
@@ -233,6 +236,13 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 
 	class_t *objectClass = vm_load_class(vm, "Object");
 	if (!objectClass)
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
+	class_t *classClass = vm_load_class(vm, "Class");
+	if (!classClass)
 	{
 		vm_free(vm, 0);
 		return NULL;
@@ -1141,250 +1151,22 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
-	if (function->flags & FUNCTION_FLAG_NATIVE)
-	{
-		if (!function->location)
-		{
-			if (!try_link_function(env->vm, function))
-				return env_raise_exception(env, exception_link_error, function->name);
-		}
-
-		void *args = CALLOC(function->numargs + 2, sizeof(qword_t));
-
-			//MALLOC((function->numargs * sizeof(qword_t)) + (2 * sizeof(qword_t)));
-		if (!args)
-			return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
-		
-		void **temp = (void **)args;
-		temp[0] = env;
-		temp[1] = function->parentClass;
-
-		byte_t *types = (byte_t *)MALLOC(sizeof(byte_t) * function->numargs);
-		if (!types)
-		{
-			FREE(args);
-			return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
-		}
-
-		if (function->numargs > 0)
-		{
-			size_t i;
-			for (i = 0; i < function->numargs; i++)
-			{
-				switch ((byte_t)map_at(function->argTypes, function->args[i]))
-				{
-				case lb_char:
-				case lb_uchar:
-				case lb_bool:
-					types[i] = lb_byte;
-					break;
-				case lb_short:
-				case lb_ushort:
-					types[i] = lb_word;
-					break;
-				case lb_int:
-				case lb_uint:
-					types[i] = lb_dword;
-					break;
-				case lb_long:
-				case lb_ulong:
-				case lb_object:
-				case lb_boolarray:
-				case lb_chararray:
-				case lb_uchararray:
-				case lb_shortarray:
-				case lb_ushortarray:
-				case lb_intarray:
-				case lb_uintarray:
-				case lb_longarray:
-				case lb_ulongarray:
-				case lb_floatarray:
-				case lb_doublearray:
-				case lb_objectarray:
-					types[i] = lb_qword;
-					break;
-				case lb_float:
-					types[i] = lb_real4;
-					break;
-				case lb_double:
-					types[i] = lb_real8;
-					break;
-				}
-			}
-		}
-
-		size_t *outArgsCursor = (size_t *)args;
-		char *lsCursor = ls;
-		outArgsCursor += 2;
-		for (size_t i = 0; i < function->numargs; i++, outArgsCursor++)
-		{
-			switch (types[i])
-			{
-			case lb_byte:
-				*((byte_t *)outArgsCursor) = *((byte_t *)lsCursor);
-				lsCursor += sizeof(byte_t);
-				break;
-			case lb_word:
-				*((word_t *)outArgsCursor) = *((word_t *)*lsCursor);
-				lsCursor += sizeof(word_t);
-				break;
-			case lb_dword:
-				*((dword_t *)outArgsCursor) = *((dword_t *)lsCursor);
-				lsCursor += sizeof(dword_t);
-				break;
-			case lb_qword:
-				*((qword_t *)outArgsCursor) = *((qword_t *)lsCursor);
-				lsCursor += sizeof(qword_t);
-				break;
-			case lb_real4:
-				*((real4_t *)outArgsCursor) = *((real4_t *)lsCursor);
-				lsCursor += sizeof(real4_t);
-				break;
-			case lb_real8:
-				*((real8_t *)outArgsCursor) = *((real8_t *)lsCursor);
-				lsCursor += sizeof(real8_t);
-				break;
-			}
-		}
-
-		env->qret = vm_call_extern_asm(function->numargs + 2, NULL, args, function->location);
-
-		FREE(types);
-		FREE(args);
-
-		return env->exception;
-	}
-	else
-	{
-		//if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
-		//	return env_raise_exception(env, exception_stack_overflow, NULL);
-
-		size_t *stackframe = stack_alloc(env, 3);
-		if (!stackframe)
-			return env->exception;
-
-		*(stackframe) = (size_t)env->rbp;
-		*(stackframe + 1) = (size_t)env->rip;
-		*(stackframe + 2) = (size_t)function;
-
-		env->rbp = (byte_t *)(stackframe + 3);
-		//env->rbp = 
-			//(byte_t *)stackframe;
-		//env->rsp = (byte_t *)stackframe;
-			
-			//((size_t *)env->rsp) + 3;
-
-		env->variables->next = list_create();
-		env->variables->next->prev = env->variables;
-		env->variables = env->variables->next;
-		env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
-
-		for (size_t i = 0; i < function->numargs; i++)
-		{
-			const char *argname = function->args[i];
-			byte_t type = (byte_t)map_at(function->argTypes, argname);
-			size_t size = sizeof_type(type);
-			value_t val;
-			val.flags = 0;
-			value_set_type(&val, type);
-			MEMCPY(&val.ovalue, ls, size);
-			ls += size;
-
-			void *loc;
-			if (!(loc = stack_push(env, &val)))
-				return env->exception;
-
-			map_insert((map_t *)env->variables->data, argname, loc);
-		}
-
-		// Register static variables
-		map_iterator_t *sfieldIt = map_create_iterator(function->parentClass->staticFields);
-		while (sfieldIt->node)
-		{
-			const char *fieldName = (const char *)sfieldIt->key;
-			if (!map_find((map_t *)env->variables->data, fieldName))
-				map_insert((map_t *)env->variables->data, fieldName, sfieldIt->value);
-			sfieldIt = map_iterator_next(sfieldIt);
-		}
-		map_iterator_free(sfieldIt);
-
-		return env_run(env, function->location);
-	}
+	int code;
+	code = env_handle_static_function_callv(env, function, ls);
+	if (code)
+		return code;
+	code = env_run(env, env->rip);
+	return code;
 }
 
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls)
 {
-	// push the arg list to the stack
-
-	size_t *stackframe = stack_alloc(env, 3);
-	if (!stackframe)
-		return env->exception;
-
-
-	*(stackframe) = (size_t)env->rbp;
-	*(stackframe + 1) = (size_t)env->rip;
-	*(stackframe + 2) = (size_t)function;
-
-	env->rbp = (byte_t *)(stackframe + 3);
-	//env->rbp = env->rsp;
-	//env->rsp = (byte_t *)stackframe;
-		//((size_t *)env->rsp) + 3;
-
-	env->variables->next = list_create();
-	env->variables->next->prev = env->variables;
-	env->variables = env->variables->next;
-	env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
-
-	for (size_t i = 0; i < function->numargs; i++)
-	{
-		const char *argname = function->args[i];
-		byte_t type = (byte_t)map_at(function->argTypes, argname);
-		size_t size = sizeof_type(type);
-		value_t val;
-		val.flags = 0;
-		value_set_type(&val, type);
-		MEMCPY(&val.ovalue, ls, size);
-		ls += size;
-
-		void *loc;
-		if (!(loc = stack_push(env, &val)))
-			return env->exception;
-
-		map_insert((map_t *)env->variables->data, argname, loc);
-	}
-
-	// Register static variables
-	map_iterator_t *sfieldIt = map_create_iterator(function->parentClass->staticFields);
-	while (sfieldIt->node)
-	{
-		const char *fieldName = (const char *)sfieldIt->key;
-		if (!map_find((map_t *)env->variables->data, fieldName))
-			map_insert((map_t *)env->variables->data, fieldName, sfieldIt->value);
-		sfieldIt = map_iterator_next(sfieldIt);
-	}
-	map_iterator_free(sfieldIt);
-
-	// Register "this" variable
-	void *thisLoc;
-	value_t thisVal;
-	thisVal.flags = 0;
-	value_set_type(&thisVal, lb_object);
-	thisVal.ovalue = object;
-	if (!(thisLoc = stack_push(env, &thisVal)))
-		return env->exception;
-	map_insert((map_t *)env->variables->data, "this", thisLoc);
-
-	// At some point, add the fields to possible variables to reference, but for now
-	// just require this.<field>
-	/*map_iterator_t *mit = map_create_iterator(object->clazz->fields);
-	while (mit->node)
-	{
-		const char *fieldName = (const char *)mit->key;
-		map_insert((map_t *)env->variables->data, fieldName, mit->value);
-	}
-	map_iterator_free(mit);*/
-
-	return env_run(env, function->location);
+	int code;
+	code = env_handle_dynamic_function_callv(env, function, object, ls);
+	if (code)
+		return code;
+	code = env_run(env, env->rip);
+	return code;
 }
 
 object_t *env_new_string(env_t *env, const char *cstring)
@@ -1736,37 +1518,45 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_ret:
-			EXIT_RUN(env_cleanup_call(env));
+		case lb_retr:
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_retb:
 			env->rip++;
 			env->bret = *(byte_t *)env->rip;
-			EXIT_RUN(env_cleanup_call(env));
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_retw:
 			env->rip++;
 			env->wret = *(word_t *)env->rip;
-			EXIT_RUN(env_cleanup_call(env));
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_retd:
 			env->rip++;
 			env->dret = *(dword_t *)env->rip;
-			EXIT_RUN(env_cleanup_call(env));
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_retq:
 			env->rip++;
 			env->qret = *(qword_t *)env->rip;
-			EXIT_RUN(env_cleanup_call(env));
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_retr4:
 			env->rip++;
 			env->r4ret = *(real4_t *)env->rip;
-			EXIT_RUN(env_cleanup_call(env));
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_retr8:
 			env->rip++;
 			env->r8ret = *(real8_t *)env->rip;
-			EXIT_RUN(env_cleanup_call(env));
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 		case lb_reto:
 			break;
@@ -1776,10 +1566,8 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			MEMCPY(&env->vret, data, value_sizeof((value_t *)&flags));
-			EXIT_RUN(env_cleanup_call(env));
-			break;
-		case lb_retr:
-			EXIT_RUN(env_cleanup_call(env));
+			if (env_cleanup_call(env))
+				EXIT_RUN(env->exception);
 			break;
 
 		case lb_static_call:
@@ -2240,6 +2028,256 @@ int env_cleanup_call(env_t *env)
 		//(byte_t *)(*(stackframe + 1));
 	//env->rip = ((byte_t *)env->rbp) + sizeof(void *);
 
+	return exception_none;
+}
+
+int env_handle_static_function_callv(env_t *env, function_t *function, va_list ls)
+{
+	if (function->flags & FUNCTION_FLAG_NATIVE)
+	{
+		if (!function->location)
+		{
+			if (!try_link_function(env->vm, function))
+				return env_raise_exception(env, exception_link_error, function->name);
+		}
+
+		void *args = CALLOC(function->numargs + 2, sizeof(qword_t));
+
+		//MALLOC((function->numargs * sizeof(qword_t)) + (2 * sizeof(qword_t)));
+		if (!args)
+			return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
+
+		void **temp = (void **)args;
+		temp[0] = env;
+		temp[1] = function->parentClass;
+
+		byte_t *types = (byte_t *)MALLOC(sizeof(byte_t) * function->numargs);
+		if (!types)
+		{
+			FREE(args);
+			return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
+		}
+
+		if (function->numargs > 0)
+		{
+			size_t i;
+			for (i = 0; i < function->numargs; i++)
+			{
+				switch ((byte_t)map_at(function->argTypes, function->args[i]))
+				{
+				case lb_char:
+				case lb_uchar:
+				case lb_bool:
+					types[i] = lb_byte;
+					break;
+				case lb_short:
+				case lb_ushort:
+					types[i] = lb_word;
+					break;
+				case lb_int:
+				case lb_uint:
+					types[i] = lb_dword;
+					break;
+				case lb_long:
+				case lb_ulong:
+				case lb_object:
+				case lb_boolarray:
+				case lb_chararray:
+				case lb_uchararray:
+				case lb_shortarray:
+				case lb_ushortarray:
+				case lb_intarray:
+				case lb_uintarray:
+				case lb_longarray:
+				case lb_ulongarray:
+				case lb_floatarray:
+				case lb_doublearray:
+				case lb_objectarray:
+					types[i] = lb_qword;
+					break;
+				case lb_float:
+					types[i] = lb_real4;
+					break;
+				case lb_double:
+					types[i] = lb_real8;
+					break;
+				}
+			}
+		}
+
+		size_t *outArgsCursor = (size_t *)args;
+		char *lsCursor = ls;
+		outArgsCursor += 2;
+		for (size_t i = 0; i < function->numargs; i++, outArgsCursor++)
+		{
+			switch (types[i])
+			{
+			case lb_byte:
+				*((byte_t *)outArgsCursor) = *((byte_t *)lsCursor);
+				lsCursor += sizeof(byte_t);
+				break;
+			case lb_word:
+				*((word_t *)outArgsCursor) = *((word_t *)*lsCursor);
+				lsCursor += sizeof(word_t);
+				break;
+			case lb_dword:
+				*((dword_t *)outArgsCursor) = *((dword_t *)lsCursor);
+				lsCursor += sizeof(dword_t);
+				break;
+			case lb_qword:
+				*((qword_t *)outArgsCursor) = *((qword_t *)lsCursor);
+				lsCursor += sizeof(qword_t);
+				break;
+			case lb_real4:
+				*((real4_t *)outArgsCursor) = *((real4_t *)lsCursor);
+				lsCursor += sizeof(real4_t);
+				break;
+			case lb_real8:
+				*((real8_t *)outArgsCursor) = *((real8_t *)lsCursor);
+				lsCursor += sizeof(real8_t);
+				break;
+			}
+		}
+
+		env->qret = vm_call_extern_asm(function->numargs + 2, NULL, args, function->location);
+
+		FREE(types);
+		FREE(args);
+
+		return env->exception;
+	}
+	else
+	{
+		//if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
+		//	return env_raise_exception(env, exception_stack_overflow, NULL);
+
+		size_t *stackframe = stack_alloc(env, 3);
+		if (!stackframe)
+			return env->exception;
+
+		*(stackframe) = (size_t)env->rbp;
+		*(stackframe + 1) = (size_t)env->rip;
+		*(stackframe + 2) = (size_t)function;
+
+		env->rbp = (byte_t *)(stackframe + 3);
+		//env->rbp = 
+			//(byte_t *)stackframe;
+		//env->rsp = (byte_t *)stackframe;
+
+			//((size_t *)env->rsp) + 3;
+
+		env->variables->next = list_create();
+		env->variables->next->prev = env->variables;
+		env->variables = env->variables->next;
+		env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
+
+		for (size_t i = 0; i < function->numargs; i++)
+		{
+			const char *argname = function->args[i];
+			byte_t type = (byte_t)map_at(function->argTypes, argname);
+			size_t size = sizeof_type(type);
+			value_t val;
+			val.flags = 0;
+			value_set_type(&val, type);
+			MEMCPY(&val.ovalue, ls, size);
+			ls += size;
+
+			void *loc;
+			if (!(loc = stack_push(env, &val)))
+				return env->exception;
+
+			map_insert((map_t *)env->variables->data, argname, loc);
+		}
+
+		// Register static variables
+		map_iterator_t *sfieldIt = map_create_iterator(function->parentClass->staticFields);
+		while (sfieldIt->node)
+		{
+			const char *fieldName = (const char *)sfieldIt->key;
+			if (!map_find((map_t *)env->variables->data, fieldName))
+				map_insert((map_t *)env->variables->data, fieldName, sfieldIt->value);
+			sfieldIt = map_iterator_next(sfieldIt);
+		}
+		map_iterator_free(sfieldIt);
+
+		env->rip = function->location;
+		return exception_none;
+	}
+}
+
+int env_handle_dynamic_function_callv(env_t *env, function_t *function, object_t *object, va_list ls)
+{
+	// push the arg list to the stack
+
+	size_t *stackframe = stack_alloc(env, 3);
+	if (!stackframe)
+		return env->exception;
+
+
+	*(stackframe) = (size_t)env->rbp;
+	*(stackframe + 1) = (size_t)env->rip;
+	*(stackframe + 2) = (size_t)function;
+
+	env->rbp = (byte_t *)(stackframe + 3);
+	//env->rbp = env->rsp;
+	//env->rsp = (byte_t *)stackframe;
+		//((size_t *)env->rsp) + 3;
+
+	env->variables->next = list_create();
+	env->variables->next->prev = env->variables;
+	env->variables = env->variables->next;
+	env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
+
+	for (size_t i = 0; i < function->numargs; i++)
+	{
+		const char *argname = function->args[i];
+		byte_t type = (byte_t)map_at(function->argTypes, argname);
+		size_t size = sizeof_type(type);
+		value_t val;
+		val.flags = 0;
+		value_set_type(&val, type);
+		MEMCPY(&val.ovalue, ls, size);
+		ls += size;
+
+		void *loc;
+		if (!(loc = stack_push(env, &val)))
+			return env->exception;
+
+		map_insert((map_t *)env->variables->data, argname, loc);
+	}
+
+	// Register static variables
+	map_iterator_t *sfieldIt = map_create_iterator(function->parentClass->staticFields);
+	while (sfieldIt->node)
+	{
+		const char *fieldName = (const char *)sfieldIt->key;
+		if (!map_find((map_t *)env->variables->data, fieldName))
+			map_insert((map_t *)env->variables->data, fieldName, sfieldIt->value);
+		sfieldIt = map_iterator_next(sfieldIt);
+	}
+	map_iterator_free(sfieldIt);
+
+	// Register "this" variable
+	void *thisLoc;
+	value_t thisVal;
+	thisVal.flags = 0;
+	value_set_type(&thisVal, lb_object);
+	thisVal.ovalue = object;
+	if (!(thisLoc = stack_push(env, &thisVal)))
+		return env->exception;
+	map_insert((map_t *)env->variables->data, "this", thisLoc);
+
+	// At some point, add the fields to possible variables to reference, but for now
+	// just require this.<field>
+	/*map_iterator_t *mit = map_create_iterator(object->clazz->fields);
+	while (mit->node)
+	{
+		const char *fieldName = (const char *)mit->key;
+		map_insert((map_t *)env->variables->data, fieldName, mit->value);
+	}
+	map_iterator_free(mit);*/
+
+	env->rip = (byte_t *)function->location;
 	return exception_none;
 }
 

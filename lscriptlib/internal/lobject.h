@@ -3,6 +3,6 @@
 
 #include "../lscript.h"
 
-LNIFUNC void LNICALL Object_getClass(LEnv venv, lclass vclazz, lobject object);
+LNIFUNC lobject LNICALL Object_getClass(LEnv venv, lclass vclazz, lobject object);
 
 #endif
