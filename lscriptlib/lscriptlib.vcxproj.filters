@@ -87,6 +87,12 @@
     <ClInclude Include="internal\lprocess.h">
       <Filter>Header Files\internal</Filter>
     </ClInclude>
+    <ClInclude Include="internal\lobject.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="internal\lclass.h">
+      <Filter>Header Files\internal</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="internal\object.c">
@@ -138,6 +144,9 @@
       <Filter>Source Files\internal</Filter>
     </ClCompile>
     <ClCompile Include="internal\lprocess.c">
+      <Filter>Source Files\internal</Filter>
+    </ClCompile>
+    <ClCompile Include="internal\lobject.c">
       <Filter>Source Files\internal</Filter>
     </ClCompile>
   </ItemGroup>

@@ -18,5 +18,8 @@ class Object extends null
 	function dynamic interp hashCode()
 		retv this
 
+	function dynamic interp finalize()
+		ret
+
 	function static native getClass(object Object obj)
 

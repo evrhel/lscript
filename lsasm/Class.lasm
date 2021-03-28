@@ -1,0 +1,21 @@
+
+class Class
+
+	global dynamic varying ulong handle
+
+	global dynamic varying object name
+
+	function dynamic interp <init>()
+		ret
+
+	function dynamic interp getName()
+		retv this.name
+
+	function dynamic interp toString()
+		object builder
+		seto builder new StringBuilder <init>()
+		dynamic_call builder.append(LString;) "class "
+		dynamic_call builder.append(LString;) this.name
+		dynamic_call builder.toString()
+		retr
+
