@@ -17,7 +17,7 @@
 #define WORD_SIZE sizeof(size_t)
 
 //#define CURR_CLASS(env) (*(((class_t**)(env)->rbp)+2))
-#define CURR_FLAGS(env) (**(((frame_flags_t**)(env)->rbp)-1))
+#define CURR_FLAGS(env) (*(((frame_flags_t*)(env)->rbp)-1))
 #define CURR_FUNC(env) (*(((function_t**)(env)->rbp)-2))
 #define FRAME_FUNC(rbp) (*(((function_t**)(rbp))-2))
 #define FRAME_RIP(rbp) (*(((byte_t**)(rbp))-3))
@@ -60,7 +60,8 @@ enum
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
 static int env_run(env_t *env, void *location);
-static int env_cleanup_call(env_t *env);
+static inline int env_create_stack_frame(env_t *env, function_t *function, flags_t flags);
+static inline int env_cleanup_call(env_t *env);
 
 static int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls);
 static int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_flags_t flags, object_t *object, va_list ls);
@@ -1161,7 +1162,7 @@ int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t *
 int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 {
 	int code;
-	code = env_handle_static_function_callv(env, function, ls);
+	code = env_handle_static_function_callv(env, function, frame_flag_return_native, ls);
 	if (code)
 		return code;
 	code = env_run(env, env->rip);
@@ -1171,7 +1172,7 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls)
 {
 	int code;
-	code = env_handle_dynamic_function_callv(env, function, object, ls);
+	code = env_handle_dynamic_function_callv(env, function, frame_flag_return_native,  object, ls);
 	if (code)
 		return code;
 	code = env_run(env, env->rip);
@@ -1528,48 +1529,35 @@ int env_run(env_t *env, void *location)
 			store_return(env, data, flags);
 			break;
 
-		case lb_ret:
-		case lb_retr:
-			if (env_cleanup_call(env))
-				EXIT_RUN(env->exception);
-			break;
 		case lb_retb:
 			env->rip++;
 			env->bret = *(byte_t *)env->rip;
-			if (env_cleanup_call(env))
-				EXIT_RUN(env->exception);
+			goto general_ret_command_handle;
 			break;
 		case lb_retw:
 			env->rip++;
 			env->wret = *(word_t *)env->rip;
-			if (env_cleanup_call(env))
-				EXIT_RUN(env->exception);
+			goto general_ret_command_handle;
 			break;
 		case lb_retd:
 			env->rip++;
 			env->dret = *(dword_t *)env->rip;
-			if (env_cleanup_call(env))
-				EXIT_RUN(env->exception);
+			goto general_ret_command_handle;
 			break;
 		case lb_retq:
 			env->rip++;
 			env->qret = *(qword_t *)env->rip;
-			if (env_cleanup_call(env))
-				EXIT_RUN(env->exception);
+			goto general_ret_command_handle;
 			break;
 		case lb_retr4:
 			env->rip++;
 			env->r4ret = *(real4_t *)env->rip;
-			if (env_cleanup_call(env))
-				EXIT_RUN(env->exception);
+			goto general_ret_command_handle;
 			break;
 		case lb_retr8:
 			env->rip++;
 			env->r8ret = *(real8_t *)env->rip;
-			if (env_cleanup_call(env))
-				EXIT_RUN(env->exception);
-			break;
-		case lb_reto:
+			goto general_ret_command_handle;
 			break;
 		case lb_retv:
 			env->rip++;
@@ -1577,6 +1565,13 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			MEMCPY(&env->vret, data, value_sizeof((value_t *)&flags));
+			goto general_ret_command_handle;
+			break;
+		case lb_ret:
+		case lb_retr:
+			general_ret_command_handle:
+			if (CURR_FLAGS(env) & frame_flag_return_native)
+				EXIT_RUN(env_cleanup_call(env));
 			if (env_cleanup_call(env))
 				EXIT_RUN(env->exception);
 			break;
@@ -2015,7 +2010,22 @@ done_call:
 	return __retVal;
 }
 
-int env_cleanup_call(env_t *env)
+inline int env_create_stack_frame(env_t *env, function_t *function, flags_t flags)
+{
+	size_t *stackframe = stack_alloc(env, 4);
+	if (!stackframe)
+		return env->exception;
+
+	*(stackframe) = (size_t)env->rbp;
+	*(stackframe + 1) = (size_t)env->rip;
+	*(stackframe + 2) = (size_t)function;
+	*(stackframe + 3) = (size_t)flags;
+
+	env->rbp = (byte_t *)(stackframe + 4);
+	return exception_none;
+}
+
+inline int env_cleanup_call(env_t *env)
 {
 	map_t *vars = (map_t *)env->variables->data;
 	if (!vars)
@@ -2031,7 +2041,7 @@ int env_cleanup_call(env_t *env)
 	env->variables->next = NULL;
 
 	// Restore the fake registers from the previous call
-	size_t *stackframe = (size_t *)env->rbp - 3;
+	size_t *stackframe = (size_t *)env->rbp - 4;
 	
 	env->rip = FRAME_RIP(env->rbp);
 	env->rsp = env->rbp;
@@ -2044,6 +2054,9 @@ int env_cleanup_call(env_t *env)
 
 int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls)
 {
+	if (env_create_stack_frame(env, function, flags) != exception_none)
+		return env->exception;
+
 	if (function->flags & FUNCTION_FLAG_NATIVE)
 	{
 		if (!function->location)
@@ -2162,16 +2175,6 @@ int env_handle_static_function_callv(env_t *env, function_t *function, frame_fla
 		//if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
 		//	return env_raise_exception(env, exception_stack_overflow, NULL);
 
-		size_t *stackframe = stack_alloc(env, 4);
-		if (!stackframe)
-			return env->exception;
-
-		*(stackframe) = (size_t)env->rbp;
-		*(stackframe + 1) = (size_t)env->rip;
-		*(stackframe + 2) = (size_t)function;
-		*(stackframe + 3) = (size_t)flags;
-
-		env->rbp = (byte_t *)(stackframe + 4);
 		//env->rbp = 
 			//(byte_t *)stackframe;
 		//env->rsp = (byte_t *)stackframe;
@@ -2221,17 +2224,8 @@ int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_fl
 {
 	// push the arg list to the stack
 
-	size_t *stackframe = stack_alloc(env, 4);
-	if (!stackframe)
+	if (env_create_stack_frame(env, function, flags) != exception_none)
 		return env->exception;
-
-
-	*(stackframe) = (size_t)env->rbp;
-	*(stackframe + 1) = (size_t)env->rip;
-	*(stackframe + 2) = (size_t)function;
-	*(stackframe + 3) = (size_t)flags;
-
-	env->rbp = (byte_t *)(stackframe + 4);
 	//env->rbp = env->rsp;
 	//env->rsp = (byte_t *)stackframe;
 		//((size_t *)env->rsp) + 3;
