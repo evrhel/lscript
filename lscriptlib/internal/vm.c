@@ -54,14 +54,14 @@ struct start_args_s
 enum
 {
 	frame_flag_return_no_cleanup = 0x1,
-	frame_flag_return_native = 0x2
+	frame_flag_return_native = 0x2,
 };
 
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
 static int env_run(env_t *env, void *location);
 static inline int env_create_stack_frame(env_t *env, function_t *function, flags_t flags);
-static inline int env_cleanup_call(env_t *env);
+static inline int env_cleanup_call(env_t *env, int onlyStackCleanup);
 
 static int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls);
 static int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_flags_t flags, object_t *object, va_list ls);
@@ -1165,7 +1165,12 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 	code = env_handle_static_function_callv(env, function, frame_flag_return_native, ls);
 	if (code)
 		return code;
-	code = env_run(env, env->rip);
+	if (!(function->flags & FUNCTION_FLAG_NATIVE))
+		code = env_run(env, env->rip);
+	else
+	{
+		env_cleanup_call(env, 1);
+	}
 	return code;
 }
 
@@ -1571,8 +1576,8 @@ int env_run(env_t *env, void *location)
 		case lb_retr:
 			general_ret_command_handle:
 			if (CURR_FLAGS(env) & frame_flag_return_native)
-				EXIT_RUN(env_cleanup_call(env));
-			if (env_cleanup_call(env))
+				EXIT_RUN(env_cleanup_call(env, 0));
+			if (env_cleanup_call(env, 0))
 				EXIT_RUN(env->exception);
 			break;
 
@@ -2025,20 +2030,23 @@ inline int env_create_stack_frame(env_t *env, function_t *function, flags_t flag
 	return exception_none;
 }
 
-inline int env_cleanup_call(env_t *env)
+inline int env_cleanup_call(env_t *env, int onlyStackCleanup)
 {
-	map_t *vars = (map_t *)env->variables->data;
-	if (!vars)
-		return env_raise_exception(env, exception_illegal_state, NULL);
+	if (!onlyStackCleanup)
+	{
+		map_t *vars = (map_t *)env->variables->data;
+		if (!vars)
+			return env_raise_exception(env, exception_illegal_state, NULL);
 
-	map_free(vars, 0);
+		map_free(vars, 0);
 
-	// Remove the map from the list
-	list_t *prev = env->variables->prev;
-	env->variables->prev = NULL;
-	list_free(env->variables, 0);
-	env->variables = prev;
-	env->variables->next = NULL;
+		// Remove the map from the list
+		list_t *prev = env->variables->prev;
+		env->variables->prev = NULL;
+		list_free(env->variables, 0);
+		env->variables = prev;
+		env->variables->next = NULL;
+	}
 
 	// Restore the fake registers from the previous call
 	size_t *stackframe = (size_t *)env->rbp - 4;
