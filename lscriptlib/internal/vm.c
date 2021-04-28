@@ -243,7 +243,10 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 #endif
 
 	vm->flags = flags;
+	
+	// Load all the required classes
 
+	// Load Object class
 	class_t *objectClass = vm_load_class(vm, "Object");
 	if (!objectClass)
 	{
@@ -251,6 +254,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Load Class class
 	class_t *classClass = vm_load_class(vm, "Class");
 	if (!classClass)
 	{
@@ -258,6 +262,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Load String class
 	class_t *stringClass = vm_load_class(vm, "String");
 	if (!stringClass)
 	{
@@ -265,6 +270,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Load System class
 	class_t *systemClass = vm_load_class(vm, "System");
 	if (!systemClass)
 	{
@@ -272,6 +278,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Load StdFileHandle class
 	class_t *stdFileHandleClass = vm_load_class(vm, "StdFileHandle");
 	if (!stdFileHandleClass)
 	{
@@ -279,6 +286,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Load FileOutputStream class
 	class_t *fileoutputstreamClass = vm_load_class(vm, "FileOutputStream");
 	if (!fileoutputstreamClass)
 	{
@@ -286,6 +294,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Load FileInputStream class
 	class_t *fileinputstreamClass = vm_load_class(vm, "FileInputStream");
 	if (!fileinputstreamClass)
 	{
@@ -293,6 +302,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Get the stdout static field from System
 	value_t *systemStdout = class_get_static_field(systemClass, "stdout");
 	if (!systemStdout)
 	{
@@ -300,6 +310,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Get the stderr static field from System
 	value_t *systemStderr = class_get_static_field(systemClass, "stderr");
 	if (!systemStderr)
 	{
@@ -307,6 +318,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Get the stdin static field from System
 	value_t *systemStdin = class_get_static_field(systemClass, "stdin");
 	if (!systemStdin)
 	{
@@ -314,6 +326,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		return NULL;
 	}
 
+	// Allocate a FileOutputStream object for System.stdout
 	object_t *stdoutVal = manager_alloc_object(vm->manager, fileoutputstreamClass);
 	if (!stdoutVal)
 	{
@@ -322,6 +335,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 	systemStdout->ovalue = stdoutVal;
 
+	// Allocate a FileOutputStream object for System.stderr
 	object_t *stderrVal = manager_alloc_object(vm->manager, fileoutputstreamClass);
 	if (!stderrVal)
 	{
@@ -330,6 +344,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 	systemStderr->ovalue = stderrVal;
 
+	// Allocate a FileInputStream object for System.stdin
 	object_t *stdinVal = manager_alloc_object(vm->manager, fileinputstreamClass);
 	if (!stdinVal)
 	{
@@ -345,6 +360,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 		manager_alloc_object(vm->manager, stdFileHandleClass)	// stdin
 	};
 
+	// Set each nativeHandle field to the FILE pointer for each stream
 	object_set_ulong(stdHandles[0], "nativeHandle", (lulong)stdout);
 	object_set_ulong(stdHandles[1], "nativeHandle", (lulong)stderr);
 	object_set_ulong(stdHandles[2], "nativeHandle", (lulong)stdin);

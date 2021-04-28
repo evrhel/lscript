@@ -103,7 +103,29 @@ inline char *new_exception_string(const char *format, ...)
 }
 void free_exception_string(const char *exceptionString);
 
+/*
+Creates a new virtual machine with the designated parameters.
+
+@param heapSize The size of the heap.
+@param stackSize The size of the stack, per thread.
+@param flags Creation flags.
+@param pathCount The number of paths.
+@param paths The paths for which the virtual machine will search for classes on.
+
+@return The new virtual machine, or NULL if creation failed.
+*/
 vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[]);
+
+/*
+Starts the virtual machine on a main function with the given arguments.
+
+@parma vm The virtual machine to start.
+@param startOnNewThread Whether to start the virtual machine on a separate thread.
+@param argc The number of command line arguments.
+@param argv The command line arguments to be passed to main.
+
+@return 0 if the start was successful.
+*/
 int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[]);
 class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
