@@ -18,6 +18,9 @@ enum
 	lb_const,
 	lb_varying,
 
+	lb_push = 0x30,
+	lb_pop,
+
 	lb_char = 0x80,
 	lb_uchar,
 	lb_short,

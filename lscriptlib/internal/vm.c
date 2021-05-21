@@ -68,7 +68,7 @@ static int env_handle_dynamic_function_callv(env_t *env, function_t *function, f
 
 static void *stack_push(env_t *env, value_t *value);
 static void *stack_alloc(env_t *env, size_t words);
-static int stack_pop(env_t *env, flags_t type);
+static int stack_pop(env_t *env, size_t words, qword_t *dstWords);
 
 static int is_varname_avaliable(env_t *env, const char *name);
 
@@ -2021,8 +2021,54 @@ int env_run(env_t *env, void *location)
 			}
 			break;
 
+		case lb_push:
+			// Pushes 1 qword onto the stack
+
+			env->rip++;
+			switch (*(env->rip))
+			{
+			case lb_ret:
+				env->rip++;
+				{
+					qword_t *allocated = (qword_t *)stack_alloc(env, 1);
+					if (!allocated)
+						EXIT_RUN(env->exception);
+					*allocated = env->qret;
+				}
+				break;
+			case lb_value:
+				env->rip++;
+				{
+					if (!env_resolve_variable(env, env->rip, &data, &flags))
+						EXIT_RUN(env->exception);
+					qword_t *allocated = (qword_t *)stack_alloc(env, 1);
+					if (!allocated)
+						EXIT_RUN(env->exception);
+					*allocated = data->ulvalue;
+				}
+				break;
+			default:
+				EXIT_RUN(env_raise_exception(env, exception_bad_command, "Invalid push format, must be either ret or value"));
+			}
+
+			break;
+		case lb_pop:
+			// Pops 1 qword off the stack
+
+			env->rip++;
+			switch (*(env->rip))
+			{
+			case lb_null:
+				if (!stack_pop(env, 1, NULL))
+					EXIT_RUN(env->exception);
+				break;
+			default:
+				EXIT_RUN(env_raise_exception(env, exception_bad_command, "Invalid pop format, must be null"));
+			}
+			break;
+
 		default:
-			EXIT_RUN(env_raise_exception(env, exception_bad_command, "unknown instruction %x", (unsigned int)(*env->rip)));
+			EXIT_RUN(env_raise_exception(env, exception_bad_command, "Unknown instruction %x", (unsigned int)(*env->rip)));
 		}
 	}
 
@@ -2334,9 +2380,12 @@ void *stack_alloc(env_t *env, size_t words)
 	return env->rsp;
 }
 
-int stack_pop(env_t *env, flags_t type)
+static int stack_pop(env_t *env, size_t words, qword_t *dstWords)
 {
-	return exception_none;
+	if (dstWords)
+		memcpy(dstWords, env->rsp, words * sizeof(size_t));
+	env->rsp -= words * sizeof(size_t);
+	return 1;
 }
 
 int is_varname_avaliable(env_t *env, const char *name)
