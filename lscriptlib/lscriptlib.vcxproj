@@ -175,6 +175,7 @@
     <ClCompile Include="internal\collection.c" />
     <ClCompile Include="internal\debug.c" />
     <ClCompile Include="internal\heap.c" />
+    <ClCompile Include="internal\lclass.c" />
     <ClCompile Include="internal\lmath.c" />
     <ClCompile Include="internal\lobject.c" />
     <ClCompile Include="internal\lprocess.c" />

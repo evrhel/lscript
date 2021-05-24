@@ -149,6 +149,9 @@
     <ClCompile Include="internal\lobject.c">
       <Filter>Source Files\internal</Filter>
     </ClCompile>
+    <ClCompile Include="internal\lclass.c">
+      <Filter>Source Files\internal</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="internal\hooks.asm">

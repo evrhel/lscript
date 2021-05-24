@@ -30,6 +30,16 @@ manager_t *manager_create(size_t heapsize)
 	}
 	manager->refs->data = (void *)0xbaddcafebaddcafe;
 
+	manager->strongRefs = list_create();
+	if (!manager->strongRefs)
+	{
+		list_free(manager->refs, 0);
+		free_heap(manager->heap);
+		FREE(manager);
+		return NULL;
+	}
+	manager->refs->data = (void *)0xbaddcafebaddcafe;
+
 	return manager;
 }
 
@@ -95,6 +105,43 @@ array_t *manager_alloc_array(manager_t *manager, byte_t type, unsigned int lengt
 	return array;
 }
 
+reference_t *manager_create_strong_object_reference(manager_t *manager, object_t *object)
+{
+	reference_t *strongRef = (reference_t *)MALLOC(sizeof(reference_t));
+	if (!strongRef)
+		return NULL;
+	list_insert(manager->strongRefs, strongRef);
+	strongRef->object = object;
+	strongRef->type = reference_type_object;
+	return strongRef;
+}
+
+reference_t *manager_create_strong_array_reference(manager_t *manager, array_t *array)
+{
+	reference_t *strongRef = (reference_t *)MALLOC(sizeof(reference_t));
+	if (!strongRef)
+		return NULL;
+	list_insert(manager->strongRefs, strongRef);
+	strongRef->object = array;
+	strongRef->type = reference_type_array;
+	return strongRef;
+}
+
+void manager_destroy_strong_reference(manager_t *manager, reference_t *reference)
+{
+	list_t *curr = manager->strongRefs->next;
+	while (curr)
+	{
+		if (curr->data == reference)
+		{
+			FREE(reference);
+			list_remove(curr, 0);
+			return;
+		}
+		curr = curr->next;
+	}
+}
+
 void manager_gc(manager_t *manager, map_t *visibleSet)
 {
 	map_iterator_t *mit = map_create_iterator(visibleSet);
@@ -107,6 +154,13 @@ void manager_gc(manager_t *manager, map_t *visibleSet)
 	}
 
 	map_iterator_free(mit);
+
+	list_t *curr = manager->strongRefs->next;
+	while (curr)
+	{
+		explore_value((value_t *)((reference_t *)curr->data)->object);
+		curr = curr->next;
+	}
 
 	list_iterator_t *lit = list_create_iterator(manager->refs);
 	while (lit)
@@ -148,8 +202,9 @@ void manager_free(manager_t *manager)
 {
 	if (manager)
 	{
-		free_heap(manager->heap);
+		list_free(manager->strongRefs, 0);
 		list_free(manager->refs, 0);
+		free_heap(manager->heap);
 		FREE(manager);
 	}
 }

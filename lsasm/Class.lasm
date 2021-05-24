@@ -19,3 +19,5 @@ class Class
 		dynamic_call builder.toString()
 		retr
 
+	function static native classOf(object Object obj)
+

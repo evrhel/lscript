@@ -7,22 +7,6 @@ class Main
 	
 	# main function
 	function static interp main(objectarray String args)
-		object process
-		static_call System.startProcess(LString;LString;LString;) "C:\\Windows\\notepad.exe" null null
-		setr process
-
-		dynamic_call process.toString()
-		dynamic_call System.stdout.println(LString;) ret
-		
-		
-		dynamic_call System.stdout.println(LString;) "Started process!"
-
-		if process != ulong[0]
-			dynamic_call process.wait(i) Process.INFINITE
-		end
-
-		dynamic_call System.stdout.println(LString;) "Process closed!"
-
 		object builder
 		seto builder new StringBuilder <init>()
 		dynamic_call builder.append(LString;) "Hello"
@@ -31,6 +15,13 @@ class Main
 		dynamic_call builder.append(C) ' '
 		dynamic_call builder.append(q) qword[12]
 		dynamic_call builder.toString()
+		dynamic_call System.stdout.println(LString;) ret
+
+		object builderClass
+		dynamic_call builder.getClass()
+		setr builderClass
+
+		dynamic_call builderClass.getName()
 		dynamic_call System.stdout.println(LString;) ret
 
 		retd dword[25]

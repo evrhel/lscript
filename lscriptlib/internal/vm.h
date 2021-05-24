@@ -53,6 +53,8 @@ struct vm_s
 
 	list_t *paths;
 
+	map_t *loadedClassObjects;
+
 #if defined(WIN32)
 	HMODULE *hLibraries;
 	HANDLE hVMThread;
@@ -131,6 +133,7 @@ class_t *vm_get_class(vm_t *vm, const char *classname);
 class_t *vm_load_class(vm_t *vm, const char *classname);
 class_t *vm_load_class_file(vm_t *vm, const char *filename);
 class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size);
+object_t *vm_get_class_object(vm_t *vm, const char *classname);
 void vm_add_path(vm_t *vm, const char *path);
 int vm_load_library(vm_t *vm, const char *libpath);
 void vm_free(vm_t *vm, unsigned long threadWaitTime);

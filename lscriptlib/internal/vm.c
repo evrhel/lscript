@@ -224,6 +224,8 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 
 	vm_add_path(vm, ".\\lib\\");
 
+	vm->loadedClassObjects = map_create(16, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
+
 	vm->libraryCount = 4;
 #if defined(_WIN32)
 	vm->hLibraries = (HMODULE *)CALLOC(vm->libraryCount, sizeof(HMODULE));
@@ -508,6 +510,23 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 	}
 #endif
 	FREE(tempName);
+	
+	// Create the class object
+	class_t *classClass = vm_load_class(vm, "Class");
+	object_t *classObject = manager_alloc_object(vm->manager, classClass);
+	object_set_ulong(classObject, "handle", (lulong)classClass);
+	
+	class_t *classnameClass = vm_load_class(vm, "String");
+	object_t *classnameObject = manager_alloc_object(vm->manager, classnameClass);
+	
+	array_t *classnameCharArray = manager_alloc_array(vm->manager, lb_chararray, classnameSize - 1);
+	memcpy(&classnameCharArray->data, classname, classnameSize - 1);
+	object_set_object(classnameObject, "chars", classnameCharArray);
+
+	object_set_object(classObject, "name", classnameObject);
+
+	reference_t *strongClassRef = manager_create_strong_object_reference(vm->manager, classObject);
+	map_insert(vm->loadedClassObjects, classname, strongClassRef);
 
 	function_t *staticinit;
 	if (result)
@@ -555,6 +574,11 @@ class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size)
 	if (clazz)
 		map_insert(vm->classes, clazz->name, clazz);
 	return clazz;
+}
+
+object_t *vm_get_class_object(vm_t *vm, const char *classname)
+{
+	return ((reference_t *)map_at(vm->loadedClassObjects, classname))->object;
 }
 
 void vm_add_path(vm_t *vm, const char *path)
@@ -637,6 +661,8 @@ void vm_free(vm_t *vm, unsigned long threadWaitTime)
 	map_free(vm->classes, 0);
 
 	manager_free(vm->manager);
+
+	map_free(vm->loadedClassObjects, 1);
 
 #if defined(_WIN32)
 	// Don't free the first library - it is passed in vm_create by user
