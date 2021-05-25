@@ -1,8 +1,14 @@
 
 class Math
 
-	global static const double PI real8[3.1415926539]
-	global static const float PIF real4[3.1415926539]
+	global static const double PI real8[3.14159265359]
+	global static const float PIF real4[3.14159265359]
+
+	global static const double E real8[2.71828182845]
+	global static const float EF real4[2.71828182845]
+
+	global static const double PHI real8[1.61803398875]
+	global static const float PHIF real4[1.61803398875]
 
 	function dynamic interp <init>()
 		ret
