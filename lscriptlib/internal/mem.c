@@ -146,6 +146,7 @@ void manager_gc(manager_t *manager, map_t *visibleSet)
 {
 	map_iterator_t *mit = map_create_iterator(visibleSet);
 
+	// Explore each value in the visible set and mark any reachable objects
 	while (mit->node)
 	{
 		explore_value((value_t *)mit->key);
@@ -155,6 +156,7 @@ void manager_gc(manager_t *manager, map_t *visibleSet)
 
 	map_iterator_free(mit);
 
+	// Explore each value having a strong reference to it and mark any reachable objects
 	list_t *curr = manager->strongRefs->next;
 	while (curr)
 	{
@@ -162,6 +164,7 @@ void manager_gc(manager_t *manager, map_t *visibleSet)
 		curr = curr->next;
 	}
 
+	// Free any object which was not marked as visible
 	list_iterator_t *lit = list_create_iterator(manager->refs);
 	while (lit)
 	{

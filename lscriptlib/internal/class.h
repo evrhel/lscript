@@ -52,6 +52,18 @@ struct class_s
 
 typedef class_t *(*classloadproc_t)(const char *classname, void *more);
 
+/*
+Loads a class from its binary data into a class_t.
+
+@param binary The binary class data. The data is not copied and may be changed. Freeing this
+during the lifetime of the class results in undefined behavior.
+@param length The length of the data.
+@param loadproc A pointer to a function which will handle loading any necessary classes when loading
+this class. This is called generally when a superclass is needed.
+@param more A value which will be passed to loadproc when needed.
+
+@return The new class, or NULL if creation failed.
+*/
 class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, void *more);
 
 inline function_t *class_get_function(class_t *clazz, const char *qualifiedName)
@@ -69,6 +81,12 @@ inline void *class_get_dynamic_field_offset(class_t *clazz, const char *fieldNam
 	return map_at(clazz->fields, fieldName);
 }
 
+/*
+Frees a class loaded with class_load.
+
+@param clazz The class to free.
+@param freedata Whether to free the binary data associated with the class.
+*/
 void class_free(class_t *clazz, int freedata);
 
 #endif

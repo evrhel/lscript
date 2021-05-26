@@ -11,10 +11,10 @@
 typedef struct array_s array_t;
 struct array_s
 {
-	signed long long flags;
-	unsigned int length;
-	unsigned int dummy;
-	void *data;
+	signed long long flags;		// Value flags
+	unsigned int length;		// The length of the array
+	unsigned int dummy;			// Padding
+	void *data;					// The start of the data (not an actual pointer)
 };
 
 inline data_t *array_get_data(array_t *array, luint index, size_t elemSize)
