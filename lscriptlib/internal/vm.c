@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <Windows.h>
-
 #include "mem_debug.h"
 #include "cast.h"
 #include "value.h"
@@ -81,7 +79,16 @@ static void vm_start_routine(start_args_t *args);
 static void print_stack_trace(FILE *file, env_t *env, int printVars);
 
 /*
+Calls a function with the desired arguments.
+
 Implemented in hooks.asm
+
+@param argCount The number of arguments the function takes.
+@param argTypes The type of each respective argument. Unused internally - pass as NULL.
+@param args A pointer to the start of the arguments. Each argument should be 8-bytes wide.
+@param proc The function to execute.
+
+@return The return value.
 */
 extern qword_t __cdecl vm_call_extern_asm(size_t argCount, const byte_t *argTypes, const void *args, void *proc);
 
@@ -439,7 +446,7 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 	if (result = vm_get_class(vm, classname))
 		return result;
 
-	size_t classnameSize = strlen(classname) + 1;
+	unsigned int classnameSize = (unsigned int)(strlen(classname) + 1);
 	char *tempName = (char *)MALLOC(classnameSize);
 	if (!tempName)
 		return NULL;
@@ -520,7 +527,7 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 	object_t *classnameObject = manager_alloc_object(vm->manager, classnameClass);
 	
 	array_t *classnameCharArray = manager_alloc_array(vm->manager, lb_chararray, classnameSize - 1);
-	memcpy(&classnameCharArray->data, classname, classnameSize - 1);
+	MEMCPY(&classnameCharArray->data, classname, classnameSize - 1);
 	object_set_object(classnameObject, "chars", classnameCharArray);
 
 	object_set_object(classObject, "name", classnameObject);
@@ -960,7 +967,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 		char *indBegin = bracBeg + 1;
 
 		*bracEnd = 0;
-		luint index = atoll(indBegin);
+		luint index = (luint)atoll(indBegin);
 		
 
 		char buf[100];
@@ -2171,91 +2178,96 @@ int env_handle_static_function_callv(env_t *env, function_t *function, frame_fla
 		temp[0] = env;
 		temp[1] = function->parentClass;
 
-		byte_t *types = (byte_t *)MALLOC(sizeof(byte_t) * function->numargs);
-		if (!types)
-		{
-			FREE(args);
-			return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
-		}
-
+		byte_t *types = NULL;
+		
 		if (function->numargs > 0)
 		{
-			size_t i;
-			for (i = 0; i < function->numargs; i++)
+			types = (byte_t *)MALLOC(sizeof(byte_t) * function->numargs);
+			if (!types)
 			{
-				switch ((byte_t)map_at(function->argTypes, function->args[i]))
+				FREE(args);
+				return env_raise_exception(env, exception_vm_error, "allocate native function arguments");
+			}
+
+			if (function->numargs > 0)
+			{
+				size_t i;
+				for (i = 0; i < function->numargs; i++)
 				{
-				case lb_char:
-				case lb_uchar:
-				case lb_bool:
-					types[i] = lb_byte;
-					break;
-				case lb_short:
-				case lb_ushort:
-					types[i] = lb_word;
-					break;
-				case lb_int:
-				case lb_uint:
-					types[i] = lb_dword;
-					break;
-				case lb_long:
-				case lb_ulong:
-				case lb_object:
-				case lb_boolarray:
-				case lb_chararray:
-				case lb_uchararray:
-				case lb_shortarray:
-				case lb_ushortarray:
-				case lb_intarray:
-				case lb_uintarray:
-				case lb_longarray:
-				case lb_ulongarray:
-				case lb_floatarray:
-				case lb_doublearray:
-				case lb_objectarray:
-					types[i] = lb_qword;
-					break;
-				case lb_float:
-					types[i] = lb_real4;
-					break;
-				case lb_double:
-					types[i] = lb_real8;
-					break;
+					switch ((byte_t)map_at(function->argTypes, function->args[i]))
+					{
+					case lb_char:
+					case lb_uchar:
+					case lb_bool:
+						types[i] = lb_byte;
+						break;
+					case lb_short:
+					case lb_ushort:
+						types[i] = lb_word;
+						break;
+					case lb_int:
+					case lb_uint:
+						types[i] = lb_dword;
+						break;
+					case lb_long:
+					case lb_ulong:
+					case lb_object:
+					case lb_boolarray:
+					case lb_chararray:
+					case lb_uchararray:
+					case lb_shortarray:
+					case lb_ushortarray:
+					case lb_intarray:
+					case lb_uintarray:
+					case lb_longarray:
+					case lb_ulongarray:
+					case lb_floatarray:
+					case lb_doublearray:
+					case lb_objectarray:
+						types[i] = lb_qword;
+						break;
+					case lb_float:
+						types[i] = lb_real4;
+						break;
+					case lb_double:
+						types[i] = lb_real8;
+						break;
+					}
 				}
 			}
-		}
 
-		size_t *outArgsCursor = (size_t *)args;
-		char *lsCursor = ls;
-		outArgsCursor += 2;
-		for (size_t i = 0; i < function->numargs; i++, outArgsCursor++)
-		{
-			switch (types[i])
+			size_t *outArgsCursor = (size_t *)args;
+			char *lsCursor = ls;
+			outArgsCursor += 2;
+			for (size_t i = 0; i < function->numargs; i++, outArgsCursor++)
 			{
-			case lb_byte:
-				*((byte_t *)outArgsCursor) = *((byte_t *)lsCursor);
-				lsCursor += sizeof(byte_t);
-				break;
-			case lb_word:
-				*((word_t *)outArgsCursor) = *((word_t *)*lsCursor);
-				lsCursor += sizeof(word_t);
-				break;
-			case lb_dword:
-				*((dword_t *)outArgsCursor) = *((dword_t *)lsCursor);
-				lsCursor += sizeof(dword_t);
-				break;
-			case lb_qword:
-				*((qword_t *)outArgsCursor) = *((qword_t *)lsCursor);
-				lsCursor += sizeof(qword_t);
-				break;
-			case lb_real4:
-				*((real4_t *)outArgsCursor) = *((real4_t *)lsCursor);
-				lsCursor += sizeof(real4_t);
-				break;
-			case lb_real8:
-				*((real8_t *)outArgsCursor) = *((real8_t *)lsCursor);
-				lsCursor += sizeof(real8_t);
-				break;
+				switch (types[i])
+				{
+				case lb_byte:
+					*((byte_t *)outArgsCursor) = *((byte_t *)lsCursor);
+					lsCursor += sizeof(byte_t);
+					break;
+				case lb_word:
+					*((word_t *)outArgsCursor) = *((word_t *)*lsCursor);
+					lsCursor += sizeof(word_t);
+					break;
+				case lb_dword:
+					*((dword_t *)outArgsCursor) = *((dword_t *)lsCursor);
+					lsCursor += sizeof(dword_t);
+					break;
+				case lb_qword:
+					*((qword_t *)outArgsCursor) = *((qword_t *)lsCursor);
+					lsCursor += sizeof(qword_t);
+					break;
+				case lb_real4:
+					*((real4_t *)outArgsCursor) = *((real4_t *)lsCursor);
+					lsCursor += sizeof(real4_t);
+					break;
+				case lb_real8:
+					*((real8_t *)outArgsCursor) = *((real8_t *)lsCursor);
+					lsCursor += sizeof(real8_t);
+					break;
+				}
 			}
 		}
 
@@ -2409,7 +2421,7 @@ void *stack_alloc(env_t *env, size_t words)
 static int stack_pop(env_t *env, size_t words, qword_t *dstWords)
 {
 	if (dstWords)
-		memcpy(dstWords, env->rsp, words * sizeof(size_t));
+		MEMCPY(dstWords, env->rsp, words * sizeof(size_t));
 	env->rsp -= words * sizeof(size_t);
 	return 1;
 }

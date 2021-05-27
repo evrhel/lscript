@@ -122,7 +122,7 @@ reference_t *manager_create_strong_array_reference(manager_t *manager, array_t *
 	if (!strongRef)
 		return NULL;
 	list_insert(manager->strongRefs, strongRef);
-	strongRef->object = array;
+	strongRef->array = array;
 	strongRef->type = reference_type_array;
 	return strongRef;
 }

@@ -12,6 +12,9 @@
 #error Unsupported platform
 #endif
 
+/*
+The maximum length of an exception string.
+*/
 #define MAX_EXCEPTION_STRING_LENGTH 100
 
 typedef struct vm_s vm_t;
@@ -20,81 +23,99 @@ typedef unsigned long long vm_flags_t;
 
 enum
 {
-	exception_none = 0,
-	exception_out_of_memory,
-	exception_stack_overflow,
-	exception_bad_command,
-	exception_vm_error,
-	exception_illegal_state,
-	exception_class_not_found,
-	exception_function_not_found,
-	exception_field_not_found,
-	exception_null_dereference,
-	exception_bad_variable_name,
-	exception_bad_array_index,
-	exception_link_error
+	exception_none = 0,				// No exception
+	exception_out_of_memory,		// No more memory is avaliable for heap allocation
+	exception_stack_overflow,		// No more memory is avaliable on the stack
+	exception_bad_command,			// A command was malformed
+	exception_vm_error,				// An error occurred in the virtual machine
+	exception_illegal_state,		// The virtual machine was put into an illegal state
+	exception_class_not_found,		// A class name was not able to be resolved
+	exception_function_not_found,	// A function name was not able to be resolved
+	exception_field_not_found,		// A field name was not able to be resolved
+	exception_null_dereference,		// An attempt was made to access data of a null object
+	exception_bad_variable_name,	// A variable name was not able to be resolved
+	exception_bad_array_index,		// An array index was out of bounds
+	exception_link_error			// A native function failed to be linked
 };
 
 enum
 {
-	vm_flag_verbose =			0x1,
-	vm_flag_no_load_debug =		0x2,
-	vm_flag_verbose_errors =	0x4
+	vm_flag_verbose =			0x1,	// Print verbose output
+	vm_flag_no_load_debug =		0x2,	// Don't load debugging symbols
+	vm_flag_verbose_errors =	0x4		// Print verbose error output
 };
 
 struct vm_s
 {
-	list_t *envs;
-	list_t *envsLast;
-	map_t *classes;
-	manager_t *manager;
-	size_t stackSize;
-	map_t *properties;
+	list_t *envs;				// List of all execution environments
+	list_t *envsLast;			// The last environment in envs
+	map_t *classes;				// A map which maps class names to class structures
+	manager_t *manager;			// The memory manager
+	size_t stackSize;			// The stack size for each execution environment
+	map_t *properties;			// The properties of the virtual machine
 
-	list_t *paths;
+	list_t *paths;				// The classpaths
 
-	map_t *loadedClassObjects;
+	map_t *loadedClassObjects;	// A map which maps class names to Class object instances
 
 #if defined(WIN32)
-	HMODULE *hLibraries;
-	HANDLE hVMThread;
-	DWORD dwVMThreadID;
+	HMODULE *hLibraries;		// Loaded modules
+	HANDLE hVMThread;			// The thread the virtual machine is running on
+	DWORD dwVMThreadID;			// The ID of the thread the virtual machine is running on
 	
-	DWORD dwPadding;
+	DWORD dwPadding;			// 4-byte padding
 #else
 #endif
-	size_t libraryCount;
+	size_t libraryCount;		// The maximum number of libraries which can be loaded
 
-	vm_flags_t flags;
+	vm_flags_t flags;			// Virtual machine startup flags
 };
 
 struct env_s
 {
-	byte_t *rip;
-	byte_t *cmdStart;
-	vm_t *vm;
+	byte_t *rip;				// Program counter
+	byte_t *cmdStart;			// The start of the current command being executed
+	vm_t *vm;					// The virtual machine this environment is apart of
 
-	byte_t *stack;
-	byte_t *rsp, *rbp;
+	byte_t *stack;				// Pointer to the start of the block allocated for the stack
+	byte_t *rsp;				// Stack pointer - points to the top of the stack
+	byte_t *rbp;				// Stack base pointer - points to the current stack frame
 
-	list_t *variables;
+	list_t *variables;			// List of maps which map strings to values in scope (stored as a value_t *)
 
-	int exception;
-	char *exceptionMessage;
+	int exception;				// The most recent exception which was thrown
+	char *exceptionMessage;		// The message associated with the exception
 
 	union
 	{
-		byte_t bret;
-		word_t wret;
-		dword_t dret;
-		qword_t qret;
-		real4_t r4ret;
-		real8_t r8ret;
-		void *vret;
+		byte_t bret;			// 1-byte integer return value
+		word_t wret;			// 2-byte integer return value
+		dword_t dret;			// 4-byte integer return value
+		qword_t qret;			// 8-byte integer return value
+		real4_t r4ret;			// 32-bit IEEE 754 floating point return value
+		real8_t r8ret;			// 64-bit IEEE 754 floating point return value
+		void *vret;				// Object return value
 	};
 };
 
+/*
+Creates a new exception string.
+
+@param format A formatted string.
+@param ls The values which will replace each argument in format.
+
+@return A new exception string with the respective values replaced.
+*/
 char *new_exception_stringv(const char *format, va_list ls);
+
+/*
+Creates a new exception string.
+
+@param format A formatted string.
+@param ... The values which will replace each argument in format.
+
+@return A new exception string with the respective values replaced.
+*/
 inline char *new_exception_string(const char *format, ...)
 {
 	va_list ls;
@@ -103,6 +124,12 @@ inline char *new_exception_string(const char *format, ...)
 	va_end(ls);
 	return result;
 }
+
+/*
+Frees a string allocated using new_exception_string or new_exception_stringv.
+
+@param exceptionString The string to free.
+*/
 void free_exception_string(const char *exceptionString);
 
 /*
