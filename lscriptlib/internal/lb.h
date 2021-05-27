@@ -21,7 +21,8 @@ enum
 	lb_push = 0x30,
 	lb_pop,
 
-	lb_char = 0x80,
+	lb_void = 0x80,
+	lb_char,
 	lb_uchar,
 	lb_short,
 	lb_ushort,

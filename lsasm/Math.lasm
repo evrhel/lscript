@@ -10,121 +10,121 @@ class Math
 	global static const double PHI real8[1.61803398875]
 	global static const float PHIF real4[1.61803398875]
 
-	function dynamic interp <init>()
+	function dynamic interp void <init>()
 		ret
 
-	function static interp abs(double a)
+	function static interp double abs(double a)
 		if a < double[0.0]
 			sub a double[0.0] a
 		end
 		retv a
 
-	function static interp abs(float a)
+	function static interp float abs(float a)
 		if a < float[0.0]
 			sub a float[0.0] a
 		end
 		retv a
 
-	function static interp abs(int a)
+	function static interp int abs(int a)
 		if a < int[0]
 			sub a int[0] a
 		end
 		retv a
 
-	function static interp abs(long a)
+	function static interp long abs(long a)
 		if a < long[0]
 			sub a long[0] a
 		end
 		retv a
 
-	function static interp max(double a, double b)
+	function static interp double max(double a, double b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp max(float a, float b)
+	function static interp float max(float a, float b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp max(int a, int b)
+	function static interp int max(int a, int b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp max(long a, long b)
+	function static interp long max(long a, long b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp min(double a, double b)
+	function static interp double min(double a, double b)
 		if a < b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp min(float a, float b)
+	function static interp float min(float a, float b)
 		if a < b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp min(int a, int b)
+	function static interp int min(int a, int b)
 		if a < b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp min(long a, long b)
+	function static interp long min(long a, long b)
 		if a < b
 			retv a
 		else
 			retv b
 		end
 
-	function static native round(double a)
-	function static native roundf(float a)
+	function static native double round(double a)
+	function static native float roundf(float a)
 
-	function static native floor(double a)
-	function static native floorf(float a)
+	function static native double floor(double a)
+	function static native float floorf(float a)
 
-	function static native ceil(double a)
-	function static native ceilf(float a)
+	function static native double ceil(double a)
+	function static native float ceilf(float a)
 
-	function static native sqrt(double a)
-	function static native sqrtf(float a)
+	function static native double sqrt(double a)
+	function static native float sqrtf(float a)
 
-	function static native cbrt(double a)
-	function static native cbrtf(float a)
+	function static native double cbrt(double a)
+	function static native float cbrtf(float a)
 
-	function static native exp(double a)
-	function static native expf(float a)
+	function static native double exp(double a)
+	function static native float expf(float a)
 
-	function static native exp2(double a)
-	function static native exp2f(float a)
+	function static native double exp2(double a)
+	function static native float exp2f(float a)
 
-	function static native log(double a)
-	function static native logf(float a)
+	function static native double log(double a)
+	function static native float logf(float a)
 
-	function static native log10(double a)
-	function static native log10f(float a)
+	function static native double log10(double a)
+	function static native float log10f(float a)
 
-	function static native sin(double a)
-	function static native sinf(float a)
+	function static native double sin(double a)
+	function static native float sinf(float a)
 
-	function static native cos(double a)
-	function static native cosf(float a)
+	function static native double cos(double a)
+	function static native float cosf(float a)
 
-	function static native tan(double a)
-	function static native tanf(float a)
+	function static native double tan(double a)
+	function static native float tanf(float a)

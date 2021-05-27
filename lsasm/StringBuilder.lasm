@@ -20,12 +20,12 @@ class StringBuilder
 	global dynamic varying chararray chars
 	global dynamic varying uint stringLength
 
-	function dynamic interp <init>()
+	function dynamic interp void <init>()
 		seto this.chars char dword[32]
 		setd this.stringLength dword[0]
 		ret
 
-	function dynamic interp append(object String string)
+	function dynamic interp void append(object String string)
 		uint tmp
 		add tmp this.stringLength string.chars.length
 		if tmp >= this.chars.length
@@ -35,7 +35,7 @@ class StringBuilder
 		add this.stringLength this.stringLength string.chars.length
 		ret
 
-	function dynamic interp append(char c)
+	function dynamic interp void append(char c)
 		if this.stringLength == this.chars.length
 			dynamic_call this.grow(i) dword[1]
 		end
@@ -43,7 +43,7 @@ class StringBuilder
 		add this.stringLength this.stringLength uint[1]
 		ret
 
-	function dynamic interp append(long num)
+	function dynamic interp void append(long num)
 		if num < long[0]
 			dynamic_call this.append(C) '-'
 			neg num num
@@ -51,7 +51,7 @@ class StringBuilder
 		dynamic_call this.append(q) num
 		ret
 
-	function dynamic interp append(ulong num)
+	function dynamic interp void append(ulong num)
 		uintarray digits
 		ulong digit
 		int i
@@ -78,7 +78,7 @@ class StringBuilder
 		end
 		ret
 
-	function dynamic interp grow(uint required)
+	function dynamic interp void grow(uint required)
 		chararray newarr
 		uint newlen
 		mul newlen this.stringLength uint[2]
@@ -90,7 +90,7 @@ class StringBuilder
 		end
 		ret
 
-	function dynamic interp toString()
+	function dynamic interp object toString()
 		object result
 		seto result new String <init>()
 		setv result.chars this.chars

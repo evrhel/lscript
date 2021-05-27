@@ -35,6 +35,7 @@ struct function_s
 	class_t *parentClass;		// The function's parent class
 	size_t argSize;				// The total number of bytes all the arguments will take up
 	size_t references;			// The number of references there are to this function
+	byte_t returnType;			// The return type of the function
 };
 
 struct class_s

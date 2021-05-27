@@ -3,31 +3,31 @@ class FileOutputStream
 	
 	global dynamic varying object handle
 
-	function dynamic interp <init>()
+	function dynamic interp void <init>()
 		ret
 
-	function dynamic interp <init>(object StdFileHandle handle)
+	function dynamic interp void <init>(object StdFileHandle handle)
 		setv this.handle handle
 		ret
 
-	function dynamic interp write(chararray data, int off, int length)
+	function dynamic interp uint write(chararray data, int off, int length)
 		dynamic_call this.handle.write([Cii) data off length
 		retr
 
-	function dynamic interp print(object String str)
+	function dynamic interp void print(object String str)
 		dynamic_call this.handle.write([Cii) str.chars dword[0] str.chars.length
 		ret
 
-	function dynamic interp println()
+	function dynamic interp void println()
 		dynamic_call this.handle.putc(C) byte[10]
 		ret
 
-	function dynamic interp println(object String str)
+	function dynamic interp void println(object String str)
 		dynamic_call this.print(LString;) str
 		dynamic_call this.println()
 		ret
 
-	function dynamic interp close()
+	function dynamic interp void close()
 		dynamic_call handle.close()
 		setq this.handle null
 		ret

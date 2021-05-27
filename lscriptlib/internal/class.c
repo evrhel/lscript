@@ -187,6 +187,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 	const char *argname;
 	unsigned char isStatic;
 	unsigned char isNative;
+	byte_t returnType;
 
 	map_t *argTypes;
 	function_t *func;
@@ -224,6 +225,14 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				map_free(clazz->functions, 0);
 				return 0;
 			}
+			curr++;
+
+			if (*curr < lb_void || *curr > lb_objectarray)
+			{
+				map_free(clazz->functions, 0);
+				return 0;
+			}
+			returnType = *curr;
 			curr++;
 
 			funcName = curr;
@@ -388,6 +397,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				func->flags = 0;
 				func->argSize = argSize;
 				func->references = 1;
+				func->returnType = returnType;
 
 				if (isStatic)
 					func->flags |= FUNCTION_FLAG_STATIC;

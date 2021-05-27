@@ -1,7 +1,7 @@
 
 class Long
 
-	function static interp toString(long value)
+	function static interp object toString(long value)
 		object builder
 		seto builder new StringBuilder <init>()
 		dynamic_call builder.append(Q) value
@@ -10,13 +10,13 @@ class Long
 
 	global dynamic varying long value
 
-	function dynamic interp <init>()
+	function dynamic interp void <init>()
 		ret
 
-	function dynamic interp <init>(long value)
+	function dynamic interp void <init>(long value)
 		setv this.value value
 		ret
 
-	function dynamic interp toString()
+	function dynamic interp object toString()
 		static_call toString(Q) this.value
 		retr

@@ -3,17 +3,17 @@ class String
 
 	global dynamic varying chararray chars
 
-	function dynamic interp <init>()
+	function dynamic interp void <init>()
 		ret
 
-	function dynamic interp <init>(chararray chars)
+	function dynamic interp void <init>(chararray chars)
 		setv this.chars chars
 		ret
 
-	function dynamic interp getChars()
+	function dynamic interp chararray getChars()
 		reto chars
 
-	function dynamic interp equals(object String other)
+	function dynamic interp bool equals(object String other)
 		# If the lengths are different, exit early
 		if this.chars.length != other.chars.length
 			retb byte[0]

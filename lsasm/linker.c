@@ -179,7 +179,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 			break;
 		case lb_function:
 			off++;
-			off += 2; // 2 function qualifiers
+			off += 3; // 2 function qualifiers and return type
 			off += strlen(off) + 1; // function name;
 			argCount = *off;
 			off++;

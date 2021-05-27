@@ -1,16 +1,16 @@
 
 class Int
 
-	function static interp toString(int value)
+	function static interp object toString(int value)
 		static_call Long.toString(Q) value
 		retr
 
 	global dynamic varying int value
 
-	function dynamic interp <init>(int value)
+	function dynamic interp void <init>(int value)
 		setv this.value value
 		ret
 
-	function dynamic interp toString()
+	function dynamic interp object toString()
 		static_call toString(I) this.value
 		retr

@@ -6,7 +6,7 @@ class Main
 	global static varying uint myNum2 dword[19]
 	
 	# main function
-	function static interp main(objectarray String args)
+	function static interp int main(objectarray String args)
 		object builder
 		seto builder new StringBuilder <init>()
 		dynamic_call builder.append(LString;) "Hello"
@@ -29,11 +29,11 @@ class Main
 
 	global dynamic varying object myString
 	
-	function dynamic interp <init>(object String aString)
+	function dynamic interp void <init>(object String aString)
 		setv this.myString aString
 		ret
 
-	function dynamic interp print()
+	function dynamic interp void print()
 		dynamic_call System.stdout.println(LString;) this.myString
 		ret
 

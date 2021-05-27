@@ -5,13 +5,13 @@ class Class
 
 	global dynamic varying object name
 
-	function dynamic interp <init>()
+	function dynamic interp void <init>()
 		ret
 
-	function dynamic interp getName()
+	function dynamic interp object getName()
 		retv this.name
 
-	function dynamic interp toString()
+	function dynamic interp object toString()
 		object builder
 		seto builder new StringBuilder <init>()
 		dynamic_call builder.append(LString;) "class "
@@ -19,5 +19,5 @@ class Class
 		dynamic_call builder.toString()
 		retr
 
-	function static native classOf(object Object obj)
+	function static native object classOf(object Object obj)
 

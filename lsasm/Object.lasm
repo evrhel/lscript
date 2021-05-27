@@ -1,24 +1,24 @@
 
 class Object extends null
 
-	function dynamic interp <init>()
+	function dynamic interp void <init>()
 		ret
 
-	function dynamic interp getClass()
+	function dynamic interp object getClass()
 		static_call Class.classOf(LObject;) this
 		retr
 
-	function dynamic interp threadEntry()
+	function dynamic interp void threadEntry()
 		ret
 
-	function dynamic interp toString()
+	function dynamic interp object toString()
 		static_call Long.toString(Q) this
 		retr
 
-	function dynamic interp hashCode()
+	function dynamic interp uint hashCode()
 		retv this
 
-	function dynamic interp finalize()
+	function dynamic interp void finalize()
 		ret
 
 

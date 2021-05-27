@@ -127,7 +127,7 @@ LNIFUNC luint LNICALL Process_getPID(LEnv venv, lclass vclazz, lulong nativeHand
 	return (int)proc->pi->dwProcessId;
 }
 
-LNIFUNC lint LNICALL Process_wait(LEnv venv, lclass vclazz, lulong nativeHandle, luint length)
+LNIFUNC luint LNICALL Process_wait(LEnv venv, lclass vclazz, lulong nativeHandle, luint length)
 {
 	return WaitForSingleObject(((process_t *)nativeHandle)->pi->hProcess, length);
 }

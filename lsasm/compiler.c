@@ -278,6 +278,9 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 				back = handle_function_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 
+			case lb_void:
+				back = add_compile_error(back, srcFile, curr->linenum, error_error, "void cannot be used as a storage specifier.");
+				break;
 			case lb_bool:
 			case lb_char:
 			case lb_uchar:
@@ -541,6 +544,8 @@ byte_t get_command_byte(const char *string)
 	else if (!strcmp(string, "function"))
 		return lb_function;
 
+	else if (!strcmp(string, "void"))
+		return lb_void;
 	else if (!strcmp(string, "bool"))
 		return lb_bool;
 	else if (!strcmp(string, "char"))
@@ -1300,6 +1305,8 @@ byte_t get_primitive_type(const char *stringType)
 		return lb_double;
 	else if (!strcmp(stringType, "object"))
 		return lb_object;
+	else if (!strcmp(stringType, "void"))
+		return lb_void;
 	return 0;
 }
 
@@ -1455,7 +1462,7 @@ compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *ou
 
 compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
 {
-	if (tokenCount < 4)
+	if (tokenCount < 5)
 	{
 		switch (tokenCount)
 		{
@@ -1466,6 +1473,9 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function linkage mode specifier");
 			break;
 		case 3:
+			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function return type specifier");
+			break;
+		case 4:
 			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function name declaration");
 			break;
 		}
@@ -1473,6 +1483,7 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 	}
 
 	int isStatic, isInterp;
+	byte_t returnType;
 	if (!strcmp(tokens[1], "static"))
 		isStatic = 1;
 	else if (!strcmp(tokens[1], "dynamic"))
@@ -1487,8 +1498,12 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 	else
 		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"interp\" or \"native\"", tokens[2]);
 
+	returnType = get_command_byte(tokens[3]);
+	if (returnType < lb_void || returnType > lb_objectarray)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Invalid return type \"%s\"", tokens[3]);
+
 	size_t functionTokenCount;
-	char **functionData = tokenize_function(tokens + 3, tokenCount - 3, &functionTokenCount);
+	char **functionData = tokenize_function(tokens + 4, tokenCount - 4, &functionTokenCount);
 	buffer_t *build = NEW_BUFFER(64);
 
 	const char *name = functionData[0];
