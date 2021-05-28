@@ -3,7 +3,7 @@ class StringBuilder
 
 	global static const chararray intMap null
 
-	function static interp <staticinit>()
+	function static interp void <staticinit>()
 		seto intMap char dword[10]
 		setb intMap[0] '0'
 		setb intMap[1] '1'

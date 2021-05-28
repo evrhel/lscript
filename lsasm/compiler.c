@@ -1561,6 +1561,7 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 	PUT_BYTE(out, lb_function);
 	PUT_BYTE(out, isStatic ? lb_static : lb_dynamic);
 	PUT_BYTE(out, isInterp ? lb_interp : lb_native);
+	PUT_BYTE(out, returnType);
 	PUT_STRING(out, name);
 	PUT_BYTE(out, argCount);
 	PUT_BUF(out, build);

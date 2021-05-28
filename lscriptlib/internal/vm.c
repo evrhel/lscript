@@ -446,10 +446,19 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 	if (result = vm_get_class(vm, classname))
 		return result;
 
+	if (vm->flags & vm_flag_verbose)
+		printf("Loading class \"%s\".\n", classname);
+
 	unsigned int classnameSize = (unsigned int)(strlen(classname) + 1);
 	char *tempName = (char *)MALLOC(classnameSize);
 	if (!tempName)
+	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+		{
+			printf("Class load error for class \"%s\": Failure to allocate name string.\n", classname);
+		}
 		return NULL;
+	}
 	MEMCPY(tempName, classname, classnameSize);
 
 	char *cursor = tempName;
@@ -463,14 +472,12 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 #if defined(_WIN32)
 	char fullpath[MAX_PATH];
 	FILE *dummy;
-	size_t pathlen;
 
 	list_t *curr = vm->paths;
 	while (curr)
 	{
 		fullpath[0] = 0;
 		char *pathString = (char *)curr->data;
-		pathlen = strlen(pathString);
 		strcat_s(fullpath, sizeof(fullpath), pathString);
 		strcat_s(fullpath, sizeof(fullpath), tempName);
 		fopen_s(&dummy, fullpath, "rb");
@@ -478,7 +485,7 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 		{
 			fclose(dummy);
 			result = vm_load_class_file(vm, fullpath);
-			break;
+			goto after_load_class_file;
 		}
 		strcat_s(fullpath, sizeof(fullpath), ".lb");
 		fopen_s(&dummy, fullpath, "rb");
@@ -486,10 +493,29 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 		{
 			fclose(dummy);
 			result = vm_load_class_file(vm, fullpath);
+
+			after_load_class_file:
+			if (!result)
+			{
+				if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+				{
+					printf("Class load error for class \"%s\": Failed to parse binary (resolved to file \"%s\").\n", classname, fullpath);
+				}
+				return NULL;
+			}
 			break;
 		}
 
 		curr = curr->next;
+	}
+
+	if (!result)
+	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+		{
+			printf("Class load error for \"%s\": Failed to resolve location on filesystem.\n", classname);
+		}
+		return NULL;
 	}
 
 	if (result && !(vm->flags & vm_flag_no_load_debug))
@@ -500,7 +526,6 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 		{
 			fullpath[0] = 0;
 			char *pathString = (char *)curr->data;
-			pathlen = strlen(pathString);
 			strcat_s(fullpath, sizeof(fullpath), pathString);
 			strcat_s(fullpath, sizeof(fullpath), tempName);
 			strcat_s(fullpath, sizeof(fullpath), ".lds");
@@ -691,13 +716,22 @@ void vm_free(vm_t *vm, unsigned long threadWaitTime)
 
 env_t *env_create(vm_t *vm)
 {
+	if (vm->flags & vm_flag_verbose)
+		printf("Creating new execution environment...");
+
 	env_t *env = (env_t *)MALLOC(sizeof(env_t));
 	if (!env)
+	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+			printf("\nExecution environment failure: Failed to allocate environment structure.\n");
 		return NULL;
+	}
 
 	env->stack = MALLOC(vm->stackSize);
 	if (!env->stack)
 	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+			printf("\nExecution environment failure: Failed to allocate stack.\n");
 		FREE(env);
 		return NULL;
 	}
@@ -735,6 +769,10 @@ env_t *env_create(vm_t *vm)
 		vm->envsLast = vm->envs;
 		vm->envsLast->data = env;
 	}
+
+	if (vm->flags & vm_flag_verbose)
+		printf(" Done (%p)\n", (void *)env);
+
 	return env;
 }
 
@@ -1292,6 +1330,9 @@ int env_get_exception_data(env_t *env, function_t **function, void **location)
 
 void env_free(env_t *env)
 {
+	if (env->vm->flags & vm_flag_verbose)
+		printf("Freeing execution environment %p\n", (void *)env);
+
 	FREE(env->stack);
 	list_iterator_t *lit = list_create_iterator(env->variables);
 	lit = list_iterator_next(lit);
