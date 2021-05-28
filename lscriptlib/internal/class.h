@@ -67,16 +67,40 @@ this class. This is called generally when a superclass is needed.
 */
 class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, void *more);
 
+/*
+Returns a member function of a class by its qualified name.
+
+@param clazz The class to fetch the function from.
+@param qualifiedName The qualified name of the function.
+
+@return THe respective function, or NULL if it doesn't exist.
+*/
 inline function_t *class_get_function(class_t *clazz, const char *qualifiedName)
 {
 	return (function_t *)map_at(clazz->functions, qualifiedName);
 }
 
+/*
+Returns a pointer to a static field of a class by its name.
+
+@param clazz The class to fetch the field from.
+@param fieldName The name of the field.
+
+@return The respective field, or NULL if it doesn't exist or is nonstatic.
+*/
 inline value_t *class_get_static_field(class_t *clazz, const char *fieldName)
 {
 	return (value_t *)map_at(clazz->staticFields, fieldName);
 }
 
+/*
+Returns the offset of a dynamic field of a class by its name.
+
+@param clazz The class to fetch the field from.
+@param fieldName The name of the field.
+
+@return The respective field's offset, or NULL if it doesn't exist or is not dynamic.
+*/
 inline void *class_get_dynamic_field_offset(class_t *clazz, const char *fieldName)
 {
 	return map_at(clazz->fields, fieldName);
