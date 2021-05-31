@@ -20,7 +20,7 @@ static int parse_arguments(int argc, const char *const argv[], vm_args_t *argStr
 
 static vm_t *gCurrentVM = NULL;
 
-LEXPORT int LCALL ls_init()
+LEXPORT lint LCALL ls_init()
 {
 	return 0;
 }
@@ -34,7 +34,7 @@ LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILi
 	return gCurrentVM = vm;
 }
 
-LEXPORT int LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID)
+LEXPORT lint LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID)
 {
 	int result;
 	

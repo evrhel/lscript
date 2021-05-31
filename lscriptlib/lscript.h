@@ -58,10 +58,10 @@ extern "C"
 	typedef void *lfield;
 	typedef void *lfunction;
 
-	LEXPORT int LCALL ls_init();
+	LEXPORT lint LCALL ls_init();
 
 	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib);
-	LEXPORT int LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
+	LEXPORT lint LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
 	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib);
 	LEXPORT lvoid LCALL ls_destroy_vm(unsigned long threadWaitTime);
 	LEXPORT LVM LCALL ls_get_current_vm();
