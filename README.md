@@ -19,7 +19,8 @@ There exist three functions relevant to starting the virtual machine, declared i
 
 `lint ls_init()`
 - Performs initialization, returns `0` on success.
-- LVM ls_create_vm(int argc, const char *const argv[], void *lsAPILib)`
+
+`LVM ls_create_vm(int argc, const char *const argv[], void *lsAPILib)`
 - Creates the virtual machine with the given arguments.
 - `argc` - The number of elements in `argv`.
 - `argv` - An array of strings to be the virtual-machine arguments.
@@ -59,5 +60,5 @@ Below are a valid list of arguments which can be passed to `ls_create_vm`:
 
 The virtual machine can be stopped with:
 
-- `lvoid ls_destroy_vm(unsigned long threadWaitTime)`
--- `threadWaitTime` - The time to wait for the virtual machine thread to finish before stopping it, in milliseconds. Only affects virtual machines started on a separate thread.
+`lvoid ls_destroy_vm(unsigned long threadWaitTime)`
+- `threadWaitTime` - The time to wait for the virtual machine thread to finish before stopping it, in milliseconds. Only affects virtual machines started on a separate thread.
