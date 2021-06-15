@@ -17,13 +17,9 @@ struct vm_args_s
 };
 
 static int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct);
+static void print_help();
 
 static vm_t *gCurrentVM = NULL;
-
-LEXPORT lint LCALL ls_init()
-{
-	return 0;
-}
 
 LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib)
 {
@@ -118,9 +114,153 @@ LEXPORT lvoid LCALL ls_call_void_functionv(LEnv env, lfunction function, lobject
 	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
 }
 
+LEXPORT lchar LCALL ls_call_char_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lchar)((env_t *)env)->bret;
+}
+
+LEXPORT luchar LCALL ls_call_uchar_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (luchar)((env_t *)env)->bret;
+}
+
+LEXPORT lshort LCALL ls_call_short_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lshort)((env_t *)env)->wret;
+}
+
+LEXPORT lushort LCALL ls_call_ushort_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lushort)((env_t *)env)->wret;
+}
+
+LEXPORT lint LCALL ls_call_int_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lint)((env_t *)env)->dret;
+}
+
+LEXPORT luint LCALL ls_call_uint_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (luint)((env_t *)env)->dret;
+}
+
+LEXPORT llong LCALL ls_call_long_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (llong)((env_t *)env)->qret;
+}
+
+LEXPORT lulong LCALL ls_call_ulong_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lulong)((env_t *)env)->qret;
+}
+
+LEXPORT lbool LCALL ls_call_bool_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lbool)((env_t *)env)->bret;
+}
+
+LEXPORT lfloat LCALL ls_call_float_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lfloat)((env_t *)env)->r4ret;
+}
+
+LEXPORT ldouble LCALL ls_call_double_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (ldouble)((env_t *)env)->r8ret;
+}
+
+LEXPORT lobject LCALL ls_call_object_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_funcv((env_t *)env, (function_t *)function, (object_t *)object, list);
+	return (lobject)((env_t *)env)->vret;
+}
+
 LEXPORT lvoid LCALL ls_call_static_void_functionv(LEnv env, lfunction function, va_list list)
 {
 	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+}
+
+LEXPORT lchar LCALL ls_call_static_char_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lchar)((env_t *)env)->bret;
+}
+
+LEXPORT luchar LCALL ls_call_static_uchar_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (luchar)((env_t *)env)->bret;
+}
+
+LEXPORT lshort LCALL ls_call_static_short_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lshort)((env_t *)env)->wret;
+}
+
+LEXPORT lushort LCALL ls_call_static_ushort_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lushort)((env_t *)env)->wret;
+}
+
+LEXPORT lint LCALL ls_call_static_int_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lint)((env_t *)env)->dret;
+}
+
+LEXPORT luint LCALL ls_call_static_uint_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (luint)((env_t *)env)->dret;
+}
+
+LEXPORT llong LCALL ls_call_static_long_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (llong)((env_t *)env)->qret;
+}
+
+LEXPORT lulong LCALL ls_call_static_ulong_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lulong)((env_t *)env)->qret;
+}
+
+LEXPORT lbool LCALL ls_call_static_bool_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lbool)((env_t *)env)->bret;
+}
+
+LEXPORT lfloat LCALL ls_call_static_float_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lfloat)((env_t *)env)->r4ret;
+}
+
+LEXPORT ldouble LCALL ls_call_static_double_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lfloat)((env_t *)env)->r8ret;
+}
+
+LEXPORT lobject LCALL ls_call_static_object_functionv(LEnv env, lfunction function, lobject object, va_list list)
+{
+	env_run_func_staticv((env_t *)env, (function_t *)function, list);
+	return (lobject)((env_t *)env)->vret;
 }
 
 LEXPORT luint LCALL ls_get_array_length(lobject array)
@@ -136,13 +276,16 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 	argStruct->stackSize = DEFAULT_STACK_SIZE;
 	for (int i = 0; i < argc; i++)
 	{
-		if (equals_ignore_case("-v", argv[i]))
+		if (equals_ignore_case("-version", argv[i]))
 		{
-
+			printf("lscript version \"%s\"\n", LS_VERSION);
+			printf("build date: %s\n", __DATE__);
+			printf("build time: %s\n", __TIME__);
 		}
-		else if (equals_ignore_case("-h", argv[i]))
+		else if (equals_ignore_case("-help", argv[i]) || equals_ignore_case("-?", argv[i]))
 		{
-
+			print_help();
+			return 0;
 		}
 		else if (equals_ignore_case("-verbose", argv[i]))
 		{
@@ -163,6 +306,24 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 			{
 				argStruct->paths[pathInd++] = argv[i];
 			}
+			else
+			{
+				print_help();
+				return 0;
+			}
+		}
+		else if (equals_ignore_case("-heapsize", argv[i]))
+		{
+			i++;
+			if (i < argc)
+			{
+
+			}
+			else
+			{
+				print_help();
+				return 0;
+			}
 		}
 		else
 		{
@@ -172,4 +333,19 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 		}
 	}
 	return 1;
+}
+
+void print_help()
+{
+	printf("Usage: lscript [-options] <class> [args...]\n");
+	printf("       (Executes class <class> on the classpath with [args...]\n");
+	printf("       passed to its main function)\n");
+	printf("Where options include:\n");
+	printf("  -version      Displays version information and exists.\n");
+	printf("  -help -?      Prints this help message.\n");
+	printf("  -verbose      Enable verbose output.\n");
+	printf("  -nodebug      Disables loading of debugging symbols.\n");
+	printf("  -verr         Enables only verbose error output. Has no effect if\n");
+	printf("                -verbose is specified.\n");
+	printf("  -path <path>  Adds <path> to the claspath.\n");
 }

@@ -3,6 +3,8 @@
 
 #include <stdarg.h>
 
+#define LS_VERSION "1.0.0a"
+
 #define LEXPORT __declspec(dllexport)
 #define LCALL __cdecl
 
@@ -58,8 +60,6 @@ extern "C"
 	typedef void *lfield;
 	typedef void *lfunction;
 
-	LEXPORT lint LCALL ls_init();
-
 	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib);
 	LEXPORT lint LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
 	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib);
@@ -85,6 +85,138 @@ extern "C"
 		va_end(ls);
 	}
 
+	LEXPORT lchar LCALL ls_call_char_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lchar LCALL ls_call_char_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lchar result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_char_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT luchar LCALL ls_call_uchar_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline luchar LCALL ls_call_uchar_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		luchar result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_uchar_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lshort LCALL ls_call_short_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lshort LCALL ls_call_short_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lshort result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_short_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lushort LCALL ls_call_ushort_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lushort LCALL ls_call_ushort_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lushort result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_ushort_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lint LCALL ls_call_int_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lint LCALL ls_call_int_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lint result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_int_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT luint LCALL ls_call_uint_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline luint LCALL ls_call_uint_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		luint result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_uint_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT llong LCALL ls_call_long_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline llong LCALL ls_call_long_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		llong result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_long_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lulong LCALL ls_call_ulong_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lulong LCALL ls_call_ulong_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lulong result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_ulong_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lbool LCALL ls_call_bool_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lbool LCALL ls_call_bool_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lbool result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_bool_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lfloat LCALL ls_call_float_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lfloat LCALL ls_call_float_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lfloat result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_float_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT ldouble LCALL ls_call_double_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline ldouble LCALL ls_call_double_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		ldouble result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_double_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lobject LCALL ls_call_object_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lobject LCALL ls_call_object_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lobject result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_object_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
 	LEXPORT lvoid LCALL ls_call_static_void_functionv(LEnv env, lfunction function, va_list list);
 	inline lvoid LCALL ls_call_static_void_function(LEnv env, lfunction function, ...)
 	{
@@ -92,6 +224,138 @@ extern "C"
 		va_start(ls, function);
 		ls_call_static_void_functionv(env, function, ls);
 		va_end(ls);
+	}
+
+	LEXPORT lchar LCALL ls_call_static_char_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lchar LCALL ls_call_static_char_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lchar result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_char_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT luchar LCALL ls_call_static_uchar_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline luchar LCALL ls_call_static_uchar_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		luchar result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_uchar_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lshort LCALL ls_call_static_short_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lshort LCALL ls_call_static_short_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lshort result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_short_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lushort LCALL ls_call_static_ushort_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lushort LCALL ls_call_static_ushort_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lushort result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_ushort_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lint LCALL ls_call_static_int_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lint LCALL ls_call_static_int_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lint result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_int_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT luint LCALL ls_call_static_uint_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline luint LCALL ls_call_static_uint_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		luint result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_uint_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT llong LCALL ls_call_static_long_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline llong LCALL ls_call_static_long_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		llong result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_long_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lulong LCALL ls_call_static_ulong_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lulong LCALL ls_call_static_ulong_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lulong result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_ulong_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lbool LCALL ls_call_static_bool_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lbool LCALL ls_call_static_bool_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lbool result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_bool_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lfloat LCALL ls_call_static_float_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lfloat LCALL ls_call_static_float_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lfloat result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_float_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT ldouble LCALL ls_call_static_double_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline ldouble LCALL ls_call_static_double_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		ldouble result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_double_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
+	}
+
+	LEXPORT lobject LCALL ls_call_static_object_functionv(LEnv env, lfunction function, lobject object, va_list list);
+	inline lobject LCALL ls_call_static_object_function(LEnv env, lfunction function, lobject object, ...)
+	{
+		lobject result;
+		va_list ls;
+		va_start(ls, object);
+		result = ls_call_static_object_functionv(env, function, object, ls);
+		va_end(ls);
+		return result;
 	}
 
 	LEXPORT luint LCALL ls_get_array_length(lobject array);
