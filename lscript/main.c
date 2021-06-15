@@ -15,10 +15,6 @@ int main(int argc, char *argv[])
 	int initResult;
 	HMODULE lsAPILib;
 
-	initResult = ls_init();
-	if (initResult)
-		return initResult;
-
 	lsAPILib = GetModuleHandleA("lscriptapi.dll");
 	if (!lsAPILib)
 		return 0xc0;

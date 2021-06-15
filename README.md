@@ -17,9 +17,6 @@ Currently, LScript is only avaliable for 64-bit Windows and is built using Visua
 
 There exist three functions relevant to starting the virtual machine, declared in `lscript.h` in the `lscriptlib` project. These are:
 
-`lint ls_init()`
-- Performs initialization, returns `0` on success.
-
 `LVM ls_create_vm(int argc, const char *const argv[], void *lsAPILib)`
 - Creates the virtual machine with the given arguments.
 - `argc` - The number of elements in `argv`.
@@ -44,13 +41,17 @@ These can be used when debugging in Visual Studio by setting the Debug Command A
 
 ### Virtual Machine Creation Arguments
 
-Below are a valid list of arguments which can be passed to `ls_create_vm`:
+Below are a valid list of arguments which can be passed to `ls_create_vm`. These are copied from `print_help` in `lscript.c`.
 
-- `-verbose` - Indicates verbose output should be printed.
-- `-nodebug` - Indicates no debugging symbols should be loaded, if any are found.
-- `-verr` - Similar to `-verbose`, but only errors are printed. No effect if `-verbose` was specified.
-- `-path [directory]` - Specifies a directory to add to the classpath.
-
+- `-version` - Displays version information and exits.
+- `-help -?` - Prints this help message.
+- `-verbose` - Enable verbose output.
+- `-nodebug` - Disables loading of debugging symbols.
+- `-verr` - Enables only verbose error output. Has no effect if `-verbose` is specified.
+- `-path <path>` - Adds `<path>` to the classpath.
+- `-heaps [<bytes>|K<kibibytes>|M<mebibytes>|G<gibibytes>]` - Specifies the heap size, in bytes, kibibytes, mebibytes, or gibibytes.
+- `-stacks [<bytes>|K<kibibytes>|M<mebibytes>|G<gibibytes>]` - Specifies the stack size per thread, in bytes, kibibytes, mebibytes, or gibibytes.
+	
 ### Virtual Machine Start Arguments
 
 - `[classname]` - The name of a class on the classpath on which to start the virtual machine. Must contain a 

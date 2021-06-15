@@ -312,12 +312,57 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 				return 0;
 			}
 		}
-		else if (equals_ignore_case("-heapsize", argv[i]))
+		else if (equals_ignore_case("-heaps", argv[i]))
 		{
 			i++;
 			if (i < argc)
 			{
-
+				switch (argv[i][0])
+				{
+				case 'k':
+				case 'K':
+					argStruct->heapSize = KB_TO_B(atoi(argv[i] + 1));
+					break;
+				case 'm':
+				case 'M':
+					argStruct->heapSize = MB_TO_B(atoi(argv[i] + 1));
+					break;
+				case 'g':
+				case 'G':
+					argStruct->heapSize = GB_TO_B(atoi(argv[i] + 1));
+					break;
+				default:
+					argStruct->heapSize = atoi(argv[i]);
+				}
+			}
+			else
+			{
+				print_help();
+				return 0;
+			}
+		}
+		else if (equals_ignore_case("-stacks", argv[i]))
+		{
+			i++;
+			if (i < argc)
+			{
+				switch (argv[i][0])
+				{
+				case 'k':
+				case 'K':
+					argStruct->stackSize = KB_TO_B(atoi(argv[i] + 1));
+					break;
+				case 'm':
+				case 'M':
+					argStruct->stackSize = MB_TO_B(atoi(argv[i] + 1));
+					break;
+				case 'g':
+				case 'G':
+					argStruct->stackSize = GB_TO_B(atoi(argv[i] + 1));
+					break;
+				default:
+					argStruct->stackSize = atoi(argv[i]);
+				}
 			}
 			else
 			{
@@ -337,15 +382,21 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 
 void print_help()
 {
-	printf("Usage: lscript [-options] <class> [args...]\n");
+	printf("Usage: lscript [options...] <class> [args...]\n");
 	printf("       (Executes class <class> on the classpath with [args...]\n");
 	printf("       passed to its main function)\n");
 	printf("Where options include:\n");
-	printf("  -version      Displays version information and exists.\n");
+	printf("  -version      Displays version information and exits.\n");
 	printf("  -help -?      Prints this help message.\n");
 	printf("  -verbose      Enable verbose output.\n");
 	printf("  -nodebug      Disables loading of debugging symbols.\n");
 	printf("  -verr         Enables only verbose error output. Has no effect if\n");
 	printf("                -verbose is specified.\n");
 	printf("  -path <path>  Adds <path> to the claspath.\n");
+	printf("  -heaps [<bytes>|K<kibibytes>|M<mebibytes>|G<gibibytes>]\n");
+	printf("                Specifies the heap size, in bytes, kibibytes,\n");
+	printf("                mebibytes, or gibibytes.\n");
+	printf("  -stacks [<bytes>|K<kibibytes>|M<mebibytes>|G<gibibytes>]\n");
+	printf("                Specifies the stack size per thread, in bytes,\n");
+	printf("                kibiytes, mebibytes, or gibibytes.\n");
 }
