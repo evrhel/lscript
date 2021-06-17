@@ -38,6 +38,7 @@ static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffe
 static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_cast_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
@@ -330,6 +331,20 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_setv:
 			case lb_setr:
 				back = handle_set_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				break;
+
+			case lb_castc:
+			case lb_castuc:
+			case lb_casts:
+			case lb_castus:
+			case lb_casti:
+			case lb_castui:
+			case lb_castl:
+			case lb_castul:
+			case lb_castb:
+			case lb_castf:
+			case lb_castd:
+				back = handle_cast_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
 				break;
 
 			case lb_ret:
@@ -676,6 +691,29 @@ byte_t get_command_byte(const char *string)
 		return lb_while;
 	else if (!strcmp(string, "end"))
 		return lb_end;
+
+	else if (!strcmp(string, "castc"))
+		return lb_castc;
+	else if (!strcmp(string, "castuc"))
+		return lb_castuc;
+	else if (!strcmp(string, "casts"))
+		return lb_casts;
+	else if (!strcmp(string, "castus"))
+		return lb_castus;
+	else if (!strcmp(string, "casti"))
+		return lb_casti;
+	else if (!strcmp(string, "castui"))
+		return lb_castui;
+	else if (!strcmp(string, "castl"))
+		return lb_castl;
+	else if (!strcmp(string, "castul"))
+		return lb_castul;
+	else if (!strcmp(string, "castb"))
+		return lb_castb;
+	else if (!strcmp(string, "castf"))
+		return lb_castf;
+	else if (!strcmp(string, "castd"))
+		return lb_castd;
 
 	return lb_noop;
 }
@@ -1778,6 +1816,21 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 		break;
 	}
+
+	return back;
+}
+
+compile_error_t *handle_cast_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+{
+	if (tokenCount < 2)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Expected destination variable name");
+
+	if (tokenCount < 3)
+		return add_compile_error(back, srcFile, srcLine, error_error, "Expected source variable name");
+
+	PUT_CHAR(out, cmd);
+	PUT_STRING(out, tokens[1]);
+	PUT_STRING(out, tokens[2]);
 
 	return back;
 }

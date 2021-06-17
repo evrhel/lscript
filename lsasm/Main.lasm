@@ -7,22 +7,16 @@ class Main
 	
 	# main function
 	function static interp int main(objectarray String args)
-		object builder
-		seto builder new StringBuilder <init>()
-		dynamic_call builder.append(LString;) "Hello"
-		dynamic_call builder.append(C) ' '
-		dynamic_call builder.append(LString;) "World"
-		dynamic_call builder.append(C) ' '
-		dynamic_call builder.append(q) qword[12]
-		dynamic_call builder.toString()
-		dynamic_call System.stdout.println(LString;) ret
+		
+		uint counter
+		setd counter dword[0]
 
-		object builderClass
-		dynamic_call builder.getClass()
-		setr builderClass
-
-		dynamic_call builderClass.getName()
-		dynamic_call System.stdout.println(LString;) ret
+		while counter < args.length
+			static_call Int.toString(I) counter
+			dynamic_call System.stdout.print(LString;) ret
+			dynamic_call System.stdout.println(LString;) args[counter]
+			add counter counter uint[1]
+		end
 
 		retd dword[25]
 

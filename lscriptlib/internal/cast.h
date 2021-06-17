@@ -1,10 +1,13 @@
 #if !defined(CAST_H)
 #define CAST_H
 
+#include "types.h"
 #include "datau.h"
 #include "lb.h"
 
 typedef int(*cast_proc)(data_t *src, unsigned char castType, data_t *dst);
+
+int handle_cast(void *envPtr, byte_t **executeLocation);
 
 int cast_char(lchar *src, unsigned char castType, data_t *dst);
 int cast_uchar(luchar *src, unsigned char castType, data_t *dst);

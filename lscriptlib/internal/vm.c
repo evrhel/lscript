@@ -64,6 +64,9 @@ static inline int env_cleanup_call(env_t *env, int onlyStackCleanup);
 static int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls);
 static int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_flags_t flags, object_t *object, va_list ls);
 
+static va_list env_gen_call_arg_list(env_t *env, function_t *function);
+static inline void env_free_call_arg_list(env_t *env, va_list callArgs);
+
 static void *stack_push(env_t *env, value_t *value);
 static void *stack_alloc(env_t *env, size_t words);
 static int stack_pop(env_t *env, size_t words, qword_t *dstWords);
@@ -1254,10 +1257,6 @@ int env_run_func_staticv(env_t *env, function_t *function, va_list ls)
 		return code;
 	if (!(function->flags & FUNCTION_FLAG_NATIVE))
 		code = env_run(env, env->rip);
-	else
-	{
-		env_cleanup_call(env, 1);
-	}
 	return code;
 }
 
@@ -1394,13 +1393,7 @@ int env_run(env_t *env, void *location)
 	value_t val;				// An arbitrary value
 	void *stackAllocLoc;		// A pointer to where a value on the stack was allocated
 	function_t *callFunc;		// A pointer to a function which will be called
-	byte_t *callArgPtr;			// A pointer to some bytes which will be the function arguments
 	byte_t *callFuncArgs;		// A pointer to some bytes which will be the function arguments
-	size_t callFuncArgSize;		// The size of the call arguments
-	map_iterator_t *mip;		// An arbitrary map iterator
-	byte_t callArgType;			// A byte to store the type of a call argument
-	byte_t *cursor;				// A cursor into an array of bytes
-	byte_t valueType;			// A byte to store the type of some value
 	object_t *object;			// A pointer to an object_t used for holding some object
 	class_t *clazz;				// A pointer to a class_t used for holding some class
 	size_t off;					// An arbitrary value for storing an offset
@@ -1678,136 +1671,11 @@ int env_run(env_t *env, void *location)
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
 			
-			callFuncArgs = NULL;
-			callFuncArgSize = callFunc->argSize;
-
-			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
+			callFuncArgs = env_gen_call_arg_list(env, callFunc);
 			if (!callFuncArgs)
-				EXIT_RUN(env_raise_exception(env, exception_vm_error, "static_call allocate call argmuments"));
-			cursor = callFuncArgs;
+				EXIT_RUN(env->exception);
 
-			callArgPtr = callFuncArgs;
-
-			mip = map_create_iterator(callFunc->argTypes);
-			while (mip->node)
-			{
-				callArgType = (byte_t)mip->value;
-
-				switch (*(env->rip))
-				{
-				case lb_byte:
-					env->rip++;
-					*cursor = *(env->rip);
-					cursor += 1;
-					env->rip += 1;
-					break;
-				case lb_word:
-					env->rip++;
-					*((word_t *)cursor) = *((word_t *)env->rip);
-					cursor += 2;
-					env->rip += 2;
-					break;
-				case lb_dword:
-					env->rip++;
-					*((dword_t *)cursor) = *((dword_t *)env->rip);
-					cursor += 4;
-					env->rip += 4;
-					break;
-				case lb_qword:
-					env->rip++;
-					*((qword_t *)cursor) = *((qword_t *)env->rip);
-					cursor += 8;
-					env->rip += 8;
-					break;
-				case lb_string:
-					env->rip++;
-					*((qword_t *)cursor) = (qword_t)env_new_string(env, env->rip);
-					if (env->exception)
-						EXIT_RUN(env->exception);
-					env->rip += strlen(env->rip) + 1;
-					cursor += 8;
-					break;
-				case lb_value:
-					env->rip++;
-					if (!env_resolve_variable(env, env->rip, &data, &flags))
-					{
-						FREE(callFuncArgs);
-						EXIT_RUN(env->exception);
-					}
-					valueType = TYPEOF(flags);
-					switch (valueType)
-					{
-					case lb_char:
-					case lb_uchar:
-						*cursor = data->cvalue;
-						cursor += 1;
-						//counter += 1;
-						break;
-					case lb_short:
-					case lb_ushort:
-						*((lshort *)cursor) = data->svalue;
-						cursor += 2;
-						//counter += 2;
-						break;
-					case lb_int:
-					case lb_uint:
-						*((lint *)cursor) = data->ivalue;
-						cursor += 4;
-						//counter += 4;
-						break;
-					case lb_long:
-					case lb_ulong:
-						*((llong *)cursor) = data->lvalue;
-						cursor += 8;
-						//counter += 8;
-						break;
-					case lb_bool:
-						*((lbool *)cursor) = data->bvalue;
-						cursor += 1;
-						//counter += 1;
-						break;
-					case lb_float:
-						*((lfloat *)cursor) = data->fvalue;
-						cursor += 4;
-						//counter += 4;
-						break;
-					case lb_double:
-						*((ldouble *)cursor) = data->dvalue;
-						cursor += 8;
-						//counter += 8;
-						break;
-					case lb_object:
-					case lb_chararray:
-					case lb_uchararray:
-					case lb_shortarray:
-					case lb_ushortarray:
-					case lb_intarray:
-					case lb_uintarray:
-					case lb_longarray:
-					case lb_ulongarray:
-					case lb_boolarray:
-					case lb_floatarray:
-					case lb_doublearray:
-					case lb_objectarray:
-						*((lobject *)cursor) = data->ovalue;
-						//counter += 8;
-						cursor += 8;
-						break;
-					}
-					env->rip += strlen(env->rip) + 1;
-					break;
-				default:
-					FREE(callFuncArgs);
-					EXIT_RUN(env_raise_exception(env, exception_bad_command, "static_call"));
-					break;
-				}
-
-				callArgPtr += sizeof_type(callArgType);
-				mip = map_iterator_next(mip);
-			}
-			map_iterator_free(mip);
-
-			if (__retVal = env_run_func_staticv(env, callFunc, callFuncArgs))
+			if (__retVal = env_handle_static_function_callv(env, callFunc, 0, callFuncArgs))
 				EXIT_RUN(__retVal);
 
 			FREE(callFuncArgs);
@@ -1824,181 +1692,11 @@ int env_run(env_t *env, void *location)
 
 			handle_dynamic_call_after_resolve:
 
-			callFuncArgs = NULL;
-			callFuncArgSize = callFunc->argSize;
-
-			callFuncArgs = (byte_t *)MALLOC(callFuncArgSize);
+			callFuncArgs = env_gen_call_arg_list(env, callFunc);
 			if (!callFuncArgs)
-				EXIT_RUN(env_raise_exception(env, exception_vm_error, "dynamic_call allocate call argmuments"));
-			cursor = callFuncArgs;
+				EXIT_RUN(env->exception);
 
-			callArgPtr = callFuncArgs;
-
-			mip = map_create_iterator(callFunc->argTypes);
-			while (mip->node)
-			{
-				callArgType = (byte_t)mip->value;
-
-				switch (*(env->rip))
-				{
-				case lb_byte:
-					env->rip++;
-					*cursor = *(env->rip);
-					cursor += 1;
-					env->rip += 1;
-					break;
-				case lb_word:
-					env->rip++;
-					*((word_t *)cursor) = *((word_t *)env->rip);
-					cursor += 2;
-					env->rip += 2;
-					break;
-				case lb_dword:
-					env->rip++;
-					*((dword_t *)cursor) = *((dword_t *)env->rip);
-					cursor += 4;
-					env->rip += 4;
-					break;
-				case lb_qword:
-					env->rip++;
-					*((qword_t *)cursor) = *((qword_t *)env->rip);
-					cursor += 8;
-					env->rip += 8;
-					break;
-				case lb_ret:
-					env->rip++;
-					switch (callArgType)
-					{
-					case lb_bool:
-					case lb_char:
-					case lb_uchar:
-						*((byte_t *)cursor) = env->bret;
-						cursor += 1;
-						break;
-					case lb_short:
-					case lb_ushort:
-						*((word_t *)cursor) = env->wret;
-						cursor += 2;
-						break;
-					case lb_int:
-					case lb_uint:
-					case lb_float:
-						*((dword_t *)cursor) = env->dret;
-						break;
-					case lb_long:
-					case lb_ulong:
-					case lb_double:
-					case lb_object:
-					case lb_boolarray:
-					case lb_chararray:
-					case lb_uchararray:
-					case lb_shortarray:
-					case lb_ushortarray:
-					case lb_intarray:
-					case lb_uintarray:
-					case lb_longarray:
-					case lb_ulongarray:
-					case lb_floatarray:
-					case lb_doublearray:
-					case lb_objectarray:
-						*((qword_t *)cursor) = env->qret;
-						break;
-					default:
-						FREE(callFuncArgs);
-						EXIT_RUN(env_raise_exception(env, exception_bad_command, "dynamic_call"));
-						break;
-					}
-					break;
-				case lb_string:
-					env->rip++;
-					*((qword_t *)cursor) = (qword_t)env_new_string(env, env->rip);
-					if (env->exception)
-						return env->exception;
-					env->rip += strlen(env->rip) + 1;
-					cursor += 8;
-					break;
-				case lb_value:
-					env->rip++;
-					if (!env_resolve_variable(env, env->rip, &data, &flags))
-					{
-						FREE(callFuncArgs);
-						EXIT_RUN(env->exception);
-					}
-					valueType = TYPEOF(flags);
-					switch (valueType)
-					{
-					case lb_char:
-					case lb_uchar:
-						*cursor = data->cvalue;
-						cursor += 1;
-						//counter += 1;
-						break;
-					case lb_short:
-					case lb_ushort:
-						*((lshort *)cursor) = data->svalue;
-						cursor += 2;
-						//counter += 2;
-						break;
-					case lb_int:
-					case lb_uint:
-						*((lint *)cursor) = data->ivalue;
-						cursor += 4;
-						//counter += 4;
-						break;
-					case lb_long:
-					case lb_ulong:
-						*((llong *)cursor) = data->lvalue;
-						cursor += 8;
-						//counter += 8;
-						break;
-					case lb_bool:
-						*((lbool *)cursor) = data->bvalue;
-						cursor += 1;
-						//counter += 1;
-						break;
-					case lb_float:
-						*((lfloat *)cursor) = data->fvalue;
-						cursor += 4;
-						//counter += 4;
-						break;
-					case lb_double:
-						*((ldouble *)cursor) = data->dvalue;
-						cursor += 8;
-						//counter += 8;
-						break;
-					case lb_object:
-					case lb_chararray:
-					case lb_uchararray:
-					case lb_shortarray:
-					case lb_ushortarray:
-					case lb_intarray:
-					case lb_uintarray:
-					case lb_longarray:
-					case lb_ulongarray:
-					case lb_boolarray:
-					case lb_floatarray:
-					case lb_doublearray:
-					case lb_objectarray:
-						*((lobject *)cursor) = data->ovalue;
-						cursor += 8;
-						//counter += 8;
-						break;
-					}
-					env->rip += strlen(env->rip) + 1;
-					break;
-				default:
-					FREE(callFuncArgs);
-					EXIT_RUN(env_raise_exception(env, exception_bad_command, "dynamic_call"));
-					break;
-				}
-
-				callArgPtr += sizeof_type(callArgType);
-
-				mip = map_iterator_next(mip);
-			}
-			map_iterator_free(mip);
-
-			if (__retVal = env_run_funcv(env, callFunc, object, callFuncArgs))
+			if (__retVal = env_handle_dynamic_function_callv(env, callFunc, 0, object, (va_list)callFuncArgs))
 				EXIT_RUN(__retVal);
 
 			FREE(callFuncArgs);
@@ -2139,6 +1837,21 @@ int env_run(env_t *env, void *location)
 			default:
 				EXIT_RUN(env_raise_exception(env, exception_bad_command, "Invalid pop format, must be null"));
 			}
+			break;
+
+		case lb_castc:
+		case lb_castuc:
+		case lb_casts:
+		case lb_castus:
+		case lb_casti:
+		case lb_castui:
+		case lb_castl:
+		case lb_castul:
+		case lb_castb:
+		case lb_castf:
+		case lb_castd:
+			if (!handle_cast(env, &env->rip))
+				EXIT_RUN(env->exception);
 			break;
 
 		default:
@@ -2317,36 +2030,32 @@ int env_handle_static_function_callv(env_t *env, function_t *function, frame_fla
 		FREE(types);
 		FREE(args);
 
+		env_cleanup_call(env, 1);
+
 		return env->exception;
 	}
 	else
 	{
-		//if (((char *)env->rsp) + (2 * sizeof(size_t)) > (char *)env->stack + env->vm->stackSize)
-		//	return env_raise_exception(env, exception_stack_overflow, NULL);
-
-		//env->rbp = 
-			//(byte_t *)stackframe;
-		//env->rsp = (byte_t *)stackframe;
-
-			//((size_t *)env->rsp) + 3;
-
 		env->variables->next = list_create();
 		env->variables->next->prev = env->variables;
 		env->variables = env->variables->next;
 		env->variables->data = map_create(16, string_hash_func, string_compare_func, NULL, NULL, NULL);
 
+		const char *argname;
+		byte_t type;
+		size_t size;
+		value_t val;
+		void *loc;
 		for (size_t i = 0; i < function->numargs; i++)
 		{
-			const char *argname = function->args[i];
-			byte_t type = (byte_t)map_at(function->argTypes, argname);
-			size_t size = sizeof_type(type);
-			value_t val;
+			argname = function->args[i];
+			type = (byte_t)map_at(function->argTypes, argname);
+			size = sizeof_type(type);
 			val.flags = 0;
 			value_set_type(&val, type);
 			MEMCPY(&val.ovalue, ls, size);
 			ls += size;
 
-			void *loc;
 			if (!(loc = stack_push(env, &val)))
 				return env->exception;
 
@@ -2435,6 +2144,214 @@ int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_fl
 
 	env->rip = (byte_t *)function->location;
 	return exception_none;
+}
+
+va_list env_gen_call_arg_list(env_t *env, function_t *function)
+{
+	byte_t *result;
+
+	map_iterator_t *mip;
+	byte_t callArgType;
+	size_t callArgSize;
+	byte_t *cursor;
+
+	data_t *data;
+	flags_t flags;
+	byte_t valueType;
+	size_t valueSize;
+	size_t moveSize;
+
+	result = MALLOC(function->argSize);
+	if (!result)
+	{
+		env_raise_exception(env, exception_out_of_memory, "on malloc call arg list");
+		return NULL;
+	}
+
+	if (function->argSize == 0)
+		return (va_list)result;
+
+	cursor = result;
+	
+	mip = map_create_iterator(function->argTypes);
+	while (mip->node)
+	{
+		callArgType = (byte_t)mip->value;
+
+		switch (*(env->rip))
+		{
+		case lb_byte:
+			env->rip++;
+			*cursor = *(env->rip);
+			cursor += 1;
+			env->rip += 1;
+			break;
+		case lb_word:
+			env->rip++;
+			*((word_t *)cursor) = *((word_t *)env->rip);
+			cursor += 2;
+			env->rip += 2;
+			break;
+		case lb_dword:
+			env->rip++;
+			*((dword_t *)cursor) = *((dword_t *)env->rip);
+			cursor += 4;
+			env->rip += 4;
+			break;
+		case lb_qword:
+			env->rip++;
+			*((qword_t *)cursor) = *((qword_t *)env->rip);
+			cursor += 8;
+			env->rip += 8;
+			break;
+		case lb_ret:
+			env->rip++;
+			switch (callArgType)
+			{
+			case lb_bool:
+			case lb_char:
+			case lb_uchar:
+				*((byte_t *)cursor) = env->bret;
+				cursor += 1;
+				break;
+			case lb_short:
+			case lb_ushort:
+				*((word_t *)cursor) = env->wret;
+				cursor += 2;
+				break;
+			case lb_int:
+			case lb_uint:
+			case lb_float:
+				*((dword_t *)cursor) = env->dret;
+				break;
+			case lb_long:
+			case lb_ulong:
+			case lb_double:
+			case lb_object:
+			case lb_boolarray:
+			case lb_chararray:
+			case lb_uchararray:
+			case lb_shortarray:
+			case lb_ushortarray:
+			case lb_intarray:
+			case lb_uintarray:
+			case lb_longarray:
+			case lb_ulongarray:
+			case lb_floatarray:
+			case lb_doublearray:
+			case lb_objectarray:
+				*((qword_t *)cursor) = env->qret;
+				break;
+			default:
+				FREE(result);
+				env_raise_exception(env, exception_bad_command, "dynamic_call");
+				return NULL;
+				break;
+			}
+			break;
+		case lb_string:
+			env->rip++;
+			*((qword_t *)cursor) = (qword_t)env_new_string(env, env->rip);
+			if (env->exception)
+				return NULL;
+			env->rip += strlen(env->rip) + 1;
+			cursor += 8;
+			break;
+		case lb_value:
+			env->rip++;
+			if (!env_resolve_variable(env, env->rip, &data, &flags))
+			{
+				FREE(result);
+				return NULL;
+			}
+			valueType = TYPEOF(flags);
+			valueSize = sizeof_type(valueType);
+			switch (valueType)
+			{
+			case lb_char:
+			case lb_uchar:
+				//MEMCPY(cursor, &data->cvalue, 1);
+				*cursor = data->cvalue;
+				cursor += 1;
+				//counter += 1;
+				break;
+			case lb_short:
+			case lb_ushort:
+				//MEMCPY(cursor, &data->svalue, min(valueSize, 2));
+				*((lshort *)cursor) = data->svalue;
+				cursor += 2;
+				//counter += 2;
+				break;
+			case lb_int:
+			case lb_uint:
+				//MEMCPY(cursor, &data->ivalue, min(valueSize, 4));
+				*((lint *)cursor) = data->ivalue;
+				cursor += 4;
+				//counter += 4;
+				break;
+			case lb_long:
+			case lb_ulong:
+				//MEMCPY(cursor, &data->lvalue, min(valueSize, 8));
+				*((llong *)cursor) = data->lvalue;
+				cursor += 8;
+				//counter += 8;
+				break;
+			case lb_bool:
+				//MEMCPY(cursor, &data->bvalue, min(valueSize, 1));
+				*((lbool *)cursor) = data->bvalue;
+				cursor += 1;
+				//counter += 1;
+				break;
+			case lb_float:
+				//MEMCPY(cursor, &data->fvalue, min(valueSize, 4));
+				*((lfloat *)cursor) = data->fvalue;
+				cursor += 4;
+				//counter += 4;
+				break;
+			case lb_double:
+				//MEMCPY(cursor, &data->dvalue, min(valueSize, 8));
+				*((ldouble *)cursor) = data->dvalue;
+				cursor += 8;
+				//counter += 8;
+				break;
+			case lb_object:
+			case lb_chararray:
+			case lb_uchararray:
+			case lb_shortarray:
+			case lb_ushortarray:
+			case lb_intarray:
+			case lb_uintarray:
+			case lb_longarray:
+			case lb_ulongarray:
+			case lb_boolarray:
+			case lb_floatarray:
+			case lb_doublearray:
+			case lb_objectarray:
+				//MEMCPY(cursor, &data->ovalue, min(valueSize, 8));
+				*((lobject *)cursor) = data->ovalue;
+				cursor += 8;
+				//counter += 8;
+				break;
+			}
+			env->rip += strlen(env->rip) + 1;
+			break;
+		default:
+			FREE(result);
+			env_raise_exception(env, exception_bad_command, "dynamic_call");
+			return NULL;
+			break;
+		}
+
+		mip = map_iterator_next(mip);
+	}
+	map_iterator_free(mip);
+
+	return (va_list)result;
+}
+
+inline void env_free_call_arg_list(env_t *env, va_list callArgs)
+{
+	FREE(callArgs);
 }
 
 void *stack_push(env_t *env, value_t *value)

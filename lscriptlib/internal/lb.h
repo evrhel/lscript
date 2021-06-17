@@ -18,10 +18,10 @@ enum
 	lb_const,
 	lb_varying,
 
-	lb_push = 0x30,
+	lb_push = 0x20,
 	lb_pop,
 
-	lb_void = 0x80,
+	lb_void = 0x40,
 	lb_char,
 	lb_uchar,
 	lb_short,
@@ -47,7 +47,7 @@ enum
 	lb_doublearray,
 	lb_objectarray,
 
-	lb_setb = 0xa0,
+	lb_setb = 0x60,
 	lb_setw,
 	lb_setd,
 	lb_setq,
@@ -57,7 +57,7 @@ enum
 	lb_setv,
 	lb_setr,
 
-	lb_ret = 0xa9,
+	lb_ret = 0x69,
 	lb_retb,
 	lb_retw,
 	lb_retd,
@@ -68,7 +68,7 @@ enum
 	lb_retv,
 	lb_retr,
 
-	lb_static_call = 0xb3,
+	lb_static_call = 0x73,
 	lb_dynamic_call,
 	lb_byte,
 	lb_word,
@@ -80,7 +80,7 @@ enum
 	lb_string,
 	lb_new,
 
-	lb_add = 0xbe,
+	lb_add = 0x7e,
 	lb_sub,
 	lb_mul,
 	lb_div,
@@ -93,13 +93,13 @@ enum
 	lb_rsh,
 	lb_not,
 
-	lb_if = 0xd0,
+	lb_if = 0x90,
 	lb_elif,
 	lb_else,
 	lb_while,
 	lb_end,
 
-	lb_equal = 0xe0,
+	lb_equal = 0xa0,
 	lb_nequal,
 	lb_less,
 	lb_lequal,
@@ -107,6 +107,18 @@ enum
 	lb_gequal,
 	lb_one,
 	lb_two,
+
+	lb_castc = 0xb0,
+	lb_castuc,
+	lb_casts,
+	lb_castus,
+	lb_casti,
+	lb_castui,
+	lb_castl,
+	lb_castul,
+	lb_castb,
+	lb_castf,
+	lb_castd,
 
 	lb_align = 0xfe,
 	lb_debug = 0xff
