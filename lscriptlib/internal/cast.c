@@ -58,51 +58,40 @@ int handle_cast(void *envPtr, byte_t **executeLocation)
     switch (**executeLocation)
     {
     case lb_castc:
-        proc = (cast_proc)cast_char;
         castType = lb_char;
         break;
     case lb_castuc:
-        proc = (cast_proc)cast_uchar;
         castType = lb_uchar;
         break;
     case lb_casts:
-        proc = (cast_proc)cast_short;
         castType = lb_short;
         break;
     case lb_castus:
-        proc = (cast_proc)cast_ushort;
         castType = lb_ushort;
         break;
     case lb_casti:
-        proc = (cast_proc)cast_int;
         castType = lb_int;
         break;
     case lb_castui:
-        proc = (cast_proc)cast_uint;
         castType = lb_uint;
         break;
     case lb_castl:
-        proc = (cast_proc)cast_long;
         castType = lb_long;
         break;
     case lb_castul:
-        proc = (cast_proc)cast_ulong;
         castType = lb_ulong;
         break;
     case lb_castb:
-        proc = (cast_proc)cast_bool;
         castType = lb_bool;
         break;
     case lb_castf:
-        proc = (cast_proc)cast_float;
         castType = lb_float;
         break;
     case lb_castd:
-        proc = (cast_proc)cast_double;
         castType = lb_double;
         break;
     default:
-        env_raise_exception(env, exception_bad_command, "bad cast");
+        env_raise_exception(env, exception_bad_command, "bad cast type");
         return 0;
         break;
     }
@@ -126,6 +115,47 @@ int handle_cast(void *envPtr, byte_t **executeLocation)
 
     if (!env_resolve_variable(env, srcName, &srcData, &srcFlags))
         return 0;
+
+    switch (TYPEOF(srcFlags))
+    {
+    case lb_char:
+        proc = cast_char;
+        break;
+    case lb_uchar:
+        proc = cast_uchar;
+        break;
+    case lb_short:
+        proc = cast_short;
+        break;
+    case lb_ushort:
+        proc = cast_ushort;
+        break;
+    case lb_int:
+        proc = cast_int;
+        break;
+    case lb_uint:
+        proc = cast_uint;
+        break;
+    case lb_long:
+        proc = cast_long;
+        break;
+    case lb_ulong:
+        proc = cast_ulong;
+        break;
+    case lb_bool:
+        proc = cast_bool;
+        break;
+    case lb_float:
+        proc = cast_float;
+        break;
+    case lb_double:
+        proc = cast_double;
+        break;
+    default:
+        env_raise_exception(env, exception_bad_command, "bad cast source variable");
+        return 0;
+        break;
+    }
 
     return proc(srcData, castType, dstData);
 }

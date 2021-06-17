@@ -1441,6 +1441,7 @@ int env_run(env_t *env, void *location)
 		case lb_ushort:
 		case lb_int:
 		case lb_uint:
+		case lb_long:
 		case lb_ulong:
 		case lb_bool:
 		case lb_float:

@@ -4,7 +4,7 @@ class Int
 	function static interp object toString(int value)
 		long lval
 		castl lval value
-		static_call Long.toString(Q) value
+		static_call Long.toString(Q) lval
 		retr
 
 	global dynamic varying int value
