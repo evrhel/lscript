@@ -27,6 +27,7 @@ typedef struct class_s class_t;
 struct function_s
 {
 	const char *name;			// The name of the function
+	const char *qualifiedName;	// The qualified name of the function
 	void *location;				// The location of the function in memory after its declaration
 	function_flags_t flags;		// The functions's flags
 	size_t numargs;				// The number of arguments this function takes

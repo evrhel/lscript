@@ -139,6 +139,8 @@ void class_free(class_t *clazz, int freedata)
 		func->references--;
 		if (func->references == 0)
 		{
+			FREE(func->qualifiedName);
+
 			map_t *argTypes = func->argTypes;
 
 			FREE(func->args);
@@ -180,6 +182,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 		clazz->functions = map_create(CLASS_HASHTABLE_ENTRIES, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
 	char qualifiedName[MAX_QUALIFIED_FUNCTION_NAME_LENGTH];
 	char *qualnamePtr;
+	size_t qualnameSize;
 
 	const char *funcName;
 	unsigned char numArgs;
@@ -389,6 +392,12 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 			func = (function_t *)MALLOC(sizeof(function_t));
 			if (func)
 			{
+				qualnameSize = strlen(qualifiedName) + 1;
+				func->qualifiedName = (char *)MALLOC(qualnameSize);
+				if (!func->qualifiedName)
+					break;
+				strcpy_s(func->qualifiedName, qualnameSize, qualifiedName);
+
 				func->name = funcName;
 				func->location = isNative ? NULL : (void *)curr;
 				func->argTypes = argTypes;

@@ -162,19 +162,10 @@ static inline int handle_if(env_t *env)
 	return 0;
 }
 
-char *new_exception_stringv(const char *format, va_list ls)
+static inline void clear_exception(env_t *env)
 {
-	char *buf = (char *)malloc(MAX_EXCEPTION_STRING_LENGTH);
-	if (!buf)
-		return NULL;
-	vsprintf_s(buf, MAX_EXCEPTION_STRING_LENGTH, format, ls);
-	return buf;
-}
-
-void free_exception_string(const char *exceptionString)
-{
-	if (exceptionString)
-		free((void *)exceptionString);
+	env->exception = 0;
+	env->message[0] = 0;
 }
 
 vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[])
@@ -750,7 +741,7 @@ env_t *env_create(vm_t *vm)
 	env->rip = NULL;
 	env->vm = vm;
 	env->exception = exception_none;
-	env->exceptionMessage = NULL;
+	env->message[0] = 0;
 	env->qret = 0;
 
 	value_t val;
@@ -773,10 +764,38 @@ env_t *env_create(vm_t *vm)
 		vm->envsLast->data = env;
 	}
 
+	MEMSET(env->cmdHistory, 0, sizeof(env->cmdHistory));
+
 	if (vm->flags & vm_flag_verbose)
 		printf(" Done (%p)\n", (void *)env);
 
 	return env;
+}
+
+int env_take_snapshot(env_t *env, snapshot_t *ss)
+{
+	ss->time = GetTickCount64();
+
+	// Populate VM information
+	ss->vm.handle = env->vm;
+	memcpy(&ss->vm.saved, env->vm, sizeof(vm_t));
+
+	// Populate environment information
+	ss->env.handle = env;
+	memcpy(&ss->env.saved, env, sizeof(env_t));
+
+	// Populate function information
+	ss->function.handle = CURR_FUNC(env);
+	ss->function.relativeLocation =
+		(char *)ss->function.handle->location -
+		(char *)ss->function.handle->parentClass->data;
+
+	// Populate execution information
+	ss->exec.execFuncOffset =
+		(char *)ss->function.handle->location -
+		(char *)env->cmdStart;
+
+	return 1;
 }
 
 int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags)
@@ -1171,12 +1190,7 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 		}
 		else
 		{
-			env->exception = 0;
-			if (env->exceptionMessage)
-			{
-				free_exception_string(env->exceptionMessage);
-				env->exceptionMessage = NULL;
-			}
+			clear_exception(env);
 
 			funcname = end + 1;
 			class_t *clazz = vm_load_class(env->vm, name);
@@ -1311,8 +1325,10 @@ array_t *env_new_string_array(env_t *env, unsigned int count, const char *const 
 
 int env_raise_exceptionv(env_t *env, int exception, const char *format, va_list ls)
 {
-	env->exceptionMessage = format ? new_exception_stringv(format, ls) : NULL;
+	clear_exception(env);
 	env->exception = exception;
+	if (format)
+		vsprintf_s(env->message, sizeof(env->message), format, ls);
 	return exception;
 }
 
@@ -1364,8 +1380,6 @@ void env_free(env_t *env)
 		}
 		curr = curr->next;
 	}
-
-	free_exception_string(env->exceptionMessage);
 
 	FREE(env);
 }
@@ -1856,7 +1870,7 @@ int env_run(env_t *env, void *location)
 			break;
 
 		default:
-			EXIT_RUN(env_raise_exception(env, exception_bad_command, "Unknown instruction %x", (unsigned int)(*env->rip)));
+			EXIT_RUN(env_raise_exception(env, exception_bad_command, "Unknown instruction %02x", (unsigned int)(*env->rip)));
 		}
 	}
 
@@ -2503,16 +2517,19 @@ void vm_start_routine(start_args_t *args)
 			int exception = env_run_func_static(env, func, args->args);
 			if (exception)
 			{
+				snapshot_t ss;
+				env_take_snapshot(env, &ss);
+
 				putc('\n', stdout);
-				if (env->exceptionMessage)
-					printf("Internal exception %s raised with message \"%s\"\n", g_exceptionStrings[exception], env->exceptionMessage);
+				if (env->message[0])
+					printf("Internal exception %s raised with message \"%s\"\n", g_exceptionStrings[exception], env->message);
 				else
 					printf("Internal exception %s raised\n", g_exceptionStrings[exception]);
 				 
 				printf("Outputting known information up to exception:\n");
 				printf("Exception occurred during execution in environment %p\n", env);
 				
-				function_t *exceptionFunc = CURR_FUNC(env);
+				function_t *exceptionFunc = ss.function.handle;
 				/*printf("Top stack frame parameters of suspect environment:\n");
 				printf("(rbp + 0) (last stack frame rbp) = %p\n", *((size_t **)env->rbp));
 				printf("(rbp + 1) (last stack frame rip) = %p\n", *((size_t **)env->rbp + 1));
@@ -2520,9 +2537,12 @@ void vm_start_routine(start_args_t *args)
 
 				printf("Top stack frame points to function %p -> {\n", exceptionFunc);
 				printf("\tname = \"%s\"\n", exceptionFunc->name);
+				printf("\tqualifiedName = \"%s\"\n", exceptionFunc->qualifiedName);
 				printf("\tparentClass = \"%s\"\n", exceptionFunc->parentClass->name);
-				printf("\trelativeLocation = %p\n", (void *)((char *)exceptionFunc->location - (char *)exceptionFunc->parentClass->data));
+				printf("\trelativeLocation = %p\n", (void *)ss.function.relativeLocation);
 				printf("}\n");
+
+				printf("Exception location relative to function: %p\n", (void *)ss.exec.execFuncOffset);
 
 				print_stack_trace(stdout, env, (vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors));
 
@@ -2531,7 +2551,7 @@ void vm_start_routine(start_args_t *args)
 					printf("\nVariables of suspect execution environment:\n");
 					printf("rip = %p, cmdStart = %p, vm = %p\n", env->rip, env->cmdStart, env->vm);
 					printf("stack = %p, rsp = %p, rbp = %p\n", env->stack, env->rsp, env->rbp);
-					printf("variables = %p, exception = %d, exceptionMessage = %p\n", env->variables, env->exception, env->exceptionMessage);
+					printf("variables = %p, exception = %d, exceptionMessage = %p\n", env->variables, env->exception, env->message);
 					printf("bret = %u, wret = %u, dret = %u\n", env->bret, env->wret, env->dret);
 					printf("qret = %llu, r4ret = %f, r8ret = %f\n", env->qret, (real8_t)env->r4ret, env->r8ret);
 					printf("vret = %p\n\n", env->vret);

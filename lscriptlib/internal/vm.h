@@ -17,7 +17,16 @@ The maximum length of an exception string.
 */
 #define MAX_EXCEPTION_STRING_LENGTH 100
 
+#define EMSGLEN 64
+#define HISTLEN 64
+
+/*
+Checks if verbose error messages should be used given flags.
+*/
+#define DO_VERBOSE_ERR(flags) (((flags)&vm_flag_verbose)||((flags)&vm_flag_verbose_errors))
+
 typedef struct vm_s vm_t;
+typedef struct snapshot_s snapshot_t;
 typedef struct env_s env_t;
 typedef unsigned long long vm_flags_t;
 
@@ -83,8 +92,10 @@ struct env_s
 
 	list_t *variables;			// List of maps which map strings to values in scope (stored as a value_t *)
 
+	byte_t cmdHistory[HISTLEN];	// An array of the previous commands executed - updated if launched with -verbose
+
 	int exception;				// The most recent exception which was thrown
-	char *exceptionMessage;		// The message associated with the exception
+	char message[EMSGLEN];		// The message associated with the exception
 
 	union
 	{
@@ -99,38 +110,39 @@ struct env_s
 };
 
 /*
-Creates a new exception string.
-
-@param format A formatted string.
-@param ls The values which will replace each argument in format.
-
-@return A new exception string with the respective values replaced.
+Stores information about an execution environment at a certain time period
 */
-char *new_exception_stringv(const char *format, va_list ls);
-
-/*
-Creates a new exception string.
-
-@param format A formatted string.
-@param ... The values which will replace each argument in format.
-
-@return A new exception string with the respective values replaced.
-*/
-inline char *new_exception_string(const char *format, ...)
+struct snapshot_s
 {
-	va_list ls;
-	va_start(ls, format);
-	char *result = new_exception_stringv(format, ls);
-	va_end(ls);
-	return result;
-}
+	qword_t time;	// The time at which this snapshot was taken, in milliseconds
 
-/*
-Frees a string allocated using new_exception_string or new_exception_stringv.
+	// Information about the virtual machine
+	struct
+	{
+		vm_t *handle;				// The VM's handle (volatile members)
+		vm_t saved;					// Saved state of the VM (volatile members)
+	} vm;
 
-@param exceptionString The string to free.
-*/
-void free_exception_string(const char *exceptionString);
+	// Information about the current execution environment
+	struct
+	{
+		env_t *handle;				// The execution enviornment's handle (volatile members)
+		env_t saved;				// Saved state of the execution environment
+	} env;
+
+	// Information about the currently executing function
+	struct
+	{
+		function_t *handle;			// The function handle
+		size_t relativeLocation;	// The function's location relative to the class
+	} function;
+
+	// Information about the execution location
+	struct
+	{
+		size_t execFuncOffset;		// Execution location relative to the function's location
+	} exec;
+};
 
 /*
 Creates a new virtual machine with the designated parameters.
@@ -244,6 +256,16 @@ Creates a new execution environment in the specified virtual machine.
 @return The new enviornment, or NULL if creation failed.
 */
 env_t *env_create(vm_t *vm);
+
+/*
+Creates a snapshot of the current execution status of an environment.
+
+@param env The environment to take a snapshot of.
+@param ss The destination snapshot_t to populate.
+
+@return 1 if the snapshot was populated and 0 otherwise.
+*/
+int env_take_snapshot(env_t *env, snapshot_t *ss);
 
 /*
 Resolves a variable name in the current scope. If the find fails, an exception will be
