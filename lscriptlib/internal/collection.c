@@ -76,6 +76,29 @@ list_t *list_find_end(list_t *list)
     return list;
 }
 
+list_t *list_copy(list_t *src, copy_func_t copyFunc)
+{
+    if (!src)
+        return NULL;
+
+    list_t *result = list_create();
+    if (!result)
+        return NULL;
+
+    result->data = copyFunc ? copyFunc(src->data) : src->data;
+
+    list_t *curr = result->next;
+    src = src->next;
+    while (src)
+    {
+        list_insert(curr, copyFunc ? copyFunc(src->data) : src->data);
+        src = src->next;
+        curr = curr->next;
+    }
+
+    return result;
+}
+
 list_iterator_t *list_create_iterator(list_t *list)
 {
     if (!list)
@@ -254,6 +277,29 @@ void *map_at(map_t *map, const void *key)
 {
     map_node_t *node = map_find(map, key);
     return node ? node->value : NULL;
+}
+
+map_t *map_copy(map_t *map, copy_func_t copyFunc)
+{
+    if (!map)
+        return NULL;
+
+    map_t *result = map_create(map->entries, map->hash, map->compare, map->keycopy, map->valuecopy, map->keyfree);
+    if (!result)
+        return NULL;
+
+    map_iterator_t *mit = map_create_iterator(map);
+    if (!mit)
+        return NULL;
+
+    while (mit->node)
+    {
+        map_insert(result, mit->key, mit->value);
+        mit = map_iterator_next(mit);
+    }
+    map_iterator_free(mit);
+
+    return result;
 }
 
 map_iterator_t *map_create_iterator(map_t *map)

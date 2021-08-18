@@ -26,7 +26,8 @@ Checks if verbose error messages should be used given flags.
 #define DO_VERBOSE_ERR(flags) (((flags)&vm_flag_verbose)||((flags)&vm_flag_verbose_errors))
 
 typedef struct vm_s vm_t;
-typedef struct snapshot_s snapshot_t;
+typedef struct vm_snapshot_s vm_snapshot_t;
+typedef struct env_snapshot_s env_snapshot_t;
 typedef struct env_s env_t;
 typedef unsigned long long vm_flags_t;
 
@@ -110,17 +111,25 @@ struct env_s
 };
 
 /*
-Stores information about an execution environment at a certain time period
+Stores information about the virtual machine at a certain time period
 */
-struct snapshot_s
+struct vm_snapshot_s
 {
 	qword_t time;	// The time at which this snapshot was taken, in milliseconds
 
-	// Information about the virtual machine
+	vm_t *handle;	// The VM's original handle (volatile members)
+	list_t *envs;	// A list of env_snapshot_t's for each active environment
+	vm_t saved;		// Saved state of the VM
+
+};
+
+struct env_snapshot_s
+{
+	qword_t time;	// The time at which this snapshot was taken, in milliseconds
+
 	struct
 	{
-		vm_t *handle;				// The VM's handle (volatile members)
-		vm_t saved;					// Saved state of the VM (volatile members)
+		vm_t *handle;				// The VM's original handle (volatile members)
 	} vm;
 
 	// Information about the current execution environment
@@ -128,6 +137,9 @@ struct snapshot_s
 	{
 		env_t *handle;				// The execution enviornment's handle (volatile members)
 		env_t saved;				// Saved state of the execution environment
+
+		byte_t *rsp;				// RSP relative to the copied stack - NULL if copy failed
+		byte_t *rbp;				// RBP relative to the copied stack - NULL if copy failed
 	} env;
 
 	// Information about the currently executing function
@@ -251,6 +263,25 @@ any threads, in milliseconds.
 void vm_free(vm_t *vm, unsigned long threadWaitTime);
 
 /*
+Creates a snapshot of the current execution status of an environment and virtual
+machine. Snapshots can be expensive, especially with large heap and stack sizes as
+all these are copied. However, even if these data can not be copied, other data
+will still be copied.
+
+@param env The environment to take a snapshot of.
+
+@return The snapshot, or NULL if it couldn't be taken.
+*/
+vm_snapshot_t *vm_take_snapshot(vm_t *vm);
+
+/*
+Frees a snapshot taken with vm_take_snapshot.
+
+@param ss The snapshot to free.
+*/
+void vm_free_snapshot(vm_snapshot_t *ss);
+
+/*
 Creates a new execution environment in the specified virtual machine.
 
 @return The new enviornment, or NULL if creation failed.
@@ -258,14 +289,23 @@ Creates a new execution environment in the specified virtual machine.
 env_t *env_create(vm_t *vm);
 
 /*
-Creates a snapshot of the current execution status of an environment.
+Creates a snapshot of the current execution status of an environment and virtual
+machine. Snapshots can be expensive, especially with large heap and stack sizes as
+all these are copied. However, even if these data can not be copied, other data
+will still be copied.
 
 @param env The environment to take a snapshot of.
-@param ss The destination snapshot_t to populate.
 
-@return 1 if the snapshot was populated and 0 otherwise.
+@return The snapshot, or NULL if it couldn't be taken.
 */
-int env_take_snapshot(env_t *env, snapshot_t *ss);
+env_snapshot_t *env_take_snapshot(env_t *env);
+
+/*
+Frees a snapshot taken with env_take_snapshot.
+
+@param ss The snapshot to save.
+*/
+void env_free_snapshot(env_snapshot_t *ss);
 
 /*
 Resolves a variable name in the current scope. If the find fails, an exception will be

@@ -708,6 +708,15 @@ void vm_free(vm_t *vm, unsigned long threadWaitTime)
 	FREE(vm);
 }
 
+vm_snapshot_t *vm_take_snapshot(vm_t *vm)
+{
+	return NULL;
+}
+
+void vm_free_snapshot(vm_snapshot_t *ss)
+{
+}
+
 env_t *env_create(vm_t *vm)
 {
 	if (vm->flags & vm_flag_verbose)
@@ -772,17 +781,35 @@ env_t *env_create(vm_t *vm)
 	return env;
 }
 
-int env_take_snapshot(env_t *env, snapshot_t *ss)
+env_snapshot_t *env_take_snapshot(env_t *env)
 {
+	env_snapshot_t *ss = (env_snapshot_t *)MALLOC(sizeof(env_snapshot_t));
+	if (!ss)
+		return NULL;
+
 	ss->time = GetTickCount64();
 
 	// Populate VM information
 	ss->vm.handle = env->vm;
-	memcpy(&ss->vm.saved, env->vm, sizeof(vm_t));
 
 	// Populate environment information
 	ss->env.handle = env;
 	memcpy(&ss->env.saved, env, sizeof(env_t));
+
+	ss->env.rsp = NULL;
+	ss->env.rbp = NULL;
+
+	env_t *senv = &ss->env.saved;
+	senv->stack = (byte_t *)MALLOC(env->vm->stackSize);
+	if (senv->stack)
+	{
+		MEMCPY(senv->stack, env->stack, env->vm->stackSize);
+
+		ss->env.rsp = senv->stack + (env->rsp - env->stack);
+		ss->env.rbp = senv->stack + (env->rbp - env->stack);
+	}
+
+	ss->env.saved.variables = NULL; // Nothing for right now, would require taking heap snapshot
 
 	// Populate function information
 	ss->function.handle = CURR_FUNC(env);
@@ -795,7 +822,17 @@ int env_take_snapshot(env_t *env, snapshot_t *ss)
 		(char *)ss->function.handle->location -
 		(char *)env->cmdStart;
 
-	return 1;
+	return ss;
+}
+
+void env_free_snapshot(env_snapshot_t *ss)
+{
+	if (ss)
+	{
+		if (ss->env.saved.rsp)
+			FREE(ss->env.saved.stack);
+		FREE(ss);
+	}
 }
 
 int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags)
@@ -2099,9 +2136,6 @@ int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_fl
 
 	if (env_create_stack_frame(env, function, flags) != exception_none)
 		return env->exception;
-	//env->rbp = env->rsp;
-	//env->rsp = (byte_t *)stackframe;
-		//((size_t *)env->rsp) + 3;
 
 	env->variables->next = list_create();
 	env->variables->next->prev = env->variables;
@@ -2517,8 +2551,7 @@ void vm_start_routine(start_args_t *args)
 			int exception = env_run_func_static(env, func, args->args);
 			if (exception)
 			{
-				snapshot_t ss;
-				env_take_snapshot(env, &ss);
+				env_snapshot_t *ss = env_take_snapshot(env);
 
 				putc('\n', stdout);
 				if (env->message[0])
@@ -2529,7 +2562,7 @@ void vm_start_routine(start_args_t *args)
 				printf("Outputting known information up to exception:\n");
 				printf("Exception occurred during execution in environment %p\n", env);
 				
-				function_t *exceptionFunc = ss.function.handle;
+				function_t *exceptionFunc = ss->function.handle;
 				/*printf("Top stack frame parameters of suspect environment:\n");
 				printf("(rbp + 0) (last stack frame rbp) = %p\n", *((size_t **)env->rbp));
 				printf("(rbp + 1) (last stack frame rip) = %p\n", *((size_t **)env->rbp + 1));
@@ -2539,10 +2572,10 @@ void vm_start_routine(start_args_t *args)
 				printf("\tname = \"%s\"\n", exceptionFunc->name);
 				printf("\tqualifiedName = \"%s\"\n", exceptionFunc->qualifiedName);
 				printf("\tparentClass = \"%s\"\n", exceptionFunc->parentClass->name);
-				printf("\trelativeLocation = %p\n", (void *)ss.function.relativeLocation);
+				printf("\trelativeLocation = %p\n", (void *)ss->function.relativeLocation);
 				printf("}\n");
 
-				printf("Exception location relative to function: %p\n", (void *)ss.exec.execFuncOffset);
+				printf("Exception location relative to function: %p\n", (void *)ss->exec.execFuncOffset);
 
 				print_stack_trace(stdout, env, (vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors));
 

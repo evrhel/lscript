@@ -147,6 +147,17 @@ Finds the last node in a list, i.e. the first node where list->next is NULL.
 list_t *list_find_end(list_t *list);
 
 /*
+Creates a new list with copies of each element.
+
+@param src The list to copy.
+@param copyFunc The function to copy each value stored in each node. If NULL,
+only the value will be copied.
+
+@return The new list, or NULL if it could not be created.
+*/
+list_t *list_copy(list_t *src, copy_func_t copyFunc);
+
+/*
 Creates a new list iterator.
 
 @param list The list to create an iterator over.
@@ -242,6 +253,8 @@ Returns the value mapped from the key.
 @return The value at the given key, or NULL if no entry existed.
 */
 void *map_at(map_t *map, const void *key);
+
+map_t *map_copy(map_t *map, copy_func_t copyFunc);
 
 /*
 Creates a new iterator which iterates over all elements in a map in
