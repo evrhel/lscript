@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 	if (!lsAPILib)
 		return 0xc0;
 
-	vm = ls_create_and_start_vm(argc - 1, argv + 1, &hThreadHandle, &dThreadID, lsAPILib);
+	vm = ls_create_and_start_vm(argc, argv, &hThreadHandle, &dThreadID, lsAPILib);
 	if (!vm)
 		return 0xc1;
 

@@ -270,11 +270,15 @@ LEXPORT luint LCALL ls_get_array_length(lobject array)
 
 int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 {
-	int pathInd = 0;
+	int pathInd = 1;
+	if (argc <= 0)
+		return 0;
 	memset(argStruct, 0, sizeof(vm_args_t));
+
+	argStruct->paths[0] = argv[0];
 	argStruct->heapSize = DEFAULT_HEAP_SIZE;
 	argStruct->stackSize = DEFAULT_STACK_SIZE;
-	for (int i = 0; i < argc; i++)
+	for (int i = 1; i < argc; i++)
 	{
 		if (equals_ignore_case("-version", argv[i]))
 		{

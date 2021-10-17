@@ -20,7 +20,7 @@ There exist three functions relevant to starting the virtual machine, declared i
 `LVM ls_create_vm(int argc, const char *const argv[], void *lsAPILib)`
 - Creates the virtual machine with the given arguments.
 - `argc` - The number of elements in `argv`.
-- `argv` - An array of strings to be the virtual-machine arguments.
+- `argv` - An array of strings to be the virtual-machine arguments. The first argument must be the path of the executable (i.e. where lscript.exe is located).
 - `lsAPILib` - A pointer to a handle in which the virtual machine is stored. For Windows, this is an `HMODULE` (Generally referencing `lscriptapi.dll`).
 
 `int ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID)`
