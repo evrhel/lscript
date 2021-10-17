@@ -370,6 +370,11 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 		case lb_mul:
 		case lb_div:
 		case lb_mod:
+		case lb_and:
+		case lb_or:
+		case lb_xor:
+		case lb_lsh:
+		case lb_rsh:
 			off++;
 			off += strlen(off) + 1;	// Destination variable name
 			off += strlen(off) + 1;	// Source variable name
@@ -399,6 +404,26 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 				break;
 			}
 			break;
+		case lb_castc:
+		case lb_castuc:
+		case lb_casts:
+		case lb_castus:
+		case lb_casti:
+		case lb_castui:
+		case lb_castl:
+		case lb_castul:
+		case lb_castb:
+		case lb_castf:
+		case lb_castd:
+		case lb_neg:
+		case lb_not:
+			// Handle unary operators
+
+			off++;
+			off += strlen(off) + 1;	// Destination variable name
+			off += strlen(off) + 1;	// Source variable name
+			break;
+
 		default:
 			off++; // This is potentially dangerous, but is here to skip over alignment bytes
 			break;

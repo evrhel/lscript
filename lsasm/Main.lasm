@@ -11,12 +11,16 @@ class Main
 		uint counter
 		setd counter dword[0]
 
+		dynamic_call System.stdout.println(LString;) "Printing arguments:"
+
 		while counter < args.length
 			static_call Int.toString(I) counter
 			dynamic_call System.stdout.print(LString;) ret
 			dynamic_call System.stdout.println(LString;) args[counter]
 			add counter counter uint[1]
 		end
+
+		dynamic_call System.stdout.println(LString;) "Done."
 
 		retd dword[25]
 
