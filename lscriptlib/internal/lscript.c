@@ -1,7 +1,10 @@
 #include "../lscript.h"
 
+#include <stdio.h>
+
 #include "vm.h"
 #include "string_util.h"
+#include "mem_debug.h"
 
 #define MAX_PATHS 16
 
@@ -13,11 +16,22 @@ struct vm_args_s
 	vm_flags_t flags;
 	const char *const *argv;
 	int argc;
-	const char *paths[MAX_PATHS];
+	char *paths[MAX_PATHS];
 };
 
 static int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct);
+static void free_arg_struct(vm_args_t *argStruct);
 static void print_help();
+
+static inline char *copy_string(const char *in, size_t extra)
+{
+	size_t len = strlen(in) + 1 + extra;
+	char *result = (char *)MALLOC(len);
+	if (!result)
+		return NULL;
+	MEMCPY(result, in, len);
+	return result;
+}
 
 static vm_t *gCurrentVM = NULL;
 
@@ -27,6 +41,7 @@ LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILi
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
 	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths);
+	free_arg_struct(&args);
 	return gCurrentVM = vm;
 }
 
@@ -48,6 +63,7 @@ LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], voi
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
 	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths);
+	free_arg_struct(&args);
 	gCurrentVM = vm;
 	if (!gCurrentVM)
 		return NULL;
@@ -273,18 +289,33 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 	int pathInd = 1;
 	if (argc <= 0)
 		return 0;
-	memset(argStruct, 0, sizeof(vm_args_t));
+	MEMSET(argStruct, 0, sizeof(vm_args_t));
 
-	argStruct->paths[0] = argv[0];
+	static const char LIB_DIR[] = "lib\\";
+	char path[MAX_PATH];
+	ZeroMemory(path, sizeof(path));
+
+	if (!GetModuleFileNameA(NULL, path, sizeof(path)))
+		return 0;
+
+	// Copy the string, and ensure there is enough space to put the LIB_DIR
+	// string
+	argStruct->paths[0] = copy_string(path, sizeof(LIB_DIR));
+
+	// Remove the executable name and replace with LIB_DIR	
+	char *sep = strrchr(argStruct->paths[0], '\\');
+	MEMCPY(sep + 1, LIB_DIR, sizeof(LIB_DIR));
+
 	argStruct->heapSize = DEFAULT_HEAP_SIZE;
 	argStruct->stackSize = DEFAULT_STACK_SIZE;
-	for (int i = 1; i < argc; i++)
+	for (int i = 0; i < argc; i++)
 	{
 		if (equals_ignore_case("-version", argv[i]))
 		{
 			printf("lscript version \"%s\"\n", LS_VERSION);
 			printf("build date: %s\n", __DATE__);
 			printf("build time: %s\n", __TIME__);
+			return 0;
 		}
 		else if (equals_ignore_case("-help", argv[i]) || equals_ignore_case("-?", argv[i]))
 		{
@@ -308,7 +339,7 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 			i++;
 			if (i < argc)
 			{
-				argStruct->paths[pathInd++] = argv[i];
+				argStruct->paths[pathInd++] = copy_string(argv[i], 0);
 			}
 			else
 			{
@@ -382,6 +413,18 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 		}
 	}
 	return 1;
+}
+
+void free_arg_struct(vm_args_t *argStruct)
+{
+	for (int i = 0; i < MAX_PATHS; i++)
+	{
+		if (argStruct->paths[i])
+		{
+			FREE(argStruct->paths[i]);
+			argStruct->paths[i] = NULL;
+		}
+	}
 }
 
 void print_help()

@@ -223,8 +223,6 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 			vm_add_path(vm, paths[i]);
 	}
 
-	vm_add_path(vm, ".\\lib\\");
-
 	vm->loadedClassObjects = map_create(16, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
 
 	vm->libraryCount = 4;

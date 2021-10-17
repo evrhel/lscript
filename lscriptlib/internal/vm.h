@@ -162,8 +162,10 @@ Creates a new virtual machine with the designated parameters.
 @param heapSize The size of the heap.
 @param stackSize The size of the stack, per thread.
 @param flags Creation flags.
-@param pathCount The number of paths.
-@param paths The paths for which the virtual machine will search for classes on.
+@param pathCount The length of paths.
+@param paths The paths for which the virtual machine will search for classes on. The first
+element should be the location of lscript API files (i.e. directory where core classes are
+stored such as Class, Object, String, etc.). Although, this is not necessary.
 
 @return The new virtual machine, or NULL if creation failed.
 */
