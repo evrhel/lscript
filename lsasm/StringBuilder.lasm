@@ -52,7 +52,7 @@ class StringBuilder
 		ret
 
 	function dynamic interp void append(ulong num)
-		uintarray digits
+		uchararray digits
 		ulong digit
 		int i
 		int j
