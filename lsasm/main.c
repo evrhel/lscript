@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
 		}
 		else if (readingInputs)
 		{
-			files = add_file(files, argv[i]);
+			files = add_file(files, argv[i], argv[i]);
 		}
 		else
 		{
@@ -157,7 +157,18 @@ int main(int argc, char *argv[])
 	if (runCompiler)
 	{
 		printf("[BEGIN COMPILE]\n");
-		errors = compile(files, outputDirectory, version, compileDebug, alignment, (msg_func_t)puts, &linkFiles);
+
+		compiler_options_t options = {
+			files,
+			outputDirectory,
+			version,
+			compileDebug,
+			alignment,
+			(msg_func_t)puts,
+			&linkFiles
+		};
+
+		errors = compile(&options);
 		free_file_list(files);
 
 		if (are_errors(errors))
@@ -258,7 +269,7 @@ int are_errors(const compile_error_t *list)
 
 input_file_t *add_source_files_in_directory(const char *directory, input_file_t *files, int recursive)
 {
-	WIN32_FIND_DATA ffd;
+	WIN32_FIND_DATAA ffd;
 	CHAR szSearchDir[MAX_PATH];
 	CHAR szFilePath[MAX_PATH];
 	HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -270,7 +281,7 @@ input_file_t *add_source_files_in_directory(const char *directory, input_file_t 
 	if (hFind == INVALID_HANDLE_VALUE)
 	{
 		printf("Failed to find directory: %s\n", directory);
-		return;
+		return files;
 	}
 
 	do
@@ -285,7 +296,7 @@ input_file_t *add_source_files_in_directory(const char *directory, input_file_t 
 		{
 			char *ext = strrchr(ffd.cFileName, '.');
 			if (ext && equals_ignore_case(ext + 1, "lasm"))
-				files = add_file(files, szFilePath);
+				files = add_file(files, ffd.cFileName, szFilePath);
 		}
 	} while (FindNextFileA(hFind, &ffd) != 0);
 

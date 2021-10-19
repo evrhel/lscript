@@ -3,6 +3,7 @@
 #include "buffer.h"
 #include <stdio.h>
 #include <internal/value.h>
+#include <assert.h>
 
 enum
 {
@@ -31,7 +32,7 @@ compile_error_t *link(input_file_t *files, unsigned int linkVersion, msg_func_t 
 
 	while (files)
 	{
-		back = link_file(files->filename, back, linkVersion);
+		back = link_file(files->fullpath, back, linkVersion);
 		files = files->next;
 	}
 

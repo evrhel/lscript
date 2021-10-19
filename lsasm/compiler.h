@@ -22,7 +22,17 @@ typedef union alignment_u
 	};
 } alignment_t;
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version,
-	int debug, alignment_t alignment, msg_func_t messenger, input_file_t **outputFiles);
+typedef struct compiler_options_s
+{
+	input_file_t *inFiles;
+	const char *outDirectory;
+	unsigned int version;
+	int debug;
+	alignment_t alignment;
+	msg_func_t messenger;
+	input_file_t **outputFiles;
+} compiler_options_t;
+
+compile_error_t *compile(compiler_options_t *options);
 
 #endif

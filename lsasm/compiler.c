@@ -17,8 +17,35 @@ struct line_s
 	int linenum;
 };
 
-static compile_error_t *compile_file(const char *file, const char *outputFile, compile_error_t *back, unsigned int version, int debug, alignment_t alignment, input_file_t **outputFiles);
-static compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile, compile_error_t *back, unsigned int version, int debug, alignment_t alignment, buffer_t *debugOut);
+typedef struct file_compile_options_s file_compile_options_t;
+struct file_compile_options_s
+{
+	const char *unitname;
+	const char *inFilePath;
+	const char *outputDirectory;
+	compile_error_t *back;
+	unsigned int version;
+	int debug;
+	alignment_t alignment;
+	input_file_t **outputFiles;
+};
+
+typedef struct data_compile_options_s data_compile_options_t;
+struct data_compile_options_s
+{
+	const char *data;
+	size_t datalen;
+	buffer_t *out;
+	const char *srcFile;
+	compile_error_t *back;
+	unsigned int version;
+	int debug;
+	alignment_t alignment;
+	buffer_t *debugOut;
+};
+
+static compile_error_t *compile_file(file_compile_options_t *options);
+static compile_error_t *compile_data(data_compile_options_t *options);
 static line_t *format_document(const char *data, size_t datalen);
 static void free_formatted(line_t *first);
 static byte_t get_command_byte(const char *string);
@@ -46,10 +73,9 @@ static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenC
 static compile_error_t *handle_unary_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 
-compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsigned int version, int debug,
-	alignment_t alignment, msg_func_t messenger, input_file_t **outputFiles)
+compile_error_t *compile(compiler_options_t *options)
 {
-	compile_error_t *errors = create_base_compile_error(messenger);
+	compile_error_t *errors = create_base_compile_error(options->messenger);
 	input_file_t *base = (input_file_t *)MALLOC(sizeof(input_file_t));
 	if (!base)
 		return add_compile_error(errors, "", 0, error_error, "Allocation failure.");
@@ -58,16 +84,28 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 	
 	input_file_t *back = base;
 
-	if (files)
+	if (options->inFiles)
 	{
-		files = files->front;
-		if (version != 1)
+		options->inFiles = options->inFiles->front;
+		if (options->version != 1)
 			return add_compile_error(errors, "", 0, error_error, "Unsupported compile standard.");
 
-		while (files)
+		while (options->inFiles)
 		{
-			errors = compile_file(files->filename, outputDirectory, errors, version, debug, alignment, &back);
-			files = files->next;
+			file_compile_options_t fileOptions = {
+				options->inFiles->unitname,
+				options->inFiles->fullpath,
+				options->outDirectory,
+				errors,
+				options->version,
+				options->debug,
+				options->alignment,
+				&back
+			};
+
+
+			errors = compile_file(&fileOptions);
+			options->inFiles = options->inFiles->next;
 		}
 	}
 
@@ -83,20 +121,19 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 		curr = curr->next;
 	}
 
-	*outputFiles = front;
+	*options->outputFiles = front;
 	return errors ? errors->front : NULL;
 }
 
-compile_error_t *compile_file(const char *file, const char *outputDirectory, compile_error_t *back,
-	unsigned int version, int debug, alignment_t alignment, input_file_t **outputFiles)
+compile_error_t *compile_file(file_compile_options_t *options)
 {
 	FILE *in = NULL;
 
-	back = add_compile_error(back, NULL, 0, error_info, "Build: %s", file);
+	options->back = add_compile_error(options->back, NULL, 0, error_info, "Build: %s", options->inFilePath);
 
-	fopen_s(&in, file, "rb");
+	fopen_s(&in, options->inFilePath, "rb");
 	if (!in)
-		return add_compile_error(back, file, 0, error_error, "Failed to fopen for read");
+		return add_compile_error(options->back, options->inFilePath, 0, error_error, "Failed to fopen for read");
 	fseek(in, 0, SEEK_END);
 	long length = ftell(in);
 	fseek(in, 0, SEEK_SET);
@@ -104,25 +141,39 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	if (!buf)
 	{
 		fclose(in);
-		return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
+		return add_compile_error(options->back, options->inFilePath, 0, error_error, "Failed to allocate buffer");
 	}
 	fread_s(buf, length, sizeof(char), length, in);
 	fclose(in);
 
 	buffer_t *obuf = NEW_BUFFER(256);
-	buffer_t *dbuf = debug ? NEW_BUFFER(256) : NULL;
-	back = compile_data(buf, length, obuf, file, back, version, debug, alignment, dbuf);
+	buffer_t *dbuf = options->debug ? NEW_BUFFER(256) : NULL;
+
+	data_compile_options_t dataCompileOptions = {
+		buf,
+		length,
+		obuf,
+		options->inFilePath,
+		options->back,
+		options->version,
+		options->debug,
+		options->alignment,
+		dbuf
+	};
+
+
+	options->back = compile_data(&dataCompileOptions);
 
 	int hasWarnings = 0;
-	if (back)
+	if (options->back)
 	{
-		compile_error_t *curr = back->front;
+		compile_error_t *curr = options->back->front;
 		while (curr)
 		{
 			if (curr->type == error_error)
 			{
-				back = add_compile_error(back, NULL, 0, error_info, "%s failed to build with errors.", file);
-				return back->front;
+				options->back = add_compile_error(options->back, NULL, 0, error_info, "%s failed to build with errors.", options->inFilePath);
+				return options->back->front;
 			}
 			else if (curr->type == error_warning)
 				hasWarnings = 1;
@@ -130,19 +181,19 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		}
 	}
 
-	size_t outputDirSize = strlen(outputDirectory);
-	size_t fileSize = strlen(file);
+	size_t outputDirSize = strlen(options->outputDirectory);
+	size_t fileSize = strlen(options->unitname);
 	size_t fullnameSize = outputDirSize + 1 + fileSize + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
 	char *nstr = (char *)MALLOC(fullnameSize);
 	char *nameoff = nstr + outputDirSize + 1;
 	if (!nstr)
 	{
 		FREE(buf);
-		return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
+		return add_compile_error(options->back, options->unitname, 0, error_error, "Failed to allocate buffer");
 	}
-	MEMCPY(nstr, outputDirectory, strlen(outputDirectory));
+	MEMCPY(nstr, options->outputDirectory, strlen(options->outputDirectory));
 	*(nameoff - 1) = '\\';
-	MEMCPY(nameoff, file, fileSize + 1);
+	MEMCPY(nameoff, options->unitname, fileSize + 1);
 	char *lastSep = strrchr(nameoff, '\\');
 	if (!lastSep)
 		lastSep = strrchr(nameoff, '\\');
@@ -163,7 +214,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		fname[len] = 0;
 	}
 
-	*outputFiles = add_file(*outputFiles, nstr);
+	*options->outputFiles = add_file(*options->outputFiles, nstr, nstr);
 
 	FILE *out = NULL;
 	fopen_s(&out, nstr, "wb");
@@ -172,10 +223,10 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		FREE_BUFFER(obuf);
 		//free(nstr);
 		printf("%s\n", nstr);
-		return add_compile_error(back, file, 0, 0, "Failed to fopen for write", error_error);
+		return add_compile_error(options->back, options->inFilePath, 0, 0, "Failed to fopen for write", error_error);
 	}
 	fputc(0, out);
-	fwrite(&version, sizeof(unsigned int), 1, out);
+	fwrite(&options->version, sizeof(unsigned int), 1, out);
 	fwrite(obuf->buf, sizeof(char), (size_t)(obuf->cursor - obuf->buf), out);
 
 	fclose(out);
@@ -183,7 +234,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 	FREE(nstr);
 
-	if (debug)
+	if (options->debug)
 	{
 		fullnameSize++;
 		nstr = (char *)MALLOC(fullnameSize);
@@ -191,11 +242,11 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		if (!nstr)
 		{
 			FREE(buf);
-			return add_compile_error(back, file, 0, error_error, "Failed to allocate buffer");
+			return add_compile_error(options->back, options->inFilePath, 0, error_error, "Failed to allocate buffer");
 		}
-		MEMCPY(nstr, outputDirectory, strlen(outputDirectory));
+		MEMCPY(nstr, options->outputDirectory, strlen(options->outputDirectory));
 		*(nameoff - 1) = '\\';
-		MEMCPY(nameoff, file, fileSize + 1);
+		MEMCPY(nameoff, options->unitname, fileSize + 1);
 		lastSep = strrchr(nstr, '\\');
 		if (!lastSep)
 			lastSep = strrchr(nstr, '/');
@@ -222,31 +273,30 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 		fopen_s(&dfout, nstr, "wb");
 		if (dfout)
 		{
-			fwrite(&version, sizeof(unsigned int), 1, dfout);
-			fputs(file, dfout);
+			fwrite(&options->version, sizeof(unsigned int), 1, dfout);
+			fputs(options->unitname, dfout);
 			fputc(0, dfout);
 			fwrite(dbuf->buf, sizeof(char), (size_t)(dbuf->cursor - dbuf->buf), dfout);
 			fclose(dfout);
 		}
 		else
-			return add_compile_error(back, file, 0, error_warning, "Failed to fopen for write debug information");
+			return add_compile_error(options->back, options->inFilePath, 0, error_warning, "Failed to fopen for write debug information");
 		FREE(nstr);
 		FREE_BUFFER(dbuf);
 	}
 
 	if (hasWarnings)
-		back = add_compile_error(back, NULL, 0, error_info, "%s built with warnings.", file);
+		options->back = add_compile_error(options->back, NULL, 0, error_info, "%s built with warnings.", options->inFilePath);
 	else
-		back = add_compile_error(back, NULL, 0, error_info, "%s successfully built.", file);
+		options->back = add_compile_error(options->back, NULL, 0, error_info, "%s successfully built.", options->inFilePath);
 
 	FREE(buf);
-	return back ? back->front : NULL;
+	return options->back ? options->back->front : NULL;
 }
 
-compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, const char *srcFile,
-	compile_error_t *back, unsigned int version, int debug, alignment_t alignment, buffer_t *debugOut)
+compile_error_t *compile_data(data_compile_options_t *options)
 {
-	line_t *formatted = format_document(data, datalen);
+	line_t *formatted = format_document(options->data, options->datalen);
 	size_t alignAmount;
 
 	line_t *curr = formatted;
@@ -255,11 +305,11 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 		char *line = curr->line;
 		if (*line != '#')
 		{
-			if (debug)
+			if (options->debug)
 			{
-				unsigned int off = (unsigned int)(out->cursor - out->buf);
-				PUT_UINT(debugOut, off);
-				PUT_INT(debugOut, curr->linenum);
+				unsigned int off = (unsigned int)(options->out->cursor - options->out->buf);
+				PUT_UINT(options->debugOut, off);
+				PUT_INT(options->debugOut, curr->linenum);
 			}
 
 			size_t tokenCount;
@@ -268,22 +318,22 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			switch (cmd)
 			{
 			case lb_class:
-				back = handle_class_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_class_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_global:
-				alignAmount = alignment.globalAlignment - ((size_t)(out->cursor - out->buf) % (size_t)alignment.globalAlignment);
-				out = PUT_BYTES(out, lb_align, alignAmount);
-				back = handle_field_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
+				alignAmount = options->alignment.globalAlignment - ((size_t)(options->out->cursor - options->out->buf) % (size_t)options->alignment.globalAlignment);
+				options->out = PUT_BYTES(options->out, lb_align, alignAmount);
+				options->back = handle_field_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 			case lb_function:
-				alignAmount = alignment.functionAlignment - ((size_t)(out->cursor - out->buf) % (size_t)alignment.functionAlignment);
-				out = PUT_BYTES(out, lb_align, alignAmount);
-				back = handle_function_def(tokens, tokenCount, out, srcFile, curr->linenum, back);
+				alignAmount = options->alignment.functionAlignment - ((size_t)(options->out->cursor - options->out->buf) % (size_t)options->alignment.functionAlignment);
+				options->out = PUT_BYTES(options->out, lb_align, alignAmount);
+				options->back = handle_function_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_void:
-				back = add_compile_error(back, srcFile, curr->linenum, error_error, "void cannot be used as a storage specifier.");
+				options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "void cannot be used as a storage specifier.");
 				break;
 			case lb_bool:
 			case lb_char:
@@ -311,16 +361,16 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_objectarray:
 				if (tokenCount == 2)
 				{
-					out = PUT_BYTE(out, cmd);
-					out = PUT_STRING(out, tokens[1]);
+					options->out = PUT_BYTE(options->out, cmd);
+					options->out = PUT_STRING(options->out, tokens[1]);
 				}
 				else if (tokenCount == 1)
 				{
-					back = add_compile_error(back, srcFile, curr->linenum, error_error, "Missing variable name declaration");
+					options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "Missing variable name declaration");
 				}
 				else
 				{
-					back = add_compile_error(back, srcFile, curr->linenum, error_warning, "Unecessary arguments following variable declaration");
+					options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_warning, "Unecessary arguments following variable declaration");
 				}
 				break;
 
@@ -333,7 +383,7 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_seto:
 			case lb_setv:
 			case lb_setr:
-				back = handle_set_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_set_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_castc:
@@ -347,7 +397,7 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_castb:
 			case lb_castf:
 			case lb_castd:
-				back = handle_cast_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_cast_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_ret:
@@ -360,12 +410,12 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_reto:
 			case lb_retv:
 			case lb_retr:
-				back = handle_ret_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_ret_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_static_call:
 			case lb_dynamic_call:
-				back = handle_call_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_call_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_add:
@@ -378,31 +428,31 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 			case lb_xor:
 			case lb_lsh:
 			case lb_rsh:
-				back = handle_math_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_math_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_neg:
 			case lb_not:
-				back = handle_unary_math_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_unary_math_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 
 			case lb_if:
 			case lb_while:
-				back = handle_if_style_cmd(cmd, tokens, tokenCount, out, srcFile, curr->linenum, back);
+				options->back = handle_if_style_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 			case lb_else:
-				out = PUT_BYTE(out, lb_else);
-				out = PUT_LONG(out, -1);
+				options->out = PUT_BYTE(options->out, lb_else);
+				options->out = PUT_LONG(options->out, -1);
 				//out = put_byte(out, tokenCount > 1);
 				if (tokenCount > 1)
-					back = handle_if_style_cmd(lb_if, tokens + 1, tokenCount - 1, out, srcFile, curr->linenum, back);
+					options->back = handle_if_style_cmd(lb_if, tokens + 1, tokenCount - 1, options->out, options->srcFile, curr->linenum, options->back);
 				break;
 			case lb_end:
-				out = PUT_BYTE(out, cmd);
-				out = PUT_LONG(out, -1);
+				options->out = PUT_BYTE(options->out, cmd);
+				options->out = PUT_LONG(options->out, -1);
 				break;
 			default:
-				back = add_compile_error(back, srcFile, curr->linenum, error_error, "Unknown command \"%s\"", tokens[0]);
+				options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "Unknown command \"%s\"", tokens[0]);
 				break;
 			}
 
@@ -413,7 +463,7 @@ compile_error_t *compile_data(const char *data, size_t datalen, buffer_t *out, c
 	}
 
 	free_formatted(formatted);
-	return back;
+	return options->back;
 }
 
 line_t *format_document(const char *data, size_t datalen)

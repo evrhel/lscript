@@ -6,7 +6,7 @@
 
 #include "buffer.h"
 
-input_file_t *add_file(input_file_t *back, const char *filename)
+input_file_t *add_file(input_file_t *back, const char *unitname, const char *fullpath)
 {
 	input_file_t *next = (input_file_t *)CALLOC(1, sizeof(input_file_t));
 	if (!next)
@@ -19,8 +19,11 @@ input_file_t *add_file(input_file_t *back, const char *filename)
 	else
 		next->front = next;
 
-	if (filename)
-		MEMCPY(next->filename, filename, sizeof(next->filename));
+	if (unitname)
+		strcpy_s(next->unitname, sizeof(next->unitname), unitname);
+
+	if (fullpath)
+		strcpy_s(next->fullpath, sizeof(next->fullpath), fullpath);
 
 	next->next = NULL;
 	return next;
