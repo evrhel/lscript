@@ -1,6 +1,8 @@
 #if !defined(COLLECTIONS_H)
 #define COLLECTIONS_H
 
+#include <Windows.h>
+
 enum
 {
 	error_info,
@@ -14,7 +16,7 @@ typedef void (*msg_func_t)(const char *const message);
 typedef struct input_file_s input_file_t;
 struct input_file_s
 {
-	const char *filename;
+	char filename[MAX_PATH];
 	input_file_t *next;
 	input_file_t *front;
 };
@@ -31,7 +33,7 @@ struct compile_error_s
 };
 
 input_file_t *add_file(input_file_t *back, const char *filename);
-void free_file_list(input_file_t *list, int freeData);
+void free_file_list(input_file_t *list);
 
 compile_error_t *create_base_compile_error(msg_func_t messenger);
 compile_error_t *add_compile_error(compile_error_t *back, const char *file, int line, int type, const char *format, ...);

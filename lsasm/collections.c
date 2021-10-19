@@ -8,7 +8,7 @@
 
 input_file_t *add_file(input_file_t *back, const char *filename)
 {
-	input_file_t *next = (input_file_t *)MALLOC(sizeof(input_file_t));
+	input_file_t *next = (input_file_t *)CALLOC(1, sizeof(input_file_t));
 	if (!next)
 		return NULL;
 	if (back)
@@ -18,18 +18,19 @@ input_file_t *add_file(input_file_t *back, const char *filename)
 	}
 	else
 		next->front = next;
-	next->filename = filename;
+
+	if (filename)
+		MEMCPY(next->filename, filename, sizeof(next->filename));
+
 	next->next = NULL;
 	return next;
 }
 
-void free_file_list(input_file_t *front, int freeData)
+void free_file_list(input_file_t *front)
 {
 	if (front)
 	{
-		free_file_list(front->next, freeData);
-		if (freeData)
-			FREE((void *)front->filename);
+		free_file_list(front->next);
 		FREE(front);
 	}
 }

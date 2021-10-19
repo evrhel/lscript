@@ -75,7 +75,7 @@ compile_error_t *compile(input_file_t *files, const char *outputDirectory, unsig
 	input_file_t *front = base->next;
 
 	base->next = NULL;
-	free_file_list(base, 0);
+	free_file_list(base);
 
 	while (curr)
 	{
@@ -171,6 +171,7 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 	{
 		FREE_BUFFER(obuf);
 		//free(nstr);
+		printf("%s\n", nstr);
 		return add_compile_error(back, file, 0, 0, "Failed to fopen for write", error_error);
 	}
 	fputc(0, out);
@@ -179,6 +180,8 @@ compile_error_t *compile_file(const char *file, const char *outputDirectory, com
 
 	fclose(out);
 	FREE_BUFFER(obuf);
+
+	FREE(nstr);
 
 	if (debug)
 	{

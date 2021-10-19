@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <Windows.h>
 
 #include "compiler.h"
 #include "linker.h"
@@ -19,42 +20,45 @@ static int equals_ignore_case(const char *s1, const char *s2);
 static void display_help();
 static void display_version();
 static int are_errors(const compile_error_t *list);
+static input_file_t *add_source_files_in_directory(const char *directory, input_file_t *files, int recursive);
 
 int main(int argc, char *argv[])
 {
 	input_file_t *files = NULL;
+	const char *inputDirectory = NULL;
 	const char *outputDirectory = ".";
 	unsigned int version = 1;
 	int runCompiler = 1, runLinker = 1;
 	int compileDebug = 0;
+	int inputDirRec = 0;
 	alignment_t alignment;
 	alignment.functionAlignment = 32;
 	alignment.globalAlignment = 8;
+
+	int readingInputs = 0;
 
 	BEGIN_DEBUG();
 
 
 	for (int i = 1; i < argc; i++)
 	{
-		if (equals_ignore_case(argv[i], "-h"))
+		if (argv[i][0] == '-' && readingInputs)
+		{
+			display_help();
+			return RETURN_INVALID_ARGUMENT;
+		}
+		else if (argv[i][0] != '-')
+			readingInputs = 1;
+
+		if (equals_ignore_case(argv[i], "-help") || equals_ignore_case(argv[i], "-h") || equals_ignore_case(argv[i], "-?"))
 		{
 			display_help();
 			return RETURN_NORMAL;
 		}
-		else if (equals_ignore_case(argv[i], "-v"))
+		else if (equals_ignore_case(argv[i], "-version") || equals_ignore_case(argv[i], "-v"))
 		{
 			display_version();
 			return RETURN_NORMAL;
-		}
-		else if (equals_ignore_case(argv[i], "-f"))
-		{
-			i++;
-			if (i == argc)
-			{
-				display_help();
-				return RETURN_INVALID_ARGUMENT;
-			}
-			files = add_file(files, argv[i]);
 		}
 		else if (equals_ignore_case(argv[i], "-o"))
 		{
@@ -65,6 +69,20 @@ int main(int argc, char *argv[])
 				return RETURN_INVALID_ARGUMENT;
 			}
 			outputDirectory = argv[i];
+		}
+		else if (equals_ignore_case(argv[i], "-i"))
+		{
+			i++;
+			if (i == argc)
+			{
+				display_help();
+				return RETURN_INVALID_ARGUMENT;
+			}
+			inputDirectory = argv[i];
+		}
+		else if (equals_ignore_case(argv[i], "-r"))
+		{
+			inputDirRec = 1;
 		}
 		else if (equals_ignore_case(argv[i], "-s"))
 		{
@@ -112,21 +130,35 @@ int main(int argc, char *argv[])
 		{
 			compileDebug = 1;
 		}
+		else if (readingInputs)
+		{
+			files = add_file(files, argv[i]);
+		}
 		else
 		{
-			printf("Invalid argument \"%s\"", argv[i]);
+			printf("Invalid switch: %s\n", argv[i]);
+			display_help();
+			return RETURN_INVALID_ARGUMENT;
 		}
+	}
+
+	if (inputDirectory)
+		files = add_source_files_in_directory(inputDirectory, files, inputDirRec);
+
+	if (!files)
+	{
+		printf("No input files.");
+		return RETURN_INVALID_ARGUMENT;
 	}
 
 	compile_error_t *errors = NULL;
 	input_file_t *linkFiles = NULL;
-	int freeLinkFiles = 0;
-	
+
 	if (runCompiler)
 	{
 		printf("[BEGIN COMPILE]\n");
 		errors = compile(files, outputDirectory, version, compileDebug, alignment, (msg_func_t)puts, &linkFiles);
-		free_file_list(files, 0);
+		free_file_list(files);
 
 		if (are_errors(errors))
 		{
@@ -138,17 +170,12 @@ int main(int argc, char *argv[])
 		putc('\n', stdout);
 	}
 
-	if (!linkFiles)
-		linkFiles = files;
-	else
-		freeLinkFiles = 1;
-
 	if (runLinker)
 	{
 		printf("[BEGIN LINK]\n");
 		errors = link(linkFiles, version, (msg_func_t)puts);
 
-		free_file_list(linkFiles, freeLinkFiles);
+		free_file_list(linkFiles);
 
 		if (are_errors(errors))
 		{
@@ -158,6 +185,8 @@ int main(int argc, char *argv[])
 		}
 		free_compile_error_list(errors);
 	}
+	else
+		free_file_list(linkFiles);
 
 	END_DEBUG();
 	return RETURN_NORMAL;
@@ -188,24 +217,24 @@ int equals_ignore_case(const char *s1, const char *s2)
 
 void display_help()
 {
-	printf("LScript Assembler command line arguments:\n");
-	printf("-h             Displays all commands and usage.\n");
-	printf("-v             Displays version information.\n");
-	printf("-f [filename]  Specifies a file to compile. More than one may be specified, but\n");
-	printf("               the files must be separated in different flags.\n");
+	printf("LScript Assembler\n");
+	printf("Usage: lsasm [options...] [files...]\n\n");
+	printf("Where [options...] include:\n");
+	printf("-help -h -?    Prints this help message.\n");
+	printf("-version -v    Displays version information.\n");
 	printf("-o [directory] Optionally specifies an output directory. The default is the\n");
 	printf("               current working directory.\n");
+	printf("-i [directory] Sets the directory containing source files. All files with the\n");
+	printf("               .lasm extension will be added as an input compilation.\n");
+	printf("-r             Indicates that the directory specified in -i should search\n");
+	printf("               recursively.\n");
 	printf("-s [version]   Sets the bytecode version to compile to. Default is 1.\n");
 	printf("-fa [value]    Sets the number of bytes to align functions to. Default is 32.\n");
 	printf("-ga [value]    Sets the number of bytes to align globals to. Default is 8.\n");
 	printf("-nc            Specifies not to run the compiler.\n");
 	printf("-nl            Specifies not to run the linker.\n");
 	printf("-d             Indicates debugging symbols should be compiled.\n\n");
-	printf("Application return codes:\n");
-	printf("0x00   Normal\n");
-	printf("0x01   Invalid command format\n");
-	printf("0x02   Compilation error\n");
-	printf("0x03   Linkage error\n");
+	printf("and [files...] include all input files.");
 }
 
 void display_version()
@@ -225,4 +254,42 @@ int are_errors(const compile_error_t *list)
 		list = list->next;
 	}
 	return 0;
+}
+
+input_file_t *add_source_files_in_directory(const char *directory, input_file_t *files, int recursive)
+{
+	WIN32_FIND_DATA ffd;
+	CHAR szSearchDir[MAX_PATH];
+	CHAR szFilePath[MAX_PATH];
+	HANDLE hFind = INVALID_HANDLE_VALUE;
+
+	strcpy_s(szSearchDir, sizeof(szSearchDir), directory);
+	strcat_s(szSearchDir, sizeof(szSearchDir), "\\*");
+
+	hFind = FindFirstFileA(szSearchDir, &ffd);
+	if (hFind == INVALID_HANDLE_VALUE)
+	{
+		printf("Failed to find directory: %s\n", directory);
+		return;
+	}
+
+	do
+	{
+		strcpy_s(szFilePath, sizeof(szFilePath), directory);
+		strcat_s(szFilePath, sizeof(szFilePath), "\\");
+		strcat_s(szFilePath, sizeof(szFilePath), ffd.cFileName);
+
+		if ((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && recursive)
+			files = add_source_files_in_directory(szFilePath, files, 1);
+		else
+		{
+			char *ext = strrchr(ffd.cFileName, '.');
+			if (ext && equals_ignore_case(ext + 1, "lasm"))
+				files = add_file(files, szFilePath);
+		}
+	} while (FindNextFileA(hFind, &ffd) != 0);
+
+	FindClose(hFind);
+
+	return files;
 }

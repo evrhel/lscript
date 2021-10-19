@@ -14,7 +14,7 @@ struct buffer_s
 	char *end;
 };
 
-#if defined(_DEBUG)
+#if defined(_DEBUG) && defined(DO_BUFFER_DEBUG)
 
 void __begin_debug_d();
 
