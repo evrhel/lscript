@@ -55,7 +55,6 @@ LNIFUNC void LNICALL StdFileHandle_fputc(LEnv venv, lclass vclazz, lulong handle
 
 LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv venv, lclass vclazz, lulong handle, lchararray data, luint off, luint length)
 {
-
 	luint temp = off + length;
 	env_t *env = (env_t *)venv;
 	if (!data)
@@ -66,7 +65,22 @@ LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv venv, lclass vclazz, lulong hand
 
 	array_t *arr = (array_t *)data;
 	char *cdata = (char *)&arr->data;
-	luint result = (luint)fwrite(cdata, sizeof(char), arr->length, (FILE *)handle);
+
+	FILE *nativeHandle = (FILE *)handle;
+
+	luint result = 0;
+	if (nativeHandle == stdout)
+	{
+		if (env->vm->stdio.writeStdoutFunc)
+			result = (luint)env->vm->stdio.writeStdoutFunc(cdata, arr->length);
+	}
+	else if (nativeHandle == stderr)
+	{
+		if (env->vm->stdio.writeStderrFunc)
+			result = (luint)env->vm->stdio.writeStderrFunc(cdata, arr->length);
+	}
+	else
+		result = (luint)fwrite(cdata, sizeof(char), arr->length, (FILE *)handle);
 	return result;
 }
 
@@ -93,7 +107,18 @@ LNIFUNC luint LNICALL StdFileHandle_fread(LEnv venv, lclass vclazz, lulong handl
 		env_raise_exception(env, exception_out_of_memory, "on allocate temp buffer size %u", length);
 		return 0;
 	}
-	luint result = (luint)fread_s(tempbuf, length, sizeof(char), length, (FILE *)handle);
+
+	FILE *nativeHandle = (FILE *)handle;
+
+	luint result = 0;
+	if (nativeHandle == stdin)
+	{
+		if (env->vm->stdio.writeStderrFunc)
+			result = (luint)env->vm->stdio.writeStderrFunc(tempbuf, length);
+	}
+	else
+		result = (luint)fread_s(tempbuf, length, sizeof(char), length, (FILE *)handle);
+
 	memcpy((lchar *)(&arr->data) + off, tempbuf, length);
 	free(tempbuf);
 
@@ -104,17 +129,34 @@ LNIFUNC lchararray LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lul
 {
 	env_t *env = (env_t *)venv;
 	char buf[256];
-	if (!fgets(buf, sizeof(buf), (FILE *)handle))
+
+	FILE *nativeHandle = (FILE *)handle;
+	if (nativeHandle == stdin)
 	{
-		env_raise_exception(env, exception_illegal_state, "fgets returned NULL");
-		return 0;
+		if (!env->vm->stdio.readCharStdinFunc)
+			return NULL;
+		luint i;
+		char c;
+		for (i = 0; i < sizeof(buf) - 2 && (c = env->vm->stdio.readCharStdinFunc()) != '\n'; i++)
+			buf[i] = c;
+		buf[i] = '\n';
+		buf[i + 1] = 0;
 	}
+	else
+	{
+		if (!fgets(buf, sizeof(buf), (FILE *)handle))
+		{
+			env_raise_exception(env, exception_illegal_state, "fgets returned NULL");
+			return NULL;
+		}
+	}
+
 	luint len = (luint)strlen(buf) - 1; // Subtract 1 to ignore the newline character
 	array_t *arr = manager_alloc_array(env->vm->manager, lb_chararray, len);
 	if (!arr)
 	{
 		env_raise_exception(env, exception_out_of_memory, "on alloc array length %u", len);
-		return 0;
+		return NULL;
 	}
 
 	memcpy(&arr->data, buf, len);

@@ -22,6 +22,12 @@ class Main
 
 		dynamic_call System.stdout.println(LString;) "Done."
 
+		object input
+		dynamic_call System.stdin.readLine()
+		setr input
+
+		dynamic_call System.stdout.println(LString;) input
+
 		retd dword[25]
 
 

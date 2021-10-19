@@ -79,6 +79,8 @@ struct vm_s
 	size_t libraryCount;		// The maximum number of libraries which can be loaded
 
 	vm_flags_t flags;			// Virtual machine startup flags
+
+	ls_stdio_t stdio;			// Standard IO functions
 };
 
 struct env_s
@@ -166,10 +168,13 @@ Creates a new virtual machine with the designated parameters.
 @param paths The paths for which the virtual machine will search for classes on. The first
 element should be the location of lscript API files (i.e. directory where core classes are
 stored such as Class, Object, String, etc.). Although, this is not necessary.
+@param stdio A pointer to a ls_stdio_t struct which contains functions which will read or
+write from standard streams. If NULL, the default IO functions will be used. If non-NULL,
+each NULL field will cause the default IO function to be used for that field.
 
 @return The new virtual machine, or NULL if creation failed.
 */
-vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[]);
+vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[], const ls_stdio_t *stdio);
 
 /*
 Starts the virtual machine on a main function with the given arguments.

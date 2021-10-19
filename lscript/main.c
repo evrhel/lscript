@@ -17,11 +17,17 @@ int main(int argc, char *argv[])
 
 	lsAPILib = GetModuleHandleA("lscriptapi.dll");
 	if (!lsAPILib)
+	{
+		printf("Failed to locate lscriptapi.dll");
 		return 0xc0;
+	}
 
-	vm = ls_create_and_start_vm(argc - 1, argv + 1, &hThreadHandle, &dThreadID, lsAPILib);
+	vm = ls_create_and_start_vm(argc - 1, argv + 1, &hThreadHandle, &dThreadID, lsAPILib, NULL);
 	if (!vm)
+	{
+		printf("Failed to start virtual machine");
 		return 0xc1;
+	}
 
 	ls_destroy_vm(INFINITE);
 

@@ -81,6 +81,11 @@ static void vm_start_routine(start_args_t *args);
 
 static void print_stack_trace(FILE *file, env_t *env, int printVars);
 
+static size_t default_write_stdout(const char *buf, size_t count);
+static size_t default_write_stderr(const char *buf, size_t count);
+static size_t default_read_stdin(char *buf, size_t size, size_t count);
+static char default_read_char_stdin();
+
 /*
 Calls a function with the desired arguments.
 
@@ -168,11 +173,26 @@ static inline void clear_exception(env_t *env)
 	env->message[0] = 0;
 }
 
-vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[])
+vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[], const ls_stdio_t *stdio)
 {
 	vm_t *vm = (vm_t *)MALLOC(sizeof(vm_t));
 	if (!vm)
 		return NULL;
+
+	if (stdio)
+	{
+		vm->stdio.writeStdoutFunc = stdio->writeStdoutFunc == DEFAULT_WRITE_STDOUT ? default_write_stdout : stdio->writeStdoutFunc;
+		vm->stdio.writeStderrFunc = stdio->writeStderrFunc == DEFAULT_WRITE_STDERR ? default_write_stderr : stdio->writeStderrFunc;
+		vm->stdio.readStdinFunc = stdio->readStdinFunc == DEFAULT_READ_STDIN ? default_read_stdin : stdio->readStdinFunc;
+		vm->stdio.readCharStdinFunc = stdio->readCharStdinFunc == DEFAULT_READ_CHAR_STDIN ? default_read_char_stdin : stdio->readCharStdinFunc;
+	}
+	else
+	{
+		vm->stdio.writeStdoutFunc = default_write_stdout;
+		vm->stdio.writeStderrFunc = default_write_stderr;
+		vm->stdio.readStdinFunc = default_read_stdin;
+		vm->stdio.readCharStdinFunc = default_read_char_stdin;
+	}
 
 	vm->classes = map_create(16, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
 	if (!vm->classes)
@@ -2684,4 +2704,24 @@ void print_stack_trace(FILE *file, env_t *env, int printVars)
 
 		rbp = PREV_FRAME(rbp);
 	}
+}
+
+size_t default_write_stdout(const char *buf, size_t count)
+{
+	return fwrite(buf, sizeof(char), count, stdout);
+}
+
+size_t default_write_stderr(const char *buf, size_t count)
+{
+	return fwrite(buf, sizeof(char), count, stderr);
+}
+
+size_t default_read_stdin(char *buf, size_t size, size_t count)
+{
+	return fread_s(buf, size, sizeof(char), count, stdin);
+}
+
+static char default_read_char_stdin()
+{
+	return (char)fgetc(stdin);
 }

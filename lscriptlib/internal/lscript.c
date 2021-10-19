@@ -35,12 +35,12 @@ static inline char *copy_string(const char *in, size_t extra)
 
 static vm_t *gCurrentVM = NULL;
 
-LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib)
+LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib, const ls_stdio_t *stdio)
 {
 	vm_args_t args;
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
-	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths);
+	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths, stdio);
 	free_arg_struct(&args);
 	return gCurrentVM = vm;
 }
@@ -57,12 +57,12 @@ LEXPORT lint LCALL ls_start_vm(int argc, const char *const argv[], void **thread
 	return result;
 }
 
-LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib)
+LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib, const ls_stdio_t *stdio)
 {
 	vm_args_t args;
 	if (gCurrentVM || !parse_arguments(argc, argv, &args))
 		return NULL;
-	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths);
+	vm_t *vm = vm_create(args.heapSize, args.stackSize, lsAPILib, args.flags, MAX_PATHS, args.paths, stdio);
 	free_arg_struct(&args);
 	gCurrentVM = vm;
 	if (!gCurrentVM)

@@ -1,6 +1,7 @@
 #if !defined(LSCRIPT_H)
 #define LSCRIPT_H
 
+#include <stdlib.h>
 #include <stdarg.h>
 
 #define LS_VERSION "1.0.0a"
@@ -19,6 +20,11 @@
 
 #define DEFAULT_HEAP_SIZE GB_TO_B(2)
 #define DEFAULT_STACK_SIZE KB_TO_B(2)
+
+#define DEFAULT_WRITE_STDOUT (ls_write_func)(-1)
+#define DEFAULT_WRITE_STDERR (ls_write_func)(-2)
+#define DEFAULT_READ_STDIN (ls_read_func)(-3)
+#define DEFAULT_READ_CHAR_STDIN (ls_read_char_func)(-4)
 
 #if defined(__cplusplus)
 extern "C"
@@ -59,10 +65,22 @@ extern "C"
 
 	typedef void *lfield;
 	typedef void *lfunction;
+ 
+	typedef size_t(*ls_write_func)(const char *buf, size_t count);
+	typedef size_t(*ls_read_func)(char *buf, size_t size, size_t count);
+	typedef char(*ls_read_char_func)();
 
-	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib);
+	typedef struct ls_stdio_s
+	{
+		ls_write_func writeStdoutFunc;
+		ls_write_func writeStderrFunc;
+		ls_read_func readStdinFunc;
+		ls_read_char_func readCharStdinFunc;
+	} ls_stdio_t;
+
+	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib, const ls_stdio_t *stdio);
 	LEXPORT lint LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
-	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib);
+	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib, const ls_stdio_t *stdio);
 	LEXPORT lvoid LCALL ls_destroy_vm(unsigned long threadWaitTime);
 	LEXPORT LVM LCALL ls_get_current_vm();
 
