@@ -6,6 +6,8 @@
 #include <internal/lb.h>
 #include <stdio.h>
 
+#include "file_util.h"
+
 #define SIG_STRING_CHAR ((char)0x01)
 #define SIG_CHAR_CHAR ((char)0x02)
 
@@ -181,24 +183,20 @@ compile_error_t *compile_file(file_compile_options_t *options)
 		}
 	}
 
-	size_t outputDirSize = strlen(options->outputDirectory);
-	size_t fileSize = strlen(options->unitname);
-	size_t fullnameSize = outputDirSize + 1 + fileSize + 3 + 1; // + 3 for ".lb" extension and + 1 for null terminator
-	char *nstr = (char *)MALLOC(fullnameSize);
-	char *nameoff = nstr + outputDirSize + 1;
-	if (!nstr)
+	char destPath[MAX_PATH];
+	strcpy_s(destPath, sizeof(destPath), options->outputDirectory);
+	strcat_s(destPath, sizeof(destPath), "\\");
+	strcat_s(destPath, sizeof(destPath), options->unitname);
+
+	char *dirchr = strrchr(destPath, '\\');
+	if (dirchr)
 	{
-		FREE(buf);
-		return add_compile_error(options->back, options->unitname, 0, error_error, "Failed to allocate buffer");
+		*dirchr = 0;
+		create_intermediate_directories(destPath);
+		*dirchr = '\\';
 	}
-	MEMCPY(nstr, options->outputDirectory, strlen(options->outputDirectory));
-	*(nameoff - 1) = '\\';
-	MEMCPY(nameoff, options->unitname, fileSize + 1);
-	char *lastSep = strrchr(nameoff, '\\');
-	if (!lastSep)
-		lastSep = strrchr(nameoff, '\\');
-	char *fname = lastSep ? lastSep : nameoff;
-	char *ext = strrchr(fname, '.');
+
+	char *ext = strrchr(destPath, '.');
 	if (ext)
 	{
 		ext[1] = 'l';
@@ -207,22 +205,16 @@ compile_error_t *compile_file(file_compile_options_t *options)
 	}
 	else
 	{
-		size_t len = strlen(fname);
-		fname[len++] = '.';
-		fname[len++] = 'l';
-		fname[len++] = 'b';
-		fname[len] = 0;
+		strcat_s(destPath, sizeof(destPath), ".lb");
 	}
 
-	*options->outputFiles = add_file(*options->outputFiles, nstr, nstr);
+	*options->outputFiles = add_file(*options->outputFiles, destPath, destPath);
 
 	FILE *out = NULL;
-	fopen_s(&out, nstr, "wb");
+	fopen_s(&out, destPath, "wb");
 	if (!out)
 	{
 		FREE_BUFFER(obuf);
-		//free(nstr);
-		printf("%s\n", nstr);
 		return add_compile_error(options->back, options->inFilePath, 0, 0, "Failed to fopen for write", error_error);
 	}
 	fputc(0, out);
@@ -232,45 +224,18 @@ compile_error_t *compile_file(file_compile_options_t *options)
 	fclose(out);
 	FREE_BUFFER(obuf);
 
-	FREE(nstr);
-
 	if (options->debug)
 	{
-		fullnameSize++;
-		nstr = (char *)MALLOC(fullnameSize);
-		nameoff = nstr + outputDirSize + 1;
-		if (!nstr)
-		{
-			FREE(buf);
-			return add_compile_error(options->back, options->inFilePath, 0, error_error, "Failed to allocate buffer");
-		}
-		MEMCPY(nstr, options->outputDirectory, strlen(options->outputDirectory));
-		*(nameoff - 1) = '\\';
-		MEMCPY(nameoff, options->unitname, fileSize + 1);
-		lastSep = strrchr(nstr, '\\');
-		if (!lastSep)
-			lastSep = strrchr(nstr, '/');
-		fname = lastSep ? lastSep : nstr;
-		ext = strrchr(fname, '.');
-		if (ext)
-		{
-			ext[1] = 'l';
-			ext[2] = 'd';
-			ext[3] = 's';
-			ext[4] = 0;
-		}
-		else
-		{
-			size_t len = strlen(fname);
-			fname[len++] = '.';
-			fname[len++] = 'l';
-			fname[len++] = 'd';
-			fname[len++] = 's';
-			fname[len] = 0;
-		}
+		if (!ext)
+			ext = strrchr(destPath, '\\');
+		
+		ext[1] = 'l';
+		ext[2] = 'd';
+		ext[3] = 's';
+		ext[4] = 0;
 
 		FILE *dfout;
-		fopen_s(&dfout, nstr, "wb");
+		fopen_s(&dfout, destPath, "wb");
 		if (dfout)
 		{
 			fwrite(&options->version, sizeof(unsigned int), 1, dfout);
@@ -281,7 +246,7 @@ compile_error_t *compile_file(file_compile_options_t *options)
 		}
 		else
 			return add_compile_error(options->back, options->inFilePath, 0, error_warning, "Failed to fopen for write debug information");
-		FREE(nstr);
+
 		FREE_BUFFER(dbuf);
 	}
 

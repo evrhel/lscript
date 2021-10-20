@@ -20,7 +20,7 @@ static int equals_ignore_case(const char *s1, const char *s2);
 static void display_help();
 static void display_version();
 static int are_errors(const compile_error_t *list);
-static input_file_t *add_source_files_in_directory(const char *directory, input_file_t *files, int recursive);
+static input_file_t *add_source_files_in_directory(const char *directory, input_file_t *files, int recursive, const char *unitPrefix);
 
 int main(int argc, char *argv[])
 {
@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (inputDirectory)
-		files = add_source_files_in_directory(inputDirectory, files, inputDirRec);
+		files = add_source_files_in_directory(inputDirectory, files, inputDirRec, NULL);
 
 	if (!files)
 	{
@@ -267,12 +267,21 @@ int are_errors(const compile_error_t *list)
 	return 0;
 }
 
-input_file_t *add_source_files_in_directory(const char *directory, input_file_t *files, int recursive)
+input_file_t *add_source_files_in_directory(const char *directory, input_file_t *files, int recursive, const char *unitPrefix)
 {
 	WIN32_FIND_DATAA ffd;
+	CHAR szPrefix[MAX_PATH];
 	CHAR szSearchDir[MAX_PATH];
 	CHAR szFilePath[MAX_PATH];
 	HANDLE hFind = INVALID_HANDLE_VALUE;
+
+	szPrefix[0] = 0;
+	if (unitPrefix)
+	{
+		strcpy_s(szPrefix, sizeof(szPrefix), unitPrefix);
+		strcat_s(szPrefix, sizeof(szPrefix), "\\");
+	}
+	size_t prefixLen = strlen(szPrefix);
 
 	strcpy_s(szSearchDir, sizeof(szSearchDir), directory);
 	strcat_s(szSearchDir, sizeof(szSearchDir), "\\*");
@@ -291,12 +300,23 @@ input_file_t *add_source_files_in_directory(const char *directory, input_file_t 
 		strcat_s(szFilePath, sizeof(szFilePath), ffd.cFileName);
 
 		if ((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && recursive)
-			files = add_source_files_in_directory(szFilePath, files, 1);
+		{
+			if (strcmp(ffd.cFileName, ".") && strcmp(ffd.cFileName, ".."))
+			{
+				strcpy_s(szPrefix + prefixLen, sizeof(szPrefix) - prefixLen, ffd.cFileName);
+				files = add_source_files_in_directory(szFilePath, files, 1, szPrefix);
+				szPrefix[prefixLen] = 0;
+			}
+		}
 		else
 		{
 			char *ext = strrchr(ffd.cFileName, '.');
 			if (ext && equals_ignore_case(ext + 1, "lasm"))
-				files = add_file(files, ffd.cFileName, szFilePath);
+			{
+				strcpy_s(szPrefix + prefixLen, sizeof(szPrefix) - prefixLen, ffd.cFileName);
+				files = add_file(files, szPrefix, szFilePath);
+				szPrefix[prefixLen] = 0;
+			}
 		}
 	} while (FindNextFileA(hFind, &ffd) != 0);
 

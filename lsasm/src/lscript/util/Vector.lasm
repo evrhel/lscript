@@ -1,0 +1,63 @@
+class Vector
+
+	global dynamic varying objectarray data
+	global dynamic varying uint size
+
+	# Create blank vector
+	function dynamic interp void <init>()
+		seto this.data object dword[10]
+		setd this.size dword[0]
+		ret
+
+	# Copy constructor
+	function dynamic interp void <init>(object Vector other)
+		uint index
+		seto this.data object other.length
+		setv this.size other.size
+		static_call System.arraycopy(LObject;iLObject;ii) this.data this.length other.data dword[0] this.length
+		ret
+
+	# Returns the number of elements in the vector
+	function dynamic interp uint size()
+		retv this.size
+
+	function dynamic interp object at(uint index)
+		if index >= this.size
+			reto null
+		end
+		retv this.data[index]
+
+	function dynamic interp bool set(uint index, object Object value)
+		if index >= this.size
+			retb false
+		end
+		setv this.data[index] value
+		retb true
+
+	function dynamic interp void add(object Object elem)
+		if this.size == data.size
+			dynamic_call this.grow()
+		end
+		setv this.data[this.size] elem
+		add this.size uint[1] this.size
+		ret
+
+	function dynamic interp objectarray toArray()
+		objectarray arr
+		seto arr object this.size
+		static_call System.arraycopy(LObject;iLObject;ii) arr this.size this.data dword[0] this.size
+		retv arr
+
+	# grows the vector to have more elements
+	function dynamic interp void grow()
+		objectarray newArr
+		uint newSize
+
+		setv newSize this.data.length
+		add newSize uint[10] newSize
+		
+		seto newArr object newSize
+		static_call System.arraycopy(LObject;iLObject;ii) newArr this.size this.data dword[0] this.size
+
+		setv this.data newArr
+		ret

@@ -30,6 +30,9 @@
     <ClCompile Include="collections.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="file_util.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="compiler.h">
@@ -42,6 +45,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="collections.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="file_util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
