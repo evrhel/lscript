@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include "mem_debug.h"
 #include "cast.h"
@@ -268,7 +269,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	// Load all the required classes
 
 	// Load Object class
-	class_t *objectClass = vm_load_class(vm, "Object");
+	class_t *objectClass = vm_load_class(vm, "lscript.lang.Object");
 	if (!objectClass)
 	{
 		vm_free(vm, 0);
@@ -276,7 +277,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load Class class
-	class_t *classClass = vm_load_class(vm, "Class");
+	class_t *classClass = vm_load_class(vm, "lscript.lang.Class");
 	if (!classClass)
 	{
 		vm_free(vm, 0);
@@ -284,7 +285,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load String class
-	class_t *stringClass = vm_load_class(vm, "String");
+	class_t *stringClass = vm_load_class(vm, "lscript.lang.String");
 	if (!stringClass)
 	{
 		vm_free(vm, 0);
@@ -292,7 +293,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load System class
-	class_t *systemClass = vm_load_class(vm, "System");
+	class_t *systemClass = vm_load_class(vm, "lscript.lang.System");
 	if (!systemClass)
 	{
 		vm_free(vm, 0);
@@ -300,7 +301,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load StdFileHandle class
-	class_t *stdFileHandleClass = vm_load_class(vm, "StdFileHandle");
+	class_t *stdFileHandleClass = vm_load_class(vm, "lscript.io.StdFileHandle");
 	if (!stdFileHandleClass)
 	{
 		vm_free(vm, 0);
@@ -308,7 +309,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load FileOutputStream class
-	class_t *fileoutputstreamClass = vm_load_class(vm, "FileOutputStream");
+	class_t *fileoutputstreamClass = vm_load_class(vm, "lscript.io.FileOutputStream");
 	if (!fileoutputstreamClass)
 	{
 		vm_free(vm, 0);
@@ -316,7 +317,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load FileInputStream class
-	class_t *fileinputstreamClass = vm_load_class(vm, "FileInputStream");
+	class_t *fileinputstreamClass = vm_load_class(vm, "lscript.io.FileInputStream");
 	if (!fileinputstreamClass)
 	{
 		vm_free(vm, 0);
@@ -556,11 +557,15 @@ class_t *vm_load_class(vm_t *vm, const char *classname)
 	FREE(tempName);
 	
 	// Create the class object
-	class_t *classClass = vm_load_class(vm, "Class");
+	class_t *classClass = vm_load_class(vm, "lscript.lang.Class");
+	assert(classClass);
+
 	object_t *classObject = manager_alloc_object(vm->manager, classClass);
 	object_set_ulong(classObject, "handle", (lulong)classClass);
 	
-	class_t *classnameClass = vm_load_class(vm, "String");
+	class_t *classnameClass = vm_load_class(vm, "lscript.lang.String");
+	assert(classnameClass);
+
 	object_t *classnameObject = manager_alloc_object(vm->manager, classnameClass);
 	
 	array_t *classnameCharArray = manager_alloc_array(vm->manager, lb_chararray, classnameSize - 1);
@@ -1341,7 +1346,7 @@ int env_run_funcv(env_t *env, function_t *function, object_t *object, va_list ls
 
 object_t *env_new_string(env_t *env, const char *cstring)
 {
-	class_t *stringClass = vm_get_class(env->vm, "String");
+	class_t *stringClass = vm_get_class(env->vm, "lscript.lang.String");
 	if (!stringClass)
 		return NULL;
 

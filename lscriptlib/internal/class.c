@@ -470,6 +470,11 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 		case lb_mul:
 		case lb_div:
 		case lb_mod:
+		case lb_and:
+		case lb_or:
+		case lb_xor:
+		case lb_lsh:
+		case lb_rsh:
 			curr++;
 			curr += strlen(curr) + 1;
 			curr += strlen(curr) + 1;
@@ -479,6 +484,23 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 			}
 			else
 				curr += sizeof_type(*curr) + 1;
+			break;
+		case lb_castc:
+		case lb_castuc:
+		case lb_casts:
+		case lb_castus:
+		case lb_casti:
+		case lb_castui:
+		case lb_castl:
+		case lb_castul:
+		case lb_castb:
+		case lb_castf:
+		case lb_castd:
+		case lb_neg:
+		case lb_not:
+			curr++;
+			curr += strlen(curr) + 1;
+			curr += strlen(curr) + 1;
 			break;
 			
 		default:
