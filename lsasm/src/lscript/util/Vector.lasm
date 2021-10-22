@@ -1,3 +1,5 @@
+package lscript.util
+
 class Vector
 
 	global dynamic varying objectarray data

@@ -20,6 +20,10 @@ The maximum length of an exception string.
 #define EMSGLEN 64
 #define HISTLEN 64
 
+#define CLASS_CLASSNAME "lscript.lang.Class"
+#define OBJECT_CLASSNAME "lscript.lang.Object"
+#define STRING_CLASSNAME "lscript.lang.String"
+
 /*
 Checks if verbose error messages should be used given flags.
 */
@@ -215,10 +219,11 @@ Loads a class from a file onto the virtual machine.
 
 @param vm The virtual machine to load the class into.
 @param filename The filepath of the class.
+@param loadSuperclasses Whether to recursively load any superclasses.
 
 @return The loaded class, or NULL if the load failed.
 */
-class_t *vm_load_class_file(vm_t *vm, const char *filename);
+class_t *vm_load_class_file(vm_t *vm, const char *filename, int loadSuperclasses);
 
 /*
 Loads a class from binary data onto the virtual machine.
@@ -226,10 +231,11 @@ Loads a class from binary data onto the virtual machine.
 @param vm The virtual machine to load the class into.
 @param binary A pointer to the binary data of the class.
 @param size The size of the binary data, in bytes.
+@param loadSuperclasses Whether to recursively load any superclasses.
 
 @return The loaded class, or NULL if the load failed.
 */
-class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size);
+class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size, int loadSuperclasses);
 
 /*
 Returns an instance of a Class LScript class for the requested classname.

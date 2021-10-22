@@ -13,7 +13,7 @@ static int register_functions(class_t *clazz, const byte_t *dataStart, const byt
 static int register_static_fields(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd);
 static int register_field_offests(class_t *clazz, const byte_t *dataStart, const byte_t *dataEnd);
 
-class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, void *more)
+class_t *class_load(byte_t *binary, size_t length, int loadSuperclasses, classloadproc_t loadproc, void *more)
 {
 	class_t *result;
 
@@ -75,35 +75,11 @@ class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, voi
 		return result;
 	}
 
+	char *superclassName = NULL;
 	if (*curr == lb_extends)
 	{
 		curr++;
-		const char *superclassName = curr;
-		if (!loadproc)
-		{
-			FREE(result);
-			return NULL;
-		}
-		class_t *superclass = loadproc(superclassName, more);
-
-		if (!superclass)
-		{
-			FREE(result);
-			return NULL;
-		}
-		result->super = superclass;
-
-		if (!result->functions)
-			result->functions = map_create(CLASS_HASHTABLE_ENTRIES, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
-		map_iterator_t *mit = map_create_iterator(superclass->functions);
-		while (mit->node)
-		{
-			function_t *func = (function_t *)mit->value;
-			func->references++;
-			map_insert(result->functions, mit->key, func);
-			mit = map_iterator_next(mit);
-		}
-		map_iterator_free(mit);
+		superclassName = (char *)curr;
 
 		curr += strlen(superclassName) + 1;
 	}
@@ -126,7 +102,56 @@ class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, voi
 		FREE(result);
 		return NULL;
 	}
+
+	if (loadSuperclasses)
+	{
+		if (!loadproc)
+		{
+			FREE(result);
+			return NULL;
+		}
+		class_t *superclass = loadproc(superclassName, more);
+
+		if (!superclass)
+		{
+			FREE(result);
+			return NULL;
+		}
+
+		set_superclass(result, superclass);
+	}
+
 	return result;
+}
+
+int set_superclass(class_t *clazz, class_t *superclass)
+{
+	if (clazz->super)
+		return 0;
+
+	clazz->super = superclass;
+
+	if (!clazz->functions)
+		clazz->functions = map_create(CLASS_HASHTABLE_ENTRIES, string_hash_func, string_compare_func, string_copy_func, NULL, (free_func_t)free);
+	map_iterator_t *mit = map_create_iterator(superclass->functions);
+	while (mit->node)
+	{
+		function_t *func = (function_t *)mit->value;
+		func->references++;
+
+		// Make sure we don't overwrite any overriden functions
+		function_t *implemented = (function_t *)map_at(clazz->functions, func->qualifiedName);
+		if (!implemented)
+		{
+			func->references++;
+			map_insert(clazz->functions, mit->key, func);
+		}
+
+		mit = map_iterator_next(mit);
+	}
+	map_iterator_free(mit);
+
+	return 1;
 }
 
 void class_free(class_t *clazz, int freedata)
@@ -428,8 +453,6 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 					it = list_iterator_next(it);
 				}
 				list_iterator_free(it);
-
-				//func->argOrder = argorder->next;
 
 				map_insert(clazz->functions, qualifiedName, func);
 

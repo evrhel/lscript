@@ -8,6 +8,7 @@ enum
 
 	lb_class = 0x01,
 	lb_extends,
+	lb_package,
 
 	lb_function = 0x10,
 	lb_static,

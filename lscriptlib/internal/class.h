@@ -60,13 +60,24 @@ Loads a class from its binary data into a class_t.
 @param binary The binary class data. The data is not copied and may be changed. Freeing this
 during the lifetime of the class results in undefined behavior.
 @param length The length of the data.
+@param loadSuperclasses Whether to recursively load superclasses using loadproc.
 @param loadproc A pointer to a function which will handle loading any necessary classes when loading
 this class. This is called generally when a superclass is needed.
 @param more A value which will be passed to loadproc when needed.
 
 @return The new class, or NULL if creation failed.
 */
-class_t *class_load(byte_t *binary, size_t length, classloadproc_t loadproc, void *more);
+class_t *class_load(byte_t *binary, size_t length, int loadSuperclasses, classloadproc_t loadproc, void *more);
+
+/*
+Sets a class' superclass. The class must not already have a superclass.
+
+@param clazz The class that will be given a superclass.
+@param superclass The superclass to set.
+
+@return nonzero on success.
+*/
+int set_superclass(class_t *clazz, class_t *superclass);
 
 /*
 Returns a member function of a class by its qualified name.

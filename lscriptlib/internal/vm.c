@@ -56,6 +56,9 @@ enum
 	frame_flag_return_native = 0x2,
 };
 
+static class_t *class_load_raw(vm_t *vm, const char *classname, int loadSuperclasses);
+static class_t *class_load_to_vm(vm_t *vm, class_t *clazz);
+
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
 static int env_run(env_t *env, void *location);
@@ -269,7 +272,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	// Load all the required classes
 
 	// Load Object class
-	class_t *objectClass = vm_load_class(vm, "lscript.lang.Object");
+	class_t *objectClass = class_load_raw(vm, "lscript.lang.Object", 0);
 	if (!objectClass)
 	{
 		vm_free(vm, 0);
@@ -277,7 +280,7 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load Class class
-	class_t *classClass = vm_load_class(vm, "lscript.lang.Class");
+	class_t *classClass = class_load_raw(vm, "lscript.lang.Class", 0);
 	if (!classClass)
 	{
 		vm_free(vm, 0);
@@ -285,12 +288,19 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load String class
-	class_t *stringClass = vm_load_class(vm, "lscript.lang.String");
+	class_t *stringClass = class_load_raw(vm, "lscript.lang.String", 0);
 	if (!stringClass)
 	{
 		vm_free(vm, 0);
 		return NULL;
 	}
+
+	set_superclass(classClass, objectClass);
+	set_superclass(stringClass, objectClass);
+
+	class_load_to_vm(vm, objectClass);
+	class_load_to_vm(vm, classClass);
+	class_load_to_vm(vm, stringClass);
 
 	// Load System class
 	class_t *systemClass = vm_load_class(vm, "lscript.lang.System");
@@ -455,143 +465,13 @@ class_t *vm_get_class(vm_t *vm, const char *classname)
 
 class_t *vm_load_class(vm_t *vm, const char *classname)
 {
-	class_t *result;
-	if (result = vm_get_class(vm, classname))
-		return result;
-
-	if (vm->flags & vm_flag_verbose)
-		printf("Loading class \"%s\".\n", classname);
-
-	unsigned int classnameSize = (unsigned int)(strlen(classname) + 1);
-	char *tempName = (char *)MALLOC(classnameSize);
-	if (!tempName)
-	{
-		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
-		{
-			printf("Class load error for class \"%s\": Failure to allocate name string.\n", classname);
-		}
-		return NULL;
-	}
-	MEMCPY(tempName, classname, classnameSize);
-
-	char *cursor = tempName;
-	while (*cursor)
-	{
-		if (*cursor == '.')
-			*cursor = '\\';
-		cursor++;
-	}
-
-#if defined(_WIN32)
-	char fullpath[MAX_PATH];
-	FILE *dummy;
-
-	list_t *curr = vm->paths;
-	while (curr)
-	{
-		fullpath[0] = 0;
-		char *pathString = (char *)curr->data;
-		strcat_s(fullpath, sizeof(fullpath), pathString);
-		strcat_s(fullpath, sizeof(fullpath), tempName);
-		fopen_s(&dummy, fullpath, "rb");
-		if (dummy)
-		{
-			fclose(dummy);
-			result = vm_load_class_file(vm, fullpath);
-			goto after_load_class_file;
-		}
-		strcat_s(fullpath, sizeof(fullpath), ".lb");
-		fopen_s(&dummy, fullpath, "rb");
-		if (dummy)
-		{
-			fclose(dummy);
-			result = vm_load_class_file(vm, fullpath);
-
-			after_load_class_file:
-			if (!result)
-			{
-				if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
-				{
-					printf("Class load error for class \"%s\": Failed to parse binary (resolved to file \"%s\").\n", classname, fullpath);
-				}
-				return NULL;
-			}
-			break;
-		}
-
-		curr = curr->next;
-	}
-
+	class_t *result = class_load_raw(vm, classname, 1);
 	if (!result)
-	{
-		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
-		{
-			printf("Class load error for \"%s\": Failed to resolve location on filesystem.\n", classname);
-		}
 		return NULL;
-	}
-
-	if (result && !(vm->flags & vm_flag_no_load_debug))
-	{
-		curr = vm->paths;
-
-		while (curr)
-		{
-			fullpath[0] = 0;
-			char *pathString = (char *)curr->data;
-			strcat_s(fullpath, sizeof(fullpath), pathString);
-			strcat_s(fullpath, sizeof(fullpath), tempName);
-			strcat_s(fullpath, sizeof(fullpath), ".lds");
-			fopen_s(&dummy, fullpath, "rb");
-			if (dummy)
-			{
-				fclose(dummy);
-				result->debug = load_debug(fullpath);
-				break;
-			}
-
-			curr = curr->next;
-		}
-	}
-#endif
-	FREE(tempName);
-	
-	// Create the class object
-	class_t *classClass = vm_load_class(vm, "lscript.lang.Class");
-	assert(classClass);
-
-	object_t *classObject = manager_alloc_object(vm->manager, classClass);
-	object_set_ulong(classObject, "handle", (lulong)classClass);
-	
-	class_t *classnameClass = vm_load_class(vm, "lscript.lang.String");
-	assert(classnameClass);
-
-	object_t *classnameObject = manager_alloc_object(vm->manager, classnameClass);
-	
-	array_t *classnameCharArray = manager_alloc_array(vm->manager, lb_chararray, classnameSize - 1);
-	MEMCPY(&classnameCharArray->data, classname, classnameSize - 1);
-	object_set_object(classnameObject, "chars", classnameCharArray);
-
-	object_set_object(classObject, "name", classnameObject);
-
-	reference_t *strongClassRef = manager_create_strong_object_reference(vm->manager, classObject);
-	map_insert(vm->loadedClassObjects, classname, strongClassRef);
-
-	function_t *staticinit;
-	if (result)
-	{
-		if (staticinit = class_get_function(result, "<staticinit>("))
-		{
-			env_t *env = env_create(vm);
-			env_run_func_static(env, staticinit);
-			env_free(env);
-		}
-	}
-
-	return result;
+	return class_load_to_vm(vm, result);
 }
 
-class_t *vm_load_class_file(vm_t *vm, const char *filename)
+class_t *vm_load_class_file(vm_t *vm, const char *filename, int loadSuperclasses)
 {
 	FILE *file;
 
@@ -614,12 +494,12 @@ class_t *vm_load_class_file(vm_t *vm, const char *filename)
 
 	fclose(file);
 
-	return vm_load_class_binary(vm, binary, size);
+	return vm_load_class_binary(vm, binary, size, loadSuperclasses);
 }
 
-class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size)
+class_t *vm_load_class_binary(vm_t *vm, byte_t *binary, size_t size, int loadSuperclasses)
 {
-	class_t *clazz = class_load(binary, size, (classloadproc_t)class_load_ext, vm);
+	class_t *clazz = class_load(binary, size, loadSuperclasses, (classloadproc_t)class_load_ext, vm);
 	if (clazz)
 		map_insert(vm->classes, clazz->name, clazz);
 	return clazz;
@@ -1442,6 +1322,149 @@ void env_free(env_t *env)
 	}
 
 	FREE(env);
+}
+
+class_t *class_load_raw(vm_t *vm, const char *classname, int loadSuperclasses)
+{
+	class_t *result;
+	if (result = vm_get_class(vm, classname))
+		return result;
+
+	if (vm->flags & vm_flag_verbose)
+		printf("Loading class \"%s\".\n", classname);
+
+	unsigned int classnameSize = (unsigned int)(strlen(classname) + 1);
+	char *tempName = (char *)MALLOC(classnameSize);
+	if (!tempName)
+	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+		{
+			printf("Class load error for class \"%s\": Failure to allocate name string.\n", classname);
+		}
+		return NULL;
+	}
+	MEMCPY(tempName, classname, classnameSize);
+
+	char *cursor = tempName;
+	while (*cursor)
+	{
+		if (*cursor == '.')
+			*cursor = '\\';
+		cursor++;
+	}
+
+#if defined(_WIN32)
+	char fullpath[MAX_PATH];
+	FILE *dummy;
+
+	list_t *curr = vm->paths;
+	while (curr)
+	{
+		fullpath[0] = 0;
+		char *pathString = (char *)curr->data;
+		strcat_s(fullpath, sizeof(fullpath), pathString);
+		strcat_s(fullpath, sizeof(fullpath), tempName);
+		fopen_s(&dummy, fullpath, "rb");
+		if (dummy)
+		{
+			fclose(dummy);
+			result = vm_load_class_file(vm, fullpath, loadSuperclasses);
+			goto after_load_class_file;
+		}
+		strcat_s(fullpath, sizeof(fullpath), ".lb");
+		fopen_s(&dummy, fullpath, "rb");
+		if (dummy)
+		{
+			fclose(dummy);
+			result = vm_load_class_file(vm, fullpath, loadSuperclasses);
+
+		after_load_class_file:
+			if (!result)
+			{
+				if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+				{
+					printf("Class load error for class \"%s\": Failed to parse binary (resolved to file \"%s\").\n", classname, fullpath);
+				}
+				return NULL;
+			}
+			break;
+		}
+
+		curr = curr->next;
+	}
+
+	if (!result)
+	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+		{
+			printf("Class load error for \"%s\": Failed to resolve location on filesystem.\n", classname);
+		}
+		return NULL;
+	}
+
+	if (result && !(vm->flags & vm_flag_no_load_debug))
+	{
+		curr = vm->paths;
+
+		while (curr)
+		{
+			fullpath[0] = 0;
+			char *pathString = (char *)curr->data;
+			strcat_s(fullpath, sizeof(fullpath), pathString);
+			strcat_s(fullpath, sizeof(fullpath), tempName);
+			strcat_s(fullpath, sizeof(fullpath), ".lds");
+			fopen_s(&dummy, fullpath, "rb");
+			if (dummy)
+			{
+				fclose(dummy);
+				result->debug = load_debug(fullpath);
+				break;
+			}
+
+			curr = curr->next;
+		}
+	}
+#endif
+	FREE(tempName);
+
+	return result;
+}
+
+class_t *class_load_to_vm(vm_t *vm, class_t *clazz)
+{
+	assert(clazz);
+
+	// Create the class object
+	class_t *classClass = vm_get_class(vm, CLASS_CLASSNAME);
+	assert(classClass);
+
+	object_t *classObject = manager_alloc_object(vm->manager, classClass);
+	object_set_ulong(classObject, "handle", (lulong)classClass);
+
+	class_t *classnameClass = vm_get_class(vm, STRING_CLASSNAME);
+	assert(classnameClass);
+
+	object_t *classnameObject = manager_alloc_object(vm->manager, classnameClass);
+
+	size_t classnameSize = strlen(clazz->name);
+	array_t *classnameCharArray = manager_alloc_array(vm->manager, lb_chararray, classnameSize);
+	MEMCPY(&classnameCharArray->data, clazz->name, classnameSize);
+	object_set_object(classnameObject, "chars", classnameCharArray);
+
+	object_set_object(classObject, "name", classnameObject);
+
+	reference_t *strongClassRef = manager_create_strong_object_reference(vm->manager, classObject);
+	map_insert(vm->loadedClassObjects, clazz->name, strongClassRef);
+
+	function_t *staticinit;
+	if (staticinit = class_get_function(clazz, "<staticinit>("))
+	{
+		env_t *env = env_create(vm);
+		env_run_func_static(env, staticinit);
+		env_free(env);
+	}
+
+	return clazz;
 }
 
 class_t *class_load_ext(const char *classname, vm_t *vm)

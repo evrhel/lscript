@@ -93,12 +93,12 @@ LEXPORT lvoid LCALL ls_add_to_classpath(const char *path)
 
 LEXPORT lclass LCALL ls_load_class_file(const char *filepath)
 {
-	return vm_load_class_file(gCurrentVM, filepath);
+	return vm_load_class_file(gCurrentVM, filepath, 1);
 }
 
 LEXPORT lclass LCALL ls_load_class_data(unsigned char *data, luint datalen)
 {
-	return vm_load_class_binary(gCurrentVM, data, datalen);
+	return vm_load_class_binary(gCurrentVM, data, datalen, 1);
 }
 
 LEXPORT lclass LCALL ls_load_class_name(const lchar *classname)

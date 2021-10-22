@@ -63,7 +63,7 @@ static void free_derived_args(byte_t *args);
 static byte_t get_comparator_byte(const char *comparatorString);
 static byte_t get_primitive_type(const char *stringType);
 
-static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back, char *packageName);
 static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
 static compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
@@ -264,6 +264,9 @@ compile_error_t *compile_data(data_compile_options_t *options)
 	line_t *formatted = format_document(options->data, options->datalen);
 	size_t alignAmount;
 
+	char package[MAX_PATH];
+	package[0] = 0;
+
 	line_t *curr = formatted;
 	while (curr)
 	{
@@ -282,8 +285,13 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			byte_t cmd = get_command_byte(tokens[0]);
 			switch (cmd)
 			{
+			case lb_package:
+				if (package[0]) options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "Package redefinition");
+				else strcpy_s(package, sizeof(package), tokens[1]);
+				break;
+
 			case lb_class:
-				options->back = handle_class_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				options->back = handle_class_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back, package);
 				break;
 
 			case lb_global:
@@ -576,6 +584,8 @@ byte_t get_command_byte(const char *string)
 		return lb_global;
 	else if (!strcmp(string, "function"))
 		return lb_function;
+	else if (!strcmp(string, "package"))
+		return lb_package;
 
 	else if (!strcmp(string, "void"))
 		return lb_void;
@@ -1366,13 +1376,22 @@ byte_t get_primitive_type(const char *stringType)
 	return 0;
 }
 
-compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back, char *packageName)
 {
 	if (tokenCount < 2)
 		return add_compile_error(back, srcFile, srcLine, error_error, "Expected token class name declaration");
 	
 	const char *classname = tokens[1];
 	PUT_BYTE(out, lb_class);
+	if (packageName[0])
+	{
+		while (*packageName)
+		{
+			PUT_BYTE(out, *packageName);
+			packageName++;
+		}
+		PUT_BYTE(out, '.');
+	}
 	PUT_STRING(out, classname);
 	if (tokenCount > 2)
 	{
@@ -1395,7 +1414,7 @@ compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *ou
 	else
 	{
 		PUT_BYTE(out, lb_extends);
-		PUT_STRING(out, "Object");
+		PUT_STRING(out, "lscript.lang.Object");
 	}
 	return back;
 }
