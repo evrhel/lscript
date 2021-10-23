@@ -1822,12 +1822,80 @@ void handle_set_cmd(compile_state_t *state)
 				return;
 			}
 
+			char temp[MAX_PATH];
+			char qualifiedfuncname[MAX_PATH];
+			char *qfnCursor = qualifiedfuncname;
 			char *constructorSig = state->tokens[4];
+
+			// Seek to the start of the signature
+			while (*constructorSig && *constructorSig != '(')
+			{
+				*qfnCursor = *constructorSig;
+				constructorSig++;
+				qfnCursor++;
+			}
+
+			if (!*constructorSig)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+				return;
+			}
+
+			while (*constructorSig && *constructorSig != ')')
+			{
+				if (*constructorSig == 'L')
+				{
+					char *saved = constructorSig;
+					while (*constructorSig && *constructorSig != ';') constructorSig++;
+
+					if (!*constructorSig)
+					{
+						state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+						return;
+					}
+
+					*constructorSig = 0;
+
+					if (!lscu_resolve_class(state->lscuctx, saved, temp, sizeof(temp)))
+					{
+						state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", saved);
+						return;
+					}
+
+					*constructorSig = ';';
+
+					char *tempcursor = temp;
+					while (*tempcursor)
+					{
+						*qfnCursor = *tempcursor;
+						tempcursor++;
+						qfnCursor++;
+					}
+					*qfnCursor = ';';
+
+					qfnCursor++;
+					constructorSig++;
+				}
+				else
+				{
+					*qfnCursor = *constructorSig;
+					qfnCursor++;
+					constructorSig++;
+				}
+			}
+
+			if (!*constructorSig)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+				return;
+			}
+
+			*qfnCursor = 0;
 
 			buffer_t *argbuf = NEW_BUFFER(16);
 
 			size_t argc;
-			byte_t *sig = derive_function_args(constructorSig, &argc);
+			byte_t *sig = derive_function_args(qualifiedfuncname, &argc);
 
 			for (size_t i = 0, j = 5; i < argc; i++, j++)
 			{
@@ -1896,17 +1964,12 @@ void handle_set_cmd(compile_state_t *state)
 				}
 			}
 
-			size_t sigend = strlen(constructorSig) - 1;
-			constructorSig[sigend] = 0;
-
 			PUT_BYTE(state->out, lb_seto);
 			PUT_STRING(state->out, varname);
 			PUT_BYTE(state->out, lb_new);
 			PUT_STRING(state->out, fullname);
 			PUT_STRING(state->out, constructorSig);
 			PUT_BUF(state->out, argbuf);
-
-			constructorSig[sigend] = ')';
 
 			free_derived_args(sig);
 
@@ -2185,9 +2248,105 @@ void handle_call_cmd(compile_state_t *state)
 	if (state->tokencount < 2)
 		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name");
 
+	char unqualbuf[MAX_PATH];
+	char temp[MAX_PATH];
+	char qualifiedfuncname[MAX_PATH];
 	char *functionName = state->tokens[1];
+	char *qfnCursor = qualifiedfuncname;
 
-	buffer_t *argBuffer = NEW_BUFFER(32);
+	if (state->cmd == lb_static_call)
+	{
+		char *dot = strchr(functionName, '.');
+		if (dot)
+		{
+			*dot = 0;
+			if (!lscu_resolve_class(state->lscuctx, functionName, temp, sizeof(temp)))
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", functionName);
+				return;
+			}
+			*dot = '.';
+
+			strcpy_s(unqualbuf, sizeof(unqualbuf), temp);
+			strcat_s(unqualbuf, sizeof(unqualbuf), dot);
+		}
+		else strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
+	}
+	else strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
+
+	functionName = unqualbuf;
+
+	// Seek to the start of the signature
+	while (*functionName && *functionName != '(')
+	{
+		*qfnCursor = *functionName;
+		functionName++;
+		qfnCursor++;
+	}
+
+	if (!*functionName)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+		return;
+	}
+
+	while (*functionName && *functionName != ')')
+	{
+		if (*functionName == 'L')
+		{
+			*qfnCursor = *functionName;
+			qfnCursor++;
+			functionName++;
+
+			char *saved = functionName;
+
+			while (*functionName && *functionName != ';') functionName++;
+
+			if (!*functionName)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+				return;
+			}
+
+			*functionName = 0;
+
+			if (!lscu_resolve_class(state->lscuctx, saved, temp, sizeof(temp)))
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", saved);
+				return;
+			}
+
+			*functionName = ';';
+
+			char *tempcursor = temp;
+			while (*tempcursor)
+			{
+				*qfnCursor = *tempcursor;
+				tempcursor++;
+				qfnCursor++;
+			}
+			*qfnCursor = ';';
+
+			qfnCursor++;
+			functionName++;
+		}
+		else
+		{
+			*qfnCursor = *functionName;
+			qfnCursor++;
+			functionName++;
+		}
+	}
+
+	if (!*functionName)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+		return;
+	}
+
+	*qfnCursor = 0;
+
+	buffer_t *argBuffer = NEW_BUFFER(128);
 	
 	for (size_t i = 2; i < state->tokencount; i++)
 	{
@@ -2250,14 +2409,11 @@ void handle_call_cmd(compile_state_t *state)
 		}
 	}
 
-	size_t length = strlen(functionName);
-	functionName[length - 1] = 0;
-
 	PUT_BYTE(state->out, state->cmd);
-	PUT_STRING(state->out, functionName);
+	PUT_STRING(state->out, qualifiedfuncname);
 	PUT_BUF(state->out, argBuffer);
 
-	functionName[length - 1] = ')';
+	//qualifiedfuncname[length - 1] = ')';
 
 	FREE_BUFFER(argBuffer);
 }
