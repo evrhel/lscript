@@ -1,6 +1,8 @@
 #if !defined(COMPILER_H)
 #define COMPILER_H
 
+#include <lscutil.h>
+
 #include "collections.h"
 
 enum
@@ -31,6 +33,7 @@ typedef struct compiler_options_s
 	alignment_t alignment;
 	msg_func_t messenger;
 	input_file_t **outputFiles;
+	char classpaths[LSCU_MAX_CLASSPATHS][MAX_PATH];
 } compiler_options_t;
 
 compile_error_t *compile(compiler_options_t *options);

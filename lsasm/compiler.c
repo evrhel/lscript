@@ -5,6 +5,7 @@
 #include <internal/datau.h>
 #include <internal/lb.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "file_util.h"
 
@@ -30,6 +31,7 @@ struct file_compile_options_s
 	int debug;
 	alignment_t alignment;
 	input_file_t **outputFiles;
+	char **classpaths;
 };
 
 typedef struct data_compile_options_s data_compile_options_t;
@@ -44,6 +46,21 @@ struct data_compile_options_s
 	int debug;
 	alignment_t alignment;
 	buffer_t *debugOut;
+	char **classpaths;
+};
+
+typedef struct compile_state_s compile_state_t;
+struct compile_state_s
+{
+	byte_t cmd;
+	char **tokens;
+	size_t tokencount;
+	buffer_t *out;
+	char package[MAX_PATH];
+	const char *srcfile;
+	int srcline;
+	compile_error_t *back;
+	LSCUCONTEXT lscuctx;
 };
 
 static compile_error_t *compile_file(file_compile_options_t *options);
@@ -63,17 +80,17 @@ static void free_derived_args(byte_t *args);
 static byte_t get_comparator_byte(const char *comparatorString);
 static byte_t get_primitive_type(const char *stringType);
 
-static compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back, char *packageName);
-static compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_cast_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_unary_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
-static compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back);
+static void handle_class_def(compile_state_t *state);
+static void handle_field_def(compile_state_t *state);
+static void handle_function_def(compile_state_t *state);
+static void handle_set_cmd(compile_state_t *state);
+static void handle_cast_cmd(compile_state_t *state);
+static void handle_array_creation(compile_state_t *state);
+static void handle_ret_cmd(compile_state_t *state);
+static void handle_call_cmd(compile_state_t *state);
+static void handle_math_cmd(compile_state_t *state);
+static void handle_unary_math_cmd(compile_state_t *state);
+static void handle_if_style_cmd(compile_state_t *state);
 
 compile_error_t *compile(compiler_options_t *options)
 {
@@ -94,6 +111,10 @@ compile_error_t *compile(compiler_options_t *options)
 
 		while (options->inFiles)
 		{
+			char *strs[LSCU_MAX_CLASSPATHS];
+			for (int i = 0; i < LSCU_MAX_CLASSPATHS; i++)
+				strs[i] = options->classpaths[i];
+
 			file_compile_options_t fileOptions = {
 				options->inFiles->unitname,
 				options->inFiles->fullpath,
@@ -102,7 +123,8 @@ compile_error_t *compile(compiler_options_t *options)
 				options->version,
 				options->debug,
 				options->alignment,
-				&back
+				&back,
+				&strs
 			};
 
 
@@ -160,7 +182,8 @@ compile_error_t *compile_file(file_compile_options_t *options)
 		options->version,
 		options->debug,
 		options->alignment,
-		dbuf
+		dbuf,
+		options->classpaths
 	};
 
 
@@ -261,52 +284,92 @@ compile_error_t *compile_file(file_compile_options_t *options)
 
 compile_error_t *compile_data(data_compile_options_t *options)
 {
-	line_t *formatted = format_document(options->data, options->datalen);
+	compile_state_t cs;
+	line_t *formatted;
 	size_t alignAmount;
+	line_t *curr;
+	size_t i;
+	int packageAllowed, importsAllowed;
 
-	char package[MAX_PATH];
-	package[0] = 0;
+	cs.back = options->back;
+	cs.out = options->out;
+	cs.srcfile = options->srcFile;
+	cs.package[0] = 0;
 
-	line_t *curr = formatted;
+	formatted = format_document(options->data, options->datalen);
+
+	cs.lscuctx = lscu_init();
+
+	for (i = 0; i < LSCU_MAX_CLASSPATHS; i++)
+	{
+		if (!options->classpaths[i][0]) break;
+		lscu_add_classpath(cs.lscuctx, options->classpaths[i]);
+	}
+	
+	packageAllowed = 1;
+	importsAllowed = 0;
+
+	curr = formatted;
 	while (curr)
 	{
 		char *line = curr->line;
 		if (*line != '#')
 		{
+			cs.srcline = curr->linenum;
+
 			if (options->debug)
 			{
 				unsigned int off = (unsigned int)(options->out->cursor - options->out->buf);
 				PUT_UINT(options->debugOut, off);
-				PUT_INT(options->debugOut, curr->linenum);
+				PUT_INT(options->debugOut, cs.srcline);
 			}
 
-			size_t tokenCount;
-			char **tokens = tokenize_string(line, &tokenCount);
-			byte_t cmd = get_command_byte(tokens[0]);
-			switch (cmd)
+			cs.tokens = tokenize_string(line, &cs.tokencount);
+			cs.cmd = get_command_byte(cs.tokens[0]);
+
+			switch (cs.cmd)
 			{
 			case lb_package:
-				if (package[0]) options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "Package redefinition");
-				else strcpy_s(package, sizeof(package), tokens[1]);
+				if (!packageAllowed) cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "package not allowed here");
+				else if (cs.package[0]) cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Package redefinition");
+				else if (cs.tokencount == 1) cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Expected package name");
+				else
+				{
+					strcpy_s(cs.package, sizeof(cs.package), cs.tokens[1]);
+					lscu_set_package(cs.lscuctx, cs.package);
+				}
+				break;
+
+			case lb_using:
+				if (!importsAllowed) cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "using not allowed here");
+				else if (cs.tokencount == 1) cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Expected package name");
+				else
+				{
+					lscu_add_import(cs.lscuctx, cs.tokens[1]);
+					packageAllowed = 0;
+				}
 				break;
 
 			case lb_class:
-				options->back = handle_class_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back, package);
+				packageAllowed = 0;
+				importsAllowed = 0;
+				lscu_add_import(cs.lscuctx, "lscript.lang");
+				handle_class_def(&cs);
 				break;
 
 			case lb_global:
-				alignAmount = options->alignment.globalAlignment - ((size_t)(options->out->cursor - options->out->buf) % (size_t)options->alignment.globalAlignment);
-				options->out = PUT_BYTES(options->out, lb_align, alignAmount);
-				options->back = handle_field_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				alignAmount = options->alignment.globalAlignment - ((size_t)(cs.out->cursor - cs.out->buf) % (size_t)options->alignment.globalAlignment);
+				cs.out = PUT_BYTES(cs.out, lb_align, alignAmount);
+				handle_field_def(&cs);
 				break;
 			case lb_function:
-				alignAmount = options->alignment.functionAlignment - ((size_t)(options->out->cursor - options->out->buf) % (size_t)options->alignment.functionAlignment);
-				options->out = PUT_BYTES(options->out, lb_align, alignAmount);
-				options->back = handle_function_def(tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				alignAmount = options->alignment.functionAlignment - ((size_t)(cs.out->cursor - cs.out->buf) % (size_t)options->alignment.functionAlignment);
+				cs.out = PUT_BYTES(cs.out, lb_align, alignAmount);
+				handle_function_def(&cs);
 				break;
 
 			case lb_void:
-				options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "void cannot be used as a storage specifier.");
+				cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "void cannot be used as a storage specifier.");
 				break;
 			case lb_bool:
 			case lb_char:
@@ -332,18 +395,18 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			case lb_floatarray:
 			case lb_doublearray:
 			case lb_objectarray:
-				if (tokenCount == 2)
+				if (cs.tokencount == 2)
 				{
-					options->out = PUT_BYTE(options->out, cmd);
-					options->out = PUT_STRING(options->out, tokens[1]);
+					cs.out = PUT_BYTE(cs.out, cs.cmd);
+					cs.out = PUT_STRING(cs.out, cs.tokens[1]);
 				}
-				else if (tokenCount == 1)
+				else if (cs.tokencount == 1)
 				{
-					options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "Missing variable name declaration");
+					cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Missing variable name declaration");
 				}
 				else
 				{
-					options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_warning, "Unecessary arguments following variable declaration");
+					cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_warning, "Unecessary arguments following variable declaration");
 				}
 				break;
 
@@ -356,7 +419,7 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			case lb_seto:
 			case lb_setv:
 			case lb_setr:
-				options->back = handle_set_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				handle_set_cmd(&cs);
 				break;
 
 			case lb_castc:
@@ -370,7 +433,7 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			case lb_castb:
 			case lb_castf:
 			case lb_castd:
-				options->back = handle_cast_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				handle_cast_cmd(&cs);
 				break;
 
 			case lb_ret:
@@ -383,12 +446,12 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			case lb_reto:
 			case lb_retv:
 			case lb_retr:
-				options->back = handle_ret_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				handle_ret_cmd(&cs);
 				break;
 
 			case lb_static_call:
 			case lb_dynamic_call:
-				options->back = handle_call_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				handle_call_cmd(&cs);
 				break;
 
 			case lb_add:
@@ -401,42 +464,44 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			case lb_xor:
 			case lb_lsh:
 			case lb_rsh:
-				options->back = handle_math_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				handle_math_cmd(&cs);
 				break;
 
 			case lb_neg:
 			case lb_not:
-				options->back = handle_unary_math_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				handle_unary_math_cmd(&cs);
 				break;
 
 			case lb_if:
 			case lb_while:
-				options->back = handle_if_style_cmd(cmd, tokens, tokenCount, options->out, options->srcFile, curr->linenum, options->back);
+				handle_if_style_cmd(&cs);
 				break;
 			case lb_else:
 				options->out = PUT_BYTE(options->out, lb_else);
 				options->out = PUT_LONG(options->out, -1);
 				//out = put_byte(out, tokenCount > 1);
-				if (tokenCount > 1)
-					options->back = handle_if_style_cmd(lb_if, tokens + 1, tokenCount - 1, options->out, options->srcFile, curr->linenum, options->back);
+				if (cs.tokencount > 1)
+					handle_if_style_cmd(&cs);
 				break;
 			case lb_end:
-				options->out = PUT_BYTE(options->out, cmd);
-				options->out = PUT_LONG(options->out, -1);
+				cs.out = PUT_BYTE(cs.out, cs.cmd);
+				cs.out = PUT_LONG(cs.out, -1);
 				break;
 			default:
-				options->back = add_compile_error(options->back, options->srcFile, curr->linenum, error_error, "Unknown command \"%s\"", tokens[0]);
+				cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Unknown command \"%s\"", cs.tokens[0]);
 				break;
 			}
 
-			free_tokenized_data(tokens, tokenCount);
+			free_tokenized_data(cs.tokens, cs.tokencount);
 		}
 
 		curr = curr->next;
 	}
 
 	free_formatted(formatted);
-	return options->back;
+
+	lscu_destroy(cs.lscuctx);
+	return cs.back;
 }
 
 line_t *format_document(const char *data, size_t datalen)
@@ -586,6 +651,8 @@ byte_t get_command_byte(const char *string)
 		return lb_function;
 	else if (!strcmp(string, "package"))
 		return lb_package;
+	else if (!strcmp(string, "using"))
+		return lb_using;
 
 	else if (!strcmp(string, "void"))
 		return lb_void;
@@ -1376,209 +1443,255 @@ byte_t get_primitive_type(const char *stringType)
 	return 0;
 }
 
-compile_error_t *handle_class_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back, char *packageName)
+void handle_class_def(compile_state_t *state)
 {
-	if (tokenCount < 2)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expected token class name declaration");
-	
-	const char *classname = tokens[1];
-	PUT_BYTE(out, lb_class);
-	if (packageName[0])
+	if (state->tokencount < 2)
 	{
-		while (*packageName)
-		{
-			PUT_BYTE(out, *packageName);
-			packageName++;
-		}
-		PUT_BYTE(out, '.');
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected token class name declaration");
+		return;
 	}
-	PUT_STRING(out, classname);
-	if (tokenCount > 2)
+	
+	const char *classname = state->tokens[1];
+	PUT_BYTE(state->out, lb_class);
+	if (state->package[0])
 	{
-		if (strcmp(tokens[2], "extends"))
-			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", \"extends\" expected.", tokens[2]);
-
-		if (tokenCount == 3)
-			return add_compile_error(back, srcFile, srcLine, error_error, "Expected token superclass name declaration");
-		else if (tokenCount == 4)
+		char *cursor = state->package;
+		while (*cursor)
 		{
-			if (strcmp(tokens[3], "null"))
+			PUT_BYTE(state->out, *cursor);
+			cursor++;
+		}
+		PUT_BYTE(state->out, '.');
+	}
+	PUT_STRING(state->out, classname);
+	if (state->tokencount > 2)
+	{
+		if (strcmp(state->tokens[2], "extends"))
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", \"extends\" expected.", state->tokens[2]);
+			return;
+		}
+
+		if (state->tokencount == 3)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected token superclass name declaration");
+			return;
+		}
+		else if (state->tokencount == 4)
+		{
+			if (strcmp(state->tokens[3], "null"))
 			{
-				PUT_BYTE(out, lb_extends);
-				PUT_STRING(out, tokens[3]);
+				PUT_BYTE(state->out, lb_extends);
+				char *superclassname = state->tokens[3];
+
+				char fullname[MAX_PATH];
+				if (!lscu_resolve_class(state->lscuctx, superclassname, fullname, sizeof(fullname)))
+				{
+					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", superclassname);
+					return;
+				}
+
+				PUT_STRING(state->out, fullname);
 			}
 		}
 		else
-			return add_compile_error(back, srcFile, srcLine, error_warning, "Uneceassary arguments following class declaration");
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Uneceassary arguments following class declaration");
+			return;
+		}
 	}
 	else
 	{
-		PUT_BYTE(out, lb_extends);
-		PUT_STRING(out, "lscript.lang.Object");
+		PUT_BYTE(state->out, lb_extends);
+		PUT_STRING(state->out, "lscript.lang.Object");
 	}
-	return back;
 }
 
-compile_error_t *handle_field_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_field_def(compile_state_t *state)
 {
-	if (tokenCount < 5)
+	if (state->tokencount < 5)
 	{
-		switch (tokenCount)
+		switch (state->tokencount)
 		{
 		case 1:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected global storage specifier");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected global storage specifier");
 			break;
 		case 2:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected global write permissions specifier");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected global write permissions specifier");
 			break;
 		case 3:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected global data type specifier");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected global data type specifier");
 			break;
 		case 4:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected global name declaration");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected global name declaration");
 			break;
 		}
-		return back;
 	}
 	int isStatic, isVarying;
 	byte_t dataType;
 	const char *name;
 
-	if (!strcmp(tokens[1], "static"))
+	if (!strcmp(state->tokens[1], "static"))
 		isStatic = 1;
-	else if (!strcmp(tokens[1], "dynamic"))
+	else if (!strcmp(state->tokens[1], "dynamic"))
 		isStatic = 0;
 	else
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", tokens[1]);
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", state->tokens[1]);
+		return;
+	}
 
-	if (!strcmp(tokens[2], "varying"))
+	if (!strcmp(state->tokens[2], "varying"))
 		isVarying = 1;
-	else if (!strcmp(tokens[2], "const"))
+	else if (!strcmp(state->tokens[2], "const"))
 		isVarying = 0;
 	else
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"varying\" or \"const\"", tokens[1]);
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"varying\" or \"const\"", state->tokens[1]);
+		return;
+	}
 
-	dataType = get_command_byte(tokens[3]);
+	dataType = get_command_byte(state->tokens[3]);
 	if (dataType < lb_char || dataType > lb_objectarray)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Invalid global data type specifier \"%s\"", tokens[3]);
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Invalid global data type specifier \"%s\"", state->tokens[3]);
+		return;
+	}
 
-	name = tokens[4];
+	name = state->tokens[4];
 
-	if (isStatic && tokenCount < 6)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Global declared static must have an initializer");
-	else if (!isStatic && tokenCount > 5)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Global declared dynamic cannot have an initializer");
+	if (isStatic && state->tokencount < 6)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Global declared static must have an initializer");
+		return;
+	}
+	else if (!isStatic && state->tokencount > 5)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Global declared dynamic cannot have an initializer");
+		return;
+	}
 
-	if (tokenCount > 5)
+	if (state->tokencount > 5)
 	{
 		data_t data;
 		byte_t type;
 		int isAbsolute;
-		int initSize = (int)evaluate_constant(tokens[5], &data, &type, &isAbsolute);
+		int initSize = (int)evaluate_constant(state->tokens[5], &data, &type, &isAbsolute);
 
 		if (!initSize)
-			return add_compile_error(back, srcFile, srcLine, error_error, "Initialization of globals to variables is not supported");
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Initialization of globals to variables is not supported");
+			return;
+		}
 
 		byte_t neededType;
 		size_t neededSize = get_type_properties(dataType, &neededType);
 
 		if (neededSize != initSize)
-			return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch");
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Type size mismatch");
+			return;
+		}
 
 		if (neededType != type)
-			back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Value types do not match");
 
-		PUT_BYTE(out, lb_global);
-		PUT_STRING(out, name);
-		PUT_BYTE(out, isStatic ? lb_static : lb_dynamic);
-		PUT_BYTE(out, isVarying ? lb_varying : lb_const);
-		PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0);
-		PUT_BYTE(out, dataType);
+		PUT_BYTE(state->out, lb_global);
+		PUT_STRING(state->out, name);
+		PUT_BYTE(state->out, isStatic ? lb_static : lb_dynamic);
+		PUT_BYTE(state->out, isVarying ? lb_varying : lb_const);
+		PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0);
+		PUT_BYTE(state->out, dataType);
 		switch (neededType)
 		{
 		case lb_byte:
-			PUT_BYTE(out, data.cvalue);
+			PUT_BYTE(state->out, data.cvalue);
 			break;
 		case lb_word:
-			PUT_SHORT(out, data.svalue);
+			PUT_SHORT(state->out, data.svalue);
 			break;
 		case lb_dword:
-			PUT_INT(out, data.ivalue);
+			PUT_INT(state->out, data.ivalue);
 			break;
 		case lb_qword:
-			PUT_LONG(out, data.lvalue);
+			PUT_LONG(state->out, data.lvalue);
 			break;
 		case lb_real4:
-			PUT_FLOAT(out, data.fvalue);
+			PUT_FLOAT(state->out, data.fvalue);
 			break;
 		case lb_real8:
-			PUT_DOUBLE(out, data.dvalue);
+			PUT_DOUBLE(state->out, data.dvalue);
 			break;
 		default:
 			// something went wrong!
+			assert(0);
 			break;
 		}
 
-		if (tokenCount > 6)
-			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following global declaration");
+		if (state->tokencount > 6)
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments following global declaration");
 	}
 	else
 	{
-		PUT_BYTE(out, lb_global);
-		PUT_STRING(out, name);
-		PUT_BYTE(out, isStatic ? lb_static : lb_dynamic);
-		PUT_BYTE(out, isVarying ? lb_varying : lb_const);
-		PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0); PUT_BYTE(out, 0);
-		PUT_BYTE(out, dataType);
+		PUT_BYTE(state->out, lb_global);
+		PUT_STRING(state->out, name);
+		PUT_BYTE(state->out, isStatic ? lb_static : lb_dynamic);
+		PUT_BYTE(state->out, isVarying ? lb_varying : lb_const);
+		PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0); PUT_BYTE(state->out, 0);
+		PUT_BYTE(state->out, dataType);
 	}
-
-	return back;
 }
 
-compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_function_def(compile_state_t *state)
 {
-	if (tokenCount < 5)
+	if (state->tokencount < 5)
 	{
-		switch (tokenCount)
+		switch (state->tokencount)
 		{
 		case 1:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function execution mode specifier");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function execution mode specifier");
 			break;
 		case 2:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function linkage mode specifier");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function linkage mode specifier");
 			break;
 		case 3:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function return type specifier");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function return type specifier");
 			break;
 		case 4:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected function name declaration");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name declaration");
 			break;
 		}
-		return back;
+		return;
 	}
 
 	int isStatic, isInterp;
 	byte_t returnType;
-	if (!strcmp(tokens[1], "static"))
+	if (!strcmp(state->tokens[1], "static"))
 		isStatic = 1;
-	else if (!strcmp(tokens[1], "dynamic"))
+	else if (!strcmp(state->tokens[1], "dynamic"))
 		isStatic = 0;
-	else 
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", tokens[1]);
+	else
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", state->tokens[1]);
+		return;
+	}
 
-	if (!strcmp(tokens[2], "interp"))
+	if (!strcmp(state->tokens[2], "interp"))
 		isInterp = 1;
-	else if (!strcmp(tokens[2], "native"))
+	else if (!strcmp(state->tokens[2], "native"))
 		isInterp = 0;
 	else
-		return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected \"interp\" or \"native\"", tokens[2]);
+		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"interp\" or \"native\"", state->tokens[2]);
 
-	returnType = get_command_byte(tokens[3]);
+	returnType = get_command_byte(state->tokens[3]);
 	if (returnType < lb_void || returnType > lb_objectarray)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Invalid return type \"%s\"", tokens[3]);
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Invalid return type \"%s\"", state->tokens[3]);
+		return;
+	}
 
 	size_t functionTokenCount;
-	char **functionData = tokenize_function(tokens + 4, tokenCount - 4, &functionTokenCount);
+	char **functionData = tokenize_function(state->tokens + 4, state->tokencount - 4, &functionTokenCount);
 	buffer_t *build = NEW_BUFFER(64);
 
 	const char *name = functionData[0];
@@ -1590,7 +1703,8 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 		if (type < lb_char || type > lb_objectarray)
 		{
 			FREE_BUFFER(build);
-			return add_compile_error(back, srcFile, srcLine, error_error, "Illegal argument type");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Illegal argument type");
+			return;
 		}
 
 		const char *argName;
@@ -1601,28 +1715,39 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 			if (i == functionTokenCount)
 			{
 				FREE_BUFFER(build);
-				return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument object classname");
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument object classname");
+				return;
 			}
 
 			const char *classname = functionData[i];
+
+			char fullname[MAX_PATH];
+			if (!lscu_resolve_class(state->lscuctx, classname, fullname, sizeof(fullname)))
+			{
+				FREE_BUFFER(build);
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", functionData[i]);
+				return;
+			}
 
 			i++;
 			if (i == functionTokenCount)
 			{
 				FREE_BUFFER(build);
-				return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument name");
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
+				return;
 			}
 
 			argName = functionData[i];
 
 			PUT_BYTE(build, type);
-			PUT_STRING(build, classname);
+			PUT_STRING(build, fullname);
 			PUT_STRING(build, argName);
 		}
 		else if (i == functionTokenCount)
 		{
 			FREE_BUFFER(build);
-			return add_compile_error(back, srcFile, srcLine, error_error, "Expected function argument name");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
+			return;
 		}
 		else
 		{
@@ -1633,26 +1758,27 @@ compile_error_t *handle_function_def(char **tokens, size_t tokenCount, buffer_t 
 		}
 	}
 
-	PUT_BYTE(out, lb_function);
-	PUT_BYTE(out, isStatic ? lb_static : lb_dynamic);
-	PUT_BYTE(out, isInterp ? lb_interp : lb_native);
-	PUT_BYTE(out, returnType);
-	PUT_STRING(out, name);
-	PUT_BYTE(out, argCount);
-	PUT_BUF(out, build);
+	PUT_BYTE(state->out, lb_function);
+	PUT_BYTE(state->out, isStatic ? lb_static : lb_dynamic);
+	PUT_BYTE(state->out, isInterp ? lb_interp : lb_native);
+	PUT_BYTE(state->out, returnType);
+	PUT_STRING(state->out, name);
+	PUT_BYTE(state->out, argCount);
+	PUT_BUF(state->out, build);
 
 	FREE_BUFFER(build);
 	free_tokenized_data(functionData, functionTokenCount);
-
-	return back;
 }
 
-compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_set_cmd(compile_state_t *state)
 {
-	if (tokenCount < 2)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
+	if (state->tokencount < 2)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected variable name");
+		return;
+	}
 
-	const char *varname = tokens[1];
+	const char *varname = state->tokens[1];
 	int myWidth;
 	byte_t myType;
 	data_t setData;
@@ -1660,27 +1786,43 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 	size_t setWidth;
 	int setIsAbsolute;
 
-	if (cmd != lb_setr && tokenCount < 3)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expeceted value");
+	if (state->cmd != lb_setr && state->tokencount < 3)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expeceted value");
+		return;
+	}
 
-	switch (cmd)
+	switch (state->cmd)
 	{
 	case lb_setv:
-		PUT_BYTE(out, lb_setv);
-		PUT_STRING(out, varname);
+		PUT_BYTE(state->out, lb_setv);
+		PUT_STRING(state->out, varname);
 		//put_byte(out, lb_value);
-		PUT_STRING(out, tokens[2]);
+		PUT_STRING(state->out, state->tokens[2]);
 		break;
 	case lb_seto:
-		if (!strcmp(tokens[2], "new"))
+		if (!strcmp(state->tokens[2], "new"))
 		{
-			if (tokenCount < 4)
-				return add_compile_error(back, srcFile, srcLine, error_error, "Expected instantiated class name");
-			else if (tokenCount < 5)
-				return add_compile_error(back, srcFile, srcLine, error_error, "Expected constructor call");
+			if (state->tokencount < 4)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected instantiated class name");
+				return;
+			}
+			else if (state->tokencount < 5)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected constructor call");
+				return;
+			}
 
-			char *classname = tokens[3];
-			char *constructorSig = tokens[4];
+			char *classname = state->tokens[3];
+			char fullname[MAX_PATH];
+			if (!lscu_resolve_class(state->lscuctx, classname, fullname, sizeof(fullname)))
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", classname);
+				return;
+			}
+
+			char *constructorSig = state->tokens[4];
 
 			buffer_t *argbuf = NEW_BUFFER(16);
 
@@ -1689,7 +1831,7 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 			for (size_t i = 0, j = 5; i < argc; i++, j++)
 			{
-				const char *argstr = tokens[j];
+				const char *argstr = state->tokens[j];
 
 				byte_t reqArgType;
 				size_t reqArgSize = get_type_properties(sig[i], &reqArgType);
@@ -1701,15 +1843,15 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 				if (argSize == 0)
 				{
-					if (tokens[j][0] == SIG_STRING_CHAR)
+					if (state->tokens[j][0] == SIG_STRING_CHAR)
 					{
 						PUT_BYTE(argbuf, lb_string);
-						PUT_STRING(argbuf, tokens[j] + 1);
+						PUT_STRING(argbuf, state->tokens[j] + 1);
 					}
 					else
 					{
 						PUT_BYTE(argbuf, lb_value);
-						PUT_STRING(argbuf, tokens[j]);
+						PUT_STRING(argbuf, state->tokens[j]);
 					}
 					continue;
 				}
@@ -1718,11 +1860,12 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 					if (reqArgSize != argSize)
 					{
 						FREE_BUFFER(argbuf);
-						return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)argSize, (int)reqArgSize);
+						state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Type size mismatch (got: %d, needs: %d)", (int)argSize, (int)reqArgSize);
+						return;
 					}
 
 					if (reqArgType != argType)
-						back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
+						state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Value types do not match");
 
 					PUT_BYTE(argbuf, reqArgType);
 					switch (reqArgType)
@@ -1756,12 +1899,12 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 			size_t sigend = strlen(constructorSig) - 1;
 			constructorSig[sigend] = 0;
 
-			PUT_BYTE(out, lb_seto);
-			PUT_STRING(out, varname);
-			PUT_BYTE(out, lb_new);
-			PUT_STRING(out, classname);
-			PUT_STRING(out, constructorSig);
-			PUT_BUF(out, argbuf);
+			PUT_BYTE(state->out, lb_seto);
+			PUT_STRING(state->out, varname);
+			PUT_BYTE(state->out, lb_new);
+			PUT_STRING(state->out, fullname);
+			PUT_STRING(state->out, constructorSig);
+			PUT_BUF(state->out, argbuf);
 
 			constructorSig[sigend] = ')';
 
@@ -1769,131 +1912,139 @@ compile_error_t *handle_set_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 
 			FREE_BUFFER(argbuf);
 		}
-		else if (!strcmp(tokens[2], "null"))
+		else if (!strcmp(state->tokens[2], "null"))
 		{
-			PUT_BYTE(out, lb_seto);
-			PUT_STRING(out, varname);
-			PUT_BYTE(out, lb_null);
+			PUT_BYTE(state->out, lb_seto);
+			PUT_STRING(state->out, varname);
+			PUT_BYTE(state->out, lb_null);
 		}
-		else if (get_primitive_type(tokens[2]))
+		else if (get_primitive_type(state->tokens[2]))
 		{
-			PUT_BYTE(out, lb_seto);
-			PUT_STRING(out, varname);
-			back = handle_array_creation(&tokens[2], tokenCount - 2, out, srcFile, srcLine, back);
+			PUT_BYTE(state->out, lb_seto);
+			PUT_STRING(state->out, varname);
+			handle_array_creation(state);
 		}
-		else if (tokens[2][0] == SIG_STRING_CHAR)
+		else if (state->tokens[2][0] == SIG_STRING_CHAR)
 		{
-			PUT_BYTE(out, lb_seto);
-			PUT_STRING(out, varname);
-			PUT_BYTE(out, lb_string);
-			PUT_STRING(out, tokens[2] + 1);
+			PUT_BYTE(state->out, lb_seto);
+			PUT_STRING(state->out, varname);
+			PUT_BYTE(state->out, lb_string);
+			PUT_STRING(state->out, state->tokens[2] + 1);
 		}
 		else
 		{
-			/*put_byte(out, lb_seto);
-			put_string(out, varname);
-			put_byte(out, lb_value);
-			put_string(out, tokens[2]);*/
-			return add_compile_error(back, srcFile, srcLine, error_error, "Invalid usage of seto; must be initialization of object, array, string, or null");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Invalid usage of seto; must be initialization of object, array, string, or null");
+			return;
 		}
-		
-		//else
-		//	return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token; expected \"new\" or \"null\"");
+
 		break;
 	case lb_setr:
-		PUT_BYTE(out, lb_setr);
-		PUT_STRING(out, varname);
+		PUT_BYTE(state->out, lb_setr);
+		PUT_STRING(state->out, varname);
 		break;
 	default:
-		myType = cmd + (lb_byte - lb_setb);
+		myType = state->cmd + (lb_byte - lb_setb);
 		myWidth = (int)get_type_width(myType);
 
-		if (tokens[2][0] == SIG_CHAR_CHAR)
+		if (state->tokens[2][0] == SIG_CHAR_CHAR)
 		{
-			setData.cvalue = tokens[2][1];
+			setData.cvalue = state->tokens[2][1];
 			setWidth = sizeof(lchar);
 			setType = lb_byte;
 		}
 		else
 		{
-			setWidth = evaluate_constant(tokens[2], &setData, &setType, &setIsAbsolute);
+			setWidth = evaluate_constant(state->tokens[2], &setData, &setType, &setIsAbsolute);
 		}
 
 		if (myWidth != setWidth)
-			return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)setWidth, (int)myWidth);
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Type size mismatch (got: %d, needs: %d)", (int)setWidth, (int)myWidth);
+			return;
+		}
 
 		if (myType != setType)
-			back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Value types do not match");
 
-		PUT_BYTE(out, cmd);
-		PUT_STRING(out, varname);
+		PUT_BYTE(state->out, state->cmd);
+		PUT_STRING(state->out, varname);
 		//put_byte(out, myType);
 
 		switch (myType)
 		{
 		case lb_byte:
-			PUT_CHAR(out, setData.cvalue);
+			PUT_CHAR(state->out, setData.cvalue);
 			break;
 		case lb_word:
-			PUT_SHORT(out, setData.svalue);
+			PUT_SHORT(state->out, setData.svalue);
 			break;
 		case lb_dword:
-			PUT_INT(out, setData.ivalue);
+			PUT_INT(state->out, setData.ivalue);
 			break;
 		case lb_qword:
-			PUT_LONG(out, setData.lvalue);
+			PUT_LONG(state->out, setData.lvalue);
 			break;
 		case lb_real4:
-			PUT_FLOAT(out, setData.fvalue);
+			PUT_FLOAT(state->out, setData.fvalue);
 			break;
 		case lb_real8:
-			PUT_DOUBLE(out, setData.dvalue);
+			PUT_DOUBLE(state->out, setData.dvalue);
 			break;
 		}
 
 		break;
 	}
-
-	return back;
 }
 
-compile_error_t *handle_cast_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_cast_cmd(compile_state_t *state)
 {
-	if (tokenCount < 2)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expected destination variable name");
+	if (state->tokencount < 2)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected destination variable name");
+		return;
+	}
 
-	if (tokenCount < 3)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expected source variable name");
+	if (state->tokencount < 3)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected source variable name");
+		return;
+	}
 
-	PUT_CHAR(out, cmd);
-	PUT_STRING(out, tokens[1]);
-	PUT_STRING(out, tokens[2]);
+	PUT_CHAR(state->out, state->cmd);
+	PUT_STRING(state->out, state->tokens[1]);
+	PUT_STRING(state->out, state->tokens[2]);
 
-	return back;
+	return state->back;
 }
 
-compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_array_creation(compile_state_t *state)
 {
-	if (tokenCount == 0)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Not enough array initialization arguments");
-	else if (tokenCount == 1)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expected array length specifier");
+	if (state->tokencount == 0)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Not enough array initialization arguments");
+		return;
+	}
+	else if (state->tokencount == 1)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected array length specifier");
+		return;
+	}
 
-	byte_t type = get_primitive_type(tokens[0]);
+	byte_t type = get_primitive_type(state->tokens[0]);
 
 	data_t argData;
 	byte_t argType;
 	int argIsAbsolute;
-	size_t argSize = evaluate_constant(tokens[1], &argData, &argType, &argIsAbsolute);
+	size_t argSize = evaluate_constant(state->tokens[1], &argData, &argType, &argIsAbsolute);
 	if (argIsAbsolute)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Array initialization does not support absolute type");
+		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Array initialization does not support absolute type");
 	////else if (argSize == 0)
 		//return add_compile_error(back, srcFile, srcLine, error_error, "Invalid array length specifier");
 	switch (argSize)
 	{
 	case 0:
-		PUT_BYTE(out, lb_value);
-		PUT_STRING(out, tokens[1]);
+		PUT_BYTE(state->out, lb_value);
+		PUT_STRING(state->out, state->tokens[1]);
 		goto post_init_array;
 		break;
 	case lb_byte:
@@ -1906,47 +2057,46 @@ compile_error_t *handle_array_creation(char **tokens, size_t tokenCount, buffer_
 		break;
 	case lb_qword:
 		argData.uivalue = (luint)argData.ulvalue;
-		back = add_compile_error(back, srcFile, srcLine, error_warning, "Arrays have maximum 32-bit unsigned length but requested length is 64-bit");
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Arrays have maximum 32-bit unsigned length but requested length is 64-bit");
 		break;
 	case lb_real4:
 	case lb_real8:
-		return add_compile_error(back, srcFile, srcLine, error_error, "Array initialization requires an integral length type");
+		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Array initialization requires an integral length type");
 		break;
 	}
 
-	PUT_BYTE(out, type);
-	PUT_UINT(out, argData.uivalue);
+	PUT_BYTE(state->out, type);
+	PUT_UINT(state->out, argData.uivalue);
 
 	post_init_array:
-	if (tokenCount > 2)
-	{
-		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments in array initialization");
-	}
-
-	return back;
+	if (state->tokencount > 2)
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments in array initialization");
 }
 
-compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_ret_cmd(compile_state_t *state)
 {
 	size_t valueRetDesSize;
 	byte_t valueRetDesType;
-	switch (cmd)
+	switch (state->cmd)
 	{
 	case lb_ret:
 	case lb_retr:
-		PUT_BYTE(out, cmd);
-		if (tokenCount > 1)
-			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
+		PUT_BYTE(state->out, state->cmd);
+		if (state->tokencount > 1)
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments following function return");
 		break;
 	case lb_retv:
-		if (tokenCount < 2)
-			return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
+		if (state->tokencount < 2)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected variable name");
+			return;
+		}
 
-		PUT_BYTE(out, lb_retv);
-		PUT_STRING(out, tokens[1]);
+		PUT_BYTE(state->out, lb_retv);
+		PUT_STRING(state->out, state->tokens[1]);
 
-		if (tokenCount > 2)
-			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
+		if (state->tokencount > 2)
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments following function return");
 		break;
 	case lb_retb:
 		valueRetDesSize = sizeof(byte_t);
@@ -1973,93 +2123,101 @@ compile_error_t *handle_ret_cmd(byte_t cmd, char **tokens, size_t tokenCount, bu
 		valueRetDesType = lb_real8;
 
 		handleValueRet:
-		if (tokenCount < 2)
-			return add_compile_error(back, srcFile, srcLine, error_error, "Expected constant");
+		if (state->tokencount < 2)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected constant");
+			return;
+		}
 		else
 		{
 			data_t retData;
 			byte_t retType;
 			int retIsAbsoluteType;
-			size_t retSize = evaluate_constant(tokens[1], &retData, &retType, &retIsAbsoluteType);
+			size_t retSize = evaluate_constant(state->tokens[1], &retData, &retType, &retIsAbsoluteType);
 			if (retIsAbsoluteType)
-				return add_compile_error(back, srcFile, srcLine, error_error, "Absolute type specifier not supported on return statement");
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Absolute type specifier not supported on return statement");
+				return;
+			}
 
 			if (retSize != valueRetDesSize)
-				return add_compile_error(back, srcFile, srcLine, error_error, "Type size mismatch (got: %d, needs: %d)", (int)retSize, (int)valueRetDesSize);
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Type size mismatch (got: %d, needs: %d)", (int)retSize, (int)valueRetDesSize);
+				return;
+			}
 
 			if (retType != valueRetDesType)
-				back = add_compile_error(back, srcFile, srcLine, error_warning, "Value types do not match");
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Value types do not match");
 
-			PUT_BYTE(out, cmd);
+			PUT_BYTE(state->out, state->cmd);
 			switch (retType)
 			{
 			case lb_byte:
-				PUT_CHAR(out, retData.cvalue);
+				PUT_CHAR(state->out, retData.cvalue);
 				break;
 			case lb_word:
-				PUT_SHORT(out, retData.svalue);
+				PUT_SHORT(state->out, retData.svalue);
 				break;
 			case lb_dword:
-				PUT_INT(out, retData.ivalue);
+				PUT_INT(state->out, retData.ivalue);
 				break;
 			case lb_qword:
-				PUT_LONG(out, retData.lvalue);
+				PUT_LONG(state->out, retData.lvalue);
 				break;
 			case lb_real4:
-				PUT_FLOAT(out, retData.fvalue);
+				PUT_FLOAT(state->out, retData.fvalue);
 				break;
 			case lb_real8:
-				PUT_DOUBLE(out, retData.dvalue);
+				PUT_DOUBLE(state->out, retData.dvalue);
 				break;
 			}
 		}
 
-		if (tokenCount > 2)
-			back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following function return");
+		if (state->tokencount > 2)
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments following function return");
 
 		break;
 	}
-	return back;
 }
 
-compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_call_cmd(compile_state_t *state)
 {
-	if (tokenCount < 2)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expected function name");
+	if (state->tokencount < 2)
+		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name");
 
-	char *functionName = tokens[1];
+	char *functionName = state->tokens[1];
 
 	buffer_t *argBuffer = NEW_BUFFER(32);
 	
-	for (size_t i = 2; i < tokenCount; i++)
+	for (size_t i = 2; i < state->tokencount; i++)
 	{
 		data_t argData;
 		byte_t argType;
 		int isAbsoluteType;
-		size_t argSize = evaluate_constant(tokens[i], &argData, &argType, &isAbsoluteType);
+		size_t argSize = evaluate_constant(state->tokens[i], &argData, &argType, &isAbsoluteType);
 
 		if (argSize == 0)
 		{
-			if (tokens[i][0] == SIG_STRING_CHAR)
+			if (state->tokens[i][0] == SIG_STRING_CHAR)
 			{
 				PUT_BYTE(argBuffer, lb_string);
-				PUT_STRING(argBuffer, tokens[i] + 1);
+				PUT_STRING(argBuffer, state->tokens[i] + 1);
 			}
-			else if (tokens[i][0] == SIG_CHAR_CHAR)
+			else if (state->tokens[i][0] == SIG_CHAR_CHAR)
 			{
 				PUT_BYTE(argBuffer, lb_byte);
-				PUT_BYTE(argBuffer, tokens[i][1]);
+				PUT_BYTE(argBuffer, state->tokens[i][1]);
 			}
 			else
 			{
-				if (!strcmp(tokens[i], "ret"))
+				if (!strcmp(state->tokens[i], "ret"))
 				{
 					PUT_BYTE(argBuffer, lb_ret);
 				}
 				else
 				{
 					PUT_BYTE(argBuffer, lb_value);
-					PUT_STRING(argBuffer, tokens[i]);
+					PUT_STRING(argBuffer, state->tokens[i]);
 				}
 			}
 			continue;
@@ -2095,143 +2253,145 @@ compile_error_t *handle_call_cmd(byte_t cmd, char **tokens, size_t tokenCount, b
 	size_t length = strlen(functionName);
 	functionName[length - 1] = 0;
 
-	PUT_BYTE(out, cmd);
-	PUT_STRING(out, functionName);
-	PUT_BUF(out, argBuffer);
+	PUT_BYTE(state->out, state->cmd);
+	PUT_STRING(state->out, functionName);
+	PUT_BUF(state->out, argBuffer);
 
 	functionName[length - 1] = ')';
 
 	FREE_BUFFER(argBuffer);
-
-	return back;
 }
 
-compile_error_t *handle_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_math_cmd(compile_state_t *state)
 {
-	if (tokenCount < 4)
+	if (state->tokencount < 4)
 	{
-		switch (tokenCount)
+		switch (state->tokencount)
 		{
 		case 1:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected destination variable name");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected destination variable name");
 			break;
 		case 2:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected source variable name");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected source variable name");
 			break;
 		case 3:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected operation argument");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected operation argument");
 			break;
 		}
-		return back;
+		return;
 	}
 
-	const char *dstVar = tokens[1];
-	const char *srcVar = tokens[2];
+	const char *dstVar = state->tokens[1];
+	const char *srcVar = state->tokens[2];
 
 	data_t argData;
 	byte_t argType;
 	int argIsAbsolute;
 	size_t argSize;
 	
-	if (tokens[3][0] == SIG_STRING_CHAR)
+	if (state->tokens[3][0] == SIG_STRING_CHAR)
 	{
-		return add_compile_error(back, srcFile, srcLine, error_error, "Operation requires integral or floating point type");
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Operation requires integral or floating point type");
+		return;
 	}
-	else if (tokens[3][0] == SIG_CHAR_CHAR)
+	else if (state->tokens[3][0] == SIG_CHAR_CHAR)
 	{
-		argData.cvalue = tokens[3][1];
+		argData.cvalue = state->tokens[3][1];
 		argType = lb_char;
 		argIsAbsolute = 1;
 		argSize = sizeof(lchar);
 	}
 	else
 	{
-		argSize = evaluate_constant(tokens[3], &argData, &argType, &argIsAbsolute);
+		argSize = evaluate_constant(state->tokens[3], &argData, &argType, &argIsAbsolute);
 
 		if (argSize != 0 && !argIsAbsolute)
 		{
-			return add_compile_error(back, srcFile, srcLine, error_error, "Operation requires absolute type");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Operation requires absolute type");
+			return;
 		}
 	}
 
-	PUT_BYTE(out, cmd);
-	PUT_STRING(out, dstVar);
-	PUT_STRING(out, srcVar);
+	PUT_BYTE(state->out, state->cmd);
+	PUT_STRING(state->out, dstVar);
+	PUT_STRING(state->out, srcVar);
 
 	if (argSize == 0)
 	{
-		const char *srcVar2 = tokens[3];
-		PUT_BYTE(out, lb_value);
-		PUT_STRING(out, srcVar2);
+		const char *srcVar2 = state->tokens[3];
+		PUT_BYTE(state->out, lb_value);
+		PUT_STRING(state->out, srcVar2);
 	}
 	else
 	{
-		PUT_BYTE(out, argType);
+		PUT_BYTE(state->out, argType);
 
 		byte_t type;
 		get_type_properties(argType, &type);
 		switch (type)
 		{
 		case lb_byte:
-			PUT_CHAR(out, argData.cvalue);
+			PUT_CHAR(state->out, argData.cvalue);
 			break;
 		case lb_word:
-			PUT_SHORT(out, argData.svalue);
+			PUT_SHORT(state->out, argData.svalue);
 			break;
 		case lb_dword:
-			PUT_INT(out, argData.ivalue);
+			PUT_INT(state->out, argData.ivalue);
 			break;
 		case lb_qword:
-			PUT_LONG(out, argData.lvalue);
+			PUT_LONG(state->out, argData.lvalue);
 			break;
 		case lb_real4:
-			PUT_FLOAT(out, argData.fvalue);
+			PUT_FLOAT(state->out, argData.fvalue);
 			break;
 		case lb_real8:
-			PUT_DOUBLE(out, argData.dvalue);
+			PUT_DOUBLE(state->out, argData.dvalue);
 			break;
 		}
 	}
 
-	if (tokenCount > 4)
-		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following operation");
-
-	return back;
+	if (state->tokencount > 4)
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments following operation");
 }
 
-compile_error_t *handle_unary_math_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_unary_math_cmd(compile_state_t *state)
 {
-	if (tokenCount < 3)
+	if (state->tokencount < 3)
 	{
-		switch (tokenCount)
+		switch (state->tokencount)
 		{
 		case 1:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected destination variable name");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected destination variable name");
 			break;
 		case 2:
-			back = add_compile_error(back, srcFile, srcLine, error_error, "Expected source variable name");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected source variable name");
 			break;
 		}
-		return back;
+		return;
 	}
 
-	const char *dstVar = tokens[1];
-	const char *srcVar = tokens[2];
+	const char *dstVar = state->tokens[1];
+	const char *srcVar = state->tokens[2];
 
-	PUT_BYTE(out, cmd);
-	PUT_STRING(out, dstVar);
-	PUT_STRING(out, srcVar);
+	PUT_BYTE(state->out, state->cmd);
+	PUT_STRING(state->out, dstVar);
+	PUT_STRING(state->out, srcVar);
 
-	if (tokenCount > 3)
-		back = add_compile_error(back, srcFile, srcLine, error_warning, "Unecessary arguments following unary operation");
-
-	return back;
+	if (state->tokencount > 3)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments following unary operation");
+		return;
+	}
 }
 
-compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCount, buffer_t *out, const char *srcFile, int srcLine, compile_error_t *back)
+void handle_if_style_cmd(compile_state_t *state)
 {
-	if (tokenCount < 2)
-		return add_compile_error(back, srcFile, srcLine, error_error, "Expected variable name");
+	if (state->tokencount < 2)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected variable name");
+		return;
+	}
 
 	buffer_t *temp = NEW_BUFFER(32);
 	byte_t count = lb_one;
@@ -2239,17 +2399,18 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 	data_t lhsData;
 	byte_t lhsType;
 	int lhsIsAbsolute;
-	size_t lhsSize = evaluate_constant(tokens[1], &lhsData, &lhsType, &lhsIsAbsolute);
+	size_t lhsSize = evaluate_constant(state->tokens[1], &lhsData, &lhsType, &lhsIsAbsolute);
 
 	if (lhsSize == 0)
 	{
 		PUT_BYTE(temp, lb_value);
-		PUT_STRING(temp, tokens[1]);
+		PUT_STRING(temp, state->tokens[1]);
 	}
 	else if (!lhsIsAbsolute)
 	{
 		FREE_BUFFER(temp);
-		return add_compile_error(back, srcFile, srcLine, error_error, "Compare operation requires absolute type");
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Compare operation requires absolute type");
+		return;
 	}
 	else
 	{
@@ -2271,37 +2432,40 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 		}
 	}
 
-	if (tokenCount > 2)
+	if (state->tokencount > 2)
 	{
 		count = lb_two;
-		byte_t comparatorByte = get_comparator_byte(tokens[2]);
+		byte_t comparatorByte = get_comparator_byte(state->tokens[2]);
 		if (comparatorByte == 0)
 		{
 			FREE_BUFFER(temp);
-			return add_compile_error(back, srcFile, srcLine, error_error, "Unexpected token \"%s\", expected comparator", tokens[2]);
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected comparator", state->tokens[2]);
+			return;
 		}
 		PUT_BYTE(temp, comparatorByte);
 
-		if (tokenCount < 4)
+		if (state->tokencount < 4)
 		{
 			FREE_BUFFER(temp);
-			return add_compile_error(back, srcFile, srcLine, error_error, "Expected compare argument");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected compare argument");
+			return;
 		}
 
 		data_t rhsData;
 		byte_t rhsType;
 		int rhsIsAbsolute;
-		size_t rhsSize = evaluate_constant(tokens[3], &rhsData, &rhsType, &rhsIsAbsolute);
+		size_t rhsSize = evaluate_constant(state->tokens[3], &rhsData, &rhsType, &rhsIsAbsolute);
 
 		if (rhsSize == 0)
 		{
 			PUT_BYTE(temp, lb_value);
-			PUT_STRING(temp, tokens[3]);
+			PUT_STRING(temp, state->tokens[3]);
 		}
 		else if (!rhsIsAbsolute)
 		{
 			FREE_BUFFER(temp);
-			return add_compile_error(back, srcFile, srcLine, error_error, "Compare operation requires absolute type");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Compare operation requires absolute type");
+			return;
 		}
 		else
 		{
@@ -2324,11 +2488,9 @@ compile_error_t *handle_if_style_cmd(byte_t cmd, char **tokens, size_t tokenCoun
 		}
 	}
 
-	PUT_BYTE(out, cmd);
-	PUT_BYTE(out, count);
-	PUT_BUF(out, temp);
-	PUT_LONG(out, -1);
+	PUT_BYTE(state->out, state->cmd);
+	PUT_BYTE(state->out, count);
+	PUT_BUF(state->out, temp);
+	PUT_LONG(state->out, -1);
 	FREE_BUFFER(temp);
-
-	return back;
 }

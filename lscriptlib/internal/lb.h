@@ -8,7 +8,8 @@ enum
 
 	lb_class = 0x01,
 	lb_extends,
-	lb_package,
+	lb_package,			// Not used in bytecode
+	lb_using,			// Not used in bytecode
 
 	lb_function = 0x10,
 	lb_static,

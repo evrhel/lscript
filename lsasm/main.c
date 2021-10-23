@@ -24,6 +24,9 @@ static input_file_t *add_source_files_in_directory(const char *directory, input_
 
 int main(int argc, char *argv[])
 {
+	compiler_options_t options;
+	memset(&options, 0, sizeof(options));
+
 	input_file_t *files = NULL;
 	const char *inputDirectory = NULL;
 	const char *outputDirectory = ".";
@@ -79,10 +82,37 @@ int main(int argc, char *argv[])
 				return RETURN_INVALID_ARGUMENT;
 			}
 			inputDirectory = argv[i];
+
+			for (int j = 0; j < LSCU_MAX_CLASSPATHS; j++)
+			{
+				if (!options.classpaths[j][0])
+				{
+					strcpy_s(options.classpaths[j], sizeof(options.classpaths[j]), inputDirectory);
+					break;
+				}
+			}
 		}
 		else if (equals_ignore_case(argv[i], "-r"))
 		{
 			inputDirRec = 1;
+		}
+		else if (equals_ignore_case(argv[i], "-cp"))
+		{
+			i++;
+			if (i == argc)
+			{
+				display_help();
+				return RETURN_INVALID_ARGUMENT;
+			}
+
+			for (int j = 0; j < LSCU_MAX_CLASSPATHS; j++)
+			{
+				if (!options.classpaths[j][0])
+				{
+					strcpy_s(options.classpaths[j], sizeof(options.classpaths[j]), argv[i]);
+					break;
+				}
+			}
 		}
 		else if (equals_ignore_case(argv[i], "-s"))
 		{
@@ -158,15 +188,13 @@ int main(int argc, char *argv[])
 	{
 		printf("[BEGIN COMPILE]\n");
 
-		compiler_options_t options = {
-			files,
-			outputDirectory,
-			version,
-			compileDebug,
-			alignment,
-			(msg_func_t)puts,
-			&linkFiles
-		};
+		options.inFiles = files;
+		options.outDirectory = outputDirectory;
+		options.version = version;
+		options.debug = compileDebug;
+		options.alignment = alignment;
+		options.messenger = (msg_func_t)puts;
+		options.outputFiles = &linkFiles;
 
 		errors = compile(&options);
 		free_file_list(files);
