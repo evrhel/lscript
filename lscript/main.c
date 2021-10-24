@@ -22,6 +22,8 @@ int main(int argc, char *argv[])
 		return 0xc0;
 	}
 
+	ls_init();
+
 	vm = ls_create_and_start_vm(argc - 1, argv + 1, &hThreadHandle, &dThreadID, lsAPILib, NULL);
 	if (!vm)
 	{
@@ -30,6 +32,8 @@ int main(int argc, char *argv[])
 	}
 
 	ls_destroy_vm(INFINITE);
+
+	ls_done();
 
 	return 0;
 }

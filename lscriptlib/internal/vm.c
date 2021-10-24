@@ -733,12 +733,15 @@ void env_free_snapshot(env_snapshot_t *ss)
 	if (ss)
 	{
 		if (ss->env.saved.rsp)
+		{
 			FREE(ss->env.saved.stack);
+			ss->env.saved.stack = NULL;
+		}
 		FREE(ss);
 	}
 }
 
-int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags)
+int env_resolve_variable(env_t *env, char *name, data_t **data, flags_t *flags)
 {
 	map_node_t *mapNode;
 	char *beg = strchr(name, '.');
@@ -759,14 +762,41 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 		}
 		else
 		{
-			class_t *clazz = vm_load_class(env->vm, name);
-			*beg = '.';
-			beg++;
+			class_t *clazz = NULL;
+
+			char *start = name;
+	
+			size_t strsize;
+			char classBuild[MAX_PATH];
+			char *classBuildCursor = classBuild;
+	
+			do
+			{
+				*beg = 0;
+				strsize = strlen(start);
+				strcpy_s(classBuildCursor, sizeof(classBuild) - 1 - (classBuildCursor - classBuild), start);
+				classBuildCursor += strsize;
+				*beg = '.';
+
+				if (clazz = vm_load_class(env->vm, classBuild)) break;
+	
+				*classBuildCursor = '.';
+				classBuildCursor++;
+				
+				beg++;
+				
+				start = beg;
+				beg = strchr(beg, '.');
+			} while (beg);
+
 			if (!clazz)
 			{
 				env_raise_exception(env, exception_bad_variable_name, name);
 				return 0;
 			}
+
+			beg++;
+
 			value_t *fieldVal;
 
 			char *nbeg = strchr(beg, '.');
@@ -943,7 +973,7 @@ int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *f
 	return 1;
 }
 
-int env_resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, flags_t *flags)
+int env_resolve_object_field(env_t *env, object_t *object, char *name, data_t **data, flags_t *flags)
 {
 	if (!object)
 	{
@@ -1096,7 +1126,7 @@ int env_resolve_object_field(env_t *env, object_t *object, const char *name, dat
 	}
 }
 
-int env_resolve_function_name(env_t *env, const char *name, function_t **function)
+int env_resolve_function_name(env_t *env, char *name, function_t **function)
 {
 	if (!name)
 	{
@@ -1167,15 +1197,19 @@ int env_resolve_function_name(env_t *env, const char *name, function_t **functio
 	return 0;
 }
 
-int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t **function, data_t **data, flags_t *flags)
+int env_resolve_dynamic_function_name(env_t *env, char *name, function_t **function, data_t **data, flags_t *flags)
 {
+	char *funend = strchr(name, '(');
+	*funend = 0;
 	char *last = strrchr(name, '.');
 	*last = 0;
 	if (!env_resolve_variable(env, name, data, flags))
 	{
+		*funend = '(';
 		*last = '.';
 		return 0;
 	}
+	*funend = '(';
 	*last = '.';
 
 	byte_t type = TYPEOF(*flags);
@@ -1289,6 +1323,8 @@ void env_free(env_t *env)
 		printf("Freeing execution environment %p\n", (void *)env);
 
 	FREE(env->stack);
+	env->stack = NULL;
+
 	list_iterator_t *lit = list_create_iterator(env->variables);
 	lit = list_iterator_next(lit);
 	while (lit)
@@ -2555,7 +2591,7 @@ int try_link_function(vm_t *vm, function_t *func)
 {
 #if defined(_WIN32)
 	char decName[512];
-	sprintf_s(decName, sizeof(decName), "%s_%s", func->parentClass->name, func->name);
+	sprintf_s(decName, sizeof(decName), "%s_%s", func->parentClass->safeName, func->name);
 	for (size_t i = 0; i < vm->libraryCount; i++)
 	{
 		HMODULE hModule = vm->hLibraries[i];
@@ -2582,7 +2618,7 @@ void vm_start_routine(start_args_t *args)
 	while (mit->node)
 	{
 		clazz = (class_t *)mit->value;
-		func = class_get_function(clazz, "main([LString;");
+		func = class_get_function(clazz, "main([Llscript.lang.String;");
 		if (func)
 			break;
 		mit = map_iterator_next(mit);

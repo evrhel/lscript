@@ -78,6 +78,9 @@ extern "C"
 		ls_read_char_func readCharStdinFunc;
 	} ls_stdio_t;
 
+	LEXPORT void LCALL ls_init();
+	LEXPORT void LCALL ls_done();
+
 	LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib, const ls_stdio_t *stdio);
 	LEXPORT lint LCALL ls_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID);
 	LEXPORT LVM LCALL ls_create_and_start_vm(int argc, const char *const argv[], void **threadHandle, unsigned long *threadID, void *lsAPILib, const ls_stdio_t *stdio);

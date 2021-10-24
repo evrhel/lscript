@@ -42,6 +42,7 @@ struct function_s
 struct class_s
 {
 	const char *name;		// The class's name
+	char *safeName;			// The class's safe name ('.' -> '_')
 	class_t *super;			// The class's superclass
 	class_flags_t flags;	// The class's flags
 	byte_t *data;			// The raw data of the class
@@ -72,12 +73,14 @@ class_t *class_load(byte_t *binary, size_t length, int loadSuperclasses, classlo
 /*
 Sets a class' superclass. The class must not already have a superclass.
 
+clazz and superclass must point to different classes. If they are the same, behavior is undefined.
+
 @param clazz The class that will be given a superclass.
 @param superclass The superclass to set.
 
 @return nonzero on success.
 */
-int set_superclass(class_t *clazz, class_t *superclass);
+int set_superclass(class_t *__restrict clazz, class_t *__restrict superclass);
 
 /*
 Returns a member function of a class by its qualified name.
@@ -124,6 +127,6 @@ Frees a class loaded with class_load.
 @param clazz The class to free.
 @param freedata Whether to free the binary data associated with the class.
 */
-void class_free(class_t *clazz, int freedata);
+void class_free(class_t *__restrict clazz, int freedata);
 
 #endif

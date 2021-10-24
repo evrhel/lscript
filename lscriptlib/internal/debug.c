@@ -59,7 +59,12 @@ void free_debug(debug_t *debug)
 {
 	if (debug)
 	{
-		free(debug->buf);
+		if (debug->buf)
+		{
+			free(debug->buf);
+			debug->buf = NULL;
+		}
+
 		free(debug);
 	}
 }

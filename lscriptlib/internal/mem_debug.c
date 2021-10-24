@@ -1,10 +1,11 @@
 #include "mem_debug.h"
-#if defined(_DEBUG) && defined(ENABLE_DEBUG)
+#if defined(_DEBUG) && defined(ENABLE_DEBUG) || defined(FORCE_DEBUG)
 
 #include "collection.h"
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <assert.h>
 
 #include <Windows.h>
 
@@ -35,6 +36,8 @@ static LONG WINAPI exception_filter(EXCEPTION_POINTERS *);
 
 int __dbegin_debug()
 {
+	assert(!g_blockMap && !g_allocLocs && !g_outputFile);
+
 	fopen_s(&g_outputFile, "memdebug.txt", "w");
 	if (!g_outputFile)
 		return 0;
@@ -51,6 +54,8 @@ int __dbegin_debug()
 
 void *__dmalloc(size_t size, const char *filename, int line)
 {
+	assert(g_blockMap && g_allocLocs && g_outputFile);
+
 	lock = 1;
 	size_t totalSize = size + sizeof(block_info_t) + (2 * PADDING_SIZE);
 
@@ -91,6 +96,8 @@ void *__dmalloc(size_t size, const char *filename, int line)
 
 void *__dcalloc(size_t count, size_t size, const char *filename, int line)
 {
+	assert(g_blockMap && g_allocLocs && g_outputFile);
+
 	void *block = __dmalloc(count * size, filename, line);
 	if (!block)
 		return NULL;
@@ -100,8 +107,11 @@ void *__dcalloc(size_t count, size_t size, const char *filename, int line)
 
 void __dfree(void *block, const char *filename, int line)
 {
+	assert(g_blockMap && g_allocLocs && g_outputFile);
+
 	if (!block)
 		return;
+
 	lock = 1;
 	if (g_blockMap && g_allocLocs)
 	{
@@ -140,18 +150,24 @@ void __dfree(void *block, const char *filename, int line)
 
 void *__dmemset(void *dst, int val, size_t size, const char *filename, int line)
 {
+	assert(g_blockMap && g_allocLocs && g_outputFile);
+
 	log_event(MESSAGE_INFO, "memset 0x%p to %d size %d at %s.%d", dst, val, (int)size, filename, line);
 	return memset(dst, val, size);
 }
 
 void *__dmemcpy(void *dst, void *src, size_t size, const char *filename, int line)
 {
+	assert(g_blockMap && g_allocLocs && g_outputFile);
+
 	log_event(MESSAGE_INFO, "memcpy 0x%p to 0x%p size %d at %s.%d", src, dst, (int)size, filename, line);
 	return memcpy(dst, src, size);
 }
 
 int __dend_debug()
 {
+	assert(g_blockMap && g_allocLocs && g_outputFile);
+
 	char buf[100];
 
 	if (g_blockMap && g_allocLocs)

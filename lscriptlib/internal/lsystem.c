@@ -2,12 +2,12 @@
 
 #include "vm.h"
 
-LNIFUNC void LNICALL System_exit(LEnv venv, lclass vclazz, lint code)
+LNIFUNC void LNICALL lscript_lang_System_exit(LEnv venv, lclass vclazz, lint code)
 {
 	exit(code);
 }
 
-LNIFUNC void LNICALL System_loadLibrary(LEnv venv, lclass vclazz, lobject lslibname)
+LNIFUNC void LNICALL lscript_lang_System_loadLibrary(LEnv venv, lclass vclazz, lobject lslibname)
 {
 	env_t *env = (env_t *)venv;
 	vm_t *vm = env->vm;
@@ -34,17 +34,17 @@ LNIFUNC void LNICALL System_loadLibrary(LEnv venv, lclass vclazz, lobject lslibn
 	free(buf);
 }
 
-LNIFUNC lobject LNICALL System_getProperty(LEnv venv, lclass vclazz, lobject lspropname)
+LNIFUNC lobject LNICALL lscript_lang_System_getProperty(LEnv venv, lclass vclazz, lobject lspropname)
 {
 	return NULL;
 }
 
-LNIFUNC lobject LNICALL System_setProperty(LEnv venv, lclass vclazz, lobject lspropname, lobject lspropvalue)
+LNIFUNC lobject LNICALL lscript_lang_System_setProperty(LEnv venv, lclass vclazz, lobject lspropname, lobject lspropvalue)
 {
 	return NULL;
 }
 
-LNIFUNC lobject LNICALL System_arraycopy(LEnv venv, lclass vclazz, lobject dst, luint dstOff, lobject src, luint srcOff, luint len)
+LNIFUNC lobject LNICALL lscript_lang_System_arraycopy(LEnv venv, lclass vclazz, lobject dst, luint dstOff, lobject src, luint srcOff, luint len)
 {
 	env_t *env = (env_t *)venv;
 	class_t *clazz = (class_t *)vclazz;

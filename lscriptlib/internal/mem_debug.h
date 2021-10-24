@@ -4,7 +4,10 @@
 #include <stdlib.h>
 #include <memory.h>
 
-#if defined(_DEBUG) && defined(ENABLE_DEBUG)
+#define FORCE_DEBUG
+#define NO_OUTPUT
+
+#if defined(_DEBUG) && defined(ENABLE_DEBUG) || defined(FORCE_DEBUG)
 #define BEGIN_DEBUG() __dbegin_debug()
 #define MALLOC(size) __dmalloc(size, strrchr(__FILE__, '\\') + 1, __LINE__)
 #define CALLOC(count, size) __dcalloc(count, size, strrchr(__FILE__, '\\') + 1, __LINE__)

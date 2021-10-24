@@ -1890,6 +1890,8 @@ void handle_set_cmd(compile_state_t *state)
 				return;
 			}
 
+			*constructorSig = 0; // Remove ')'
+
 			*qfnCursor = 0;
 
 			buffer_t *argbuf = NEW_BUFFER(16);
@@ -1968,7 +1970,7 @@ void handle_set_cmd(compile_state_t *state)
 			PUT_STRING(state->out, varname);
 			PUT_BYTE(state->out, lb_new);
 			PUT_STRING(state->out, fullname);
-			PUT_STRING(state->out, constructorSig);
+			PUT_STRING(state->out, state->tokens[4]);
 			PUT_BUF(state->out, argbuf);
 
 			free_derived_args(sig);
@@ -2254,25 +2256,36 @@ void handle_call_cmd(compile_state_t *state)
 	char *functionName = state->tokens[1];
 	char *qfnCursor = qualifiedfuncname;
 
-	if (state->cmd == lb_static_call)
-	{
-		char *dot = strchr(functionName, '.');
-		if (dot)
-		{
-			*dot = 0;
-			if (!lscu_resolve_class(state->lscuctx, functionName, temp, sizeof(temp)))
-			{
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", functionName);
-				return;
-			}
-			*dot = '.';
+	//if (state->cmd == lb_static_call)
+	//{
 
+	// If the first part of the function call is a class, replace with qualified name
+	char *dot = strchr(functionName, '.');
+	if (dot)
+	{
+		*dot = 0;
+		if (lscu_resolve_class(state->lscuctx, functionName, temp, sizeof(temp)))
+		{
+			// Replace class name with qualified name
+			*dot = '.';
 			strcpy_s(unqualbuf, sizeof(unqualbuf), temp);
 			strcat_s(unqualbuf, sizeof(unqualbuf), dot);
+			//state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", functionName);
+			//return;
 		}
-		else strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
+		else
+		{
+			// Otherwise just leave the call as-is
+			*dot = '.';
+			strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
+		}
+
+		//strcpy_s(unqualbuf, sizeof(unqualbuf), temp);
+		//strcat_s(unqualbuf, sizeof(unqualbuf), dot);
 	}
 	else strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
+	//}
+	//else strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
 
 	functionName = unqualbuf;
 

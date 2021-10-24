@@ -331,7 +331,7 @@ raised in the environment.
 
 @return 1 on success and 0 otherwise.
 */
-int env_resolve_variable(env_t *env, const char *name, data_t **data, flags_t *flags);
+int env_resolve_variable(env_t *env, char *name, data_t **data, flags_t *flags);
 
 /*
 Resolves an object field in an environment. If the find fails, an exception will be
@@ -344,7 +344,7 @@ raised in the environment.
 
 @return 1 on success and 0 otherwise.
 */
-int env_resolve_object_field(env_t *env, object_t *object, const char *name, data_t **data, flags_t *flags);
+int env_resolve_object_field(env_t *env, object_t *object, char *name, data_t **data, flags_t *flags);
 
 /*
 Resolves a function name in the current scope. If the resolution fails, an exception will
@@ -357,7 +357,7 @@ the actual function name, delimited by '.'s.
 
 @return 1 on success and 0 otherwise.
 */
-int env_resolve_function_name(env_t *env, const char *name, function_t **function);
+int env_resolve_function_name(env_t *env, char *name, function_t **function);
 
 /*
 Resolves a dynamic function name in the current scope, fetching the object to call the function
@@ -371,7 +371,7 @@ as it resolves a dynamic (non-static) function.
 @param data A pointer to a pointer which will contain the object to call the function on on success.
 @param flags A pointer to a flags_t which will contain the object flags on success.
 */
-int env_resolve_dynamic_function_name(env_t *env, const char *name, function_t **function, data_t **data, flags_t *flags);
+int env_resolve_dynamic_function_name(env_t *env, char *name, function_t **function, data_t **data, flags_t *flags);
 
 /*
 Runs a function declared static in an execution environment.

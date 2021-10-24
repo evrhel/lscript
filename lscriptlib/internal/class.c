@@ -48,7 +48,21 @@ class_t *class_load(byte_t *binary, size_t length, int loadSuperclasses, classlo
 	curr++;
 
 	result->name = curr;
-	curr += strlen(result->name) + 1;
+	size_t len;
+	curr += (len = (strlen(result->name) + 1));
+	result->safeName = (char *)MALLOC(len);
+	if (!result->safeName)
+	{
+		FREE(result);
+		return NULL;
+	}
+	strcpy_s(result->safeName, len, result->name);
+	char *cursor = result->safeName;
+	while (*cursor)
+	{
+		if (*cursor == '.') *cursor = '_';
+		cursor++;
+	}
 
 	result->debug = NULL;
 
@@ -124,7 +138,7 @@ class_t *class_load(byte_t *binary, size_t length, int loadSuperclasses, classlo
 	return result;
 }
 
-int set_superclass(class_t *clazz, class_t *superclass)
+int set_superclass(class_t *__restrict clazz, class_t *__restrict superclass)
 {
 	if (clazz->super)
 		return 0;
@@ -154,7 +168,7 @@ int set_superclass(class_t *clazz, class_t *superclass)
 	return 1;
 }
 
-void class_free(class_t *clazz, int freedata)
+void class_free(class_t *__restrict clazz, int freedata)
 {
 	map_iterator_t *it = map_create_iterator(clazz->functions);
 
@@ -164,11 +178,15 @@ void class_free(class_t *clazz, int freedata)
 		func->references--;
 		if (func->references == 0)
 		{
+			printf("Free: %s.%s\n", func->parentClass->name, func->qualifiedName);
+
 			FREE(func->qualifiedName);
+			func->qualifiedName = NULL;
 
 			map_t *argTypes = func->argTypes;
 
 			FREE(func->args);
+			func->args = NULL;
 
 			map_iterator_t *ait = map_create_iterator(argTypes);
 			while (ait->node)
@@ -181,7 +199,11 @@ void class_free(class_t *clazz, int freedata)
 			map_free(argTypes, 1);
 
 			FREE(it->key);
+			it->key = NULL;
+
+			
 			FREE(func);
+			it->value = NULL;
 		}
 
 		it = map_iterator_next(it);
@@ -196,7 +218,16 @@ void class_free(class_t *clazz, int freedata)
 		free_debug(clazz->debug);
 
 	if (freedata)
+	{
 		FREE((byte_t *)clazz->data);
+		clazz->data = NULL;
+	}
+
+	if (clazz->safeName)
+	{
+		FREE(clazz->safeName);
+		clazz->safeName = NULL;
+	}
 
 	FREE(clazz);
 }
@@ -455,6 +486,8 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				list_iterator_free(it);
 
 				map_insert(clazz->functions, qualifiedName, func);
+
+				printf("Loaded: %s.%s\n", func->parentClass->name, func->qualifiedName);
 
 				if (argorder->next)
 				{

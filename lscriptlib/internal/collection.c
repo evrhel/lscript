@@ -47,7 +47,10 @@ void list_remove(list_t *node, int freeData)
         nodeNext->prev = nodePrev;
 
     if (freeData)
+    {
         FREE(node->data);
+        node->data = NULL;
+    }
     FREE(node);
 }
 
@@ -123,7 +126,10 @@ void list_free(list_t *list, int freeData)
     {
         next = list->next;
         if (freeData)
+        {
             FREE(list->data);
+            list->data = NULL;
+        }
         FREE(list);
         list = next;
     }
@@ -339,7 +345,10 @@ void map_free(map_t *map, int freeData)
         while (node)
         {
             if (freeData)
+            {
                 FREE(node->value);
+                node->value = NULL;
+            }
 
             prev = node;
             node = node->next;
@@ -348,6 +357,8 @@ void map_free(map_t *map, int freeData)
         map->table[i] = NULL;
     }
     FREE(map->table);
+    map->table = NULL;
+
     FREE(map);
 }
 

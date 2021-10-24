@@ -52,7 +52,7 @@ void cleanup_processes()
 	}
 }
 
-LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject processName, lobject commandLine, lobject workingDir)
+LNIFUNC lulong LNICALL lscript_lang_Process_startProcess(LEnv venv, lclass vclazz, lobject processName, lobject commandLine, lobject workingDir)
 {
 	env_t *env = (env_t *)venv;
 	class_t *clazz = (class_t *)vclazz;
@@ -121,18 +121,18 @@ LNIFUNC lulong LNICALL Process_startProcess(LEnv venv, lclass vclazz, lobject pr
 	return (lulong)processReturn;
 }
 
-LNIFUNC luint LNICALL Process_getPID(LEnv venv, lclass vclazz, lulong nativeHandle)
+LNIFUNC luint LNICALL lscript_lang_Process_getPID(LEnv venv, lclass vclazz, lulong nativeHandle)
 {
 	process_t *proc = (process_t *)nativeHandle;
 	return (int)proc->pi->dwProcessId;
 }
 
-LNIFUNC luint LNICALL Process_wait(LEnv venv, lclass vclazz, lulong nativeHandle, luint length)
+LNIFUNC luint LNICALL lscript_lang_Process_wait(LEnv venv, lclass vclazz, lulong nativeHandle, luint length)
 {
 	return WaitForSingleObject(((process_t *)nativeHandle)->pi->hProcess, length);
 }
 
-LNIFUNC lbool LNICALL Process_isRunning(LEnv venv, lclass vclazz, lulong nativeHandle)
+LNIFUNC lbool LNICALL lscript_lang_Process_isRunning(LEnv venv, lclass vclazz, lulong nativeHandle)
 {
 	process_t *process = (process_t *)nativeHandle;
 
@@ -141,21 +141,21 @@ LNIFUNC lbool LNICALL Process_isRunning(LEnv venv, lclass vclazz, lulong nativeH
 	return exitCode == STILL_ACTIVE;
 }
 
-LNIFUNC lbool LNICALL Process_stop(LEnv venv, lclass vclazz, lulong nativeHandle)
+LNIFUNC lbool LNICALL lscript_lang_Process_stop(LEnv venv, lclass vclazz, lulong nativeHandle)
 {
 	process_t *process = (process_t *)nativeHandle;
 	WaitForSingleObject(process->pi->hProcess, INFINITE);
 	return TRUE;
 }
 
-LNIFUNC lbool LNICALL Process_forceStop(LEnv venv, lclass vclazz, lulong nativeHandle)
+LNIFUNC lbool LNICALL lscript_lang_Process_forceStop(LEnv venv, lclass vclazz, lulong nativeHandle)
 {
 	process_t *process = (process_t *)nativeHandle;
 	lbool result = TerminateProcess(process->pi->hProcess, -1);
 	return result;
 }
 
-LNIFUNC void LNICALL Process_freeProcessData(LEnv venv, lclass vclazz, lulong nativeHandle)
+LNIFUNC void LNICALL lscript_lang_Process_freeProcessData(LEnv venv, lclass vclazz, lulong nativeHandle)
 {
 	process_t *curr = g_processes;
 	process_t *next;

@@ -5,7 +5,7 @@
 #include "vm.h"
 #include "mem_debug.h"
 
-LNIFUNC lulong LNICALL StdFileHandle_fopen(LEnv venv, lclass vclazz, lobject filepath, lint mode)
+LNIFUNC lulong LNICALL lscript_io_StdFileHandle_fopen(LEnv venv, lclass vclazz, lobject filepath, lint mode)
 {
 	env_t *env = (env_t *)venv;
 	if (!filepath)
@@ -43,17 +43,17 @@ LNIFUNC lulong LNICALL StdFileHandle_fopen(LEnv venv, lclass vclazz, lobject fil
 	return (lulong)handle;
 }
 
-LNIFUNC void LNICALL StdFileHandle_fclose(LEnv venv, lclass vclazz, lulong handle)
+LNIFUNC void LNICALL lscript_io_StdFileHandle_fclose(LEnv venv, lclass vclazz, lulong handle)
 {
 	fclose((FILE *)handle);
 }
 
-LNIFUNC void LNICALL StdFileHandle_fputc(LEnv venv, lclass vclazz, lulong handle, lchar c)
+LNIFUNC void LNICALL lscript_io_StdFileHandle_fputc(LEnv venv, lclass vclazz, lulong handle, lchar c)
 {
 	fputc(c, (FILE *)handle);
 }
 
-LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv venv, lclass vclazz, lulong handle, lchararray data, luint off, luint length)
+LNIFUNC luint LNICALL lscript_io_StdFileHandle_fwrite(LEnv venv, lclass vclazz, lulong handle, lchararray data, luint off, luint length)
 {
 	luint temp = off + length;
 	env_t *env = (env_t *)venv;
@@ -84,7 +84,7 @@ LNIFUNC luint LNICALL StdFileHandle_fwrite(LEnv venv, lclass vclazz, lulong hand
 	return result;
 }
 
-LNIFUNC luint LNICALL StdFileHandle_fread(LEnv venv, lclass vclazz, lulong handle, lchararray buf, luint off, luint length)
+LNIFUNC luint LNICALL lscript_io_StdFileHandle_fread(LEnv venv, lclass vclazz, lulong handle, lchararray buf, luint off, luint length)
 {
 	env_t *env = (env_t *)venv;
 	if (!buf)
@@ -125,7 +125,7 @@ LNIFUNC luint LNICALL StdFileHandle_fread(LEnv venv, lclass vclazz, lulong handl
 	return result;
 }
 
-LNIFUNC lchararray LNICALL StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong handle)
+LNIFUNC lchararray LNICALL lscript_io_StdFileHandle_freadline(LEnv venv, lclass vclazz, lulong handle)
 {
 	env_t *env = (env_t *)venv;
 	char buf[256];

@@ -35,6 +35,16 @@ static inline char *copy_string(const char *in, size_t extra)
 
 static vm_t *gCurrentVM = NULL;
 
+LEXPORT void LCALL ls_init()
+{
+	BEGIN_DEBUG();
+}
+
+LEXPORT void LCALL ls_done()
+{
+	END_DEBUG();
+}
+
 LEXPORT LVM LCALL ls_create_vm(int argc, const char *const argv[], void *lsAPILib, const ls_stdio_t *stdio)
 {
 	vm_args_t args;

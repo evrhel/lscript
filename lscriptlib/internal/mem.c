@@ -134,7 +134,8 @@ void manager_destroy_strong_reference(manager_t *manager, reference_t *reference
 	{
 		if (curr->data == reference)
 		{
-			FREE(reference);
+			FREE(curr->data);
+			curr->data = NULL;
 			list_remove(curr, 0);
 			return;
 		}
