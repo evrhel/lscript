@@ -1270,7 +1270,7 @@ object_t *env_new_string(env_t *env, const char *cstring)
 	if (!arr)
 		return NULL;
 
-	MEMCPY(&arr->data, cstring, len);
+	memcpy(&arr->data, cstring, len);
 
 	object_t *stringObj = manager_alloc_object(env->vm->manager, stringClass);
 	if (!stringObj)
@@ -1484,7 +1484,7 @@ class_t *class_load_to_vm(vm_t *vm, class_t *clazz)
 
 	size_t classnameSize = strlen(clazz->name);
 	array_t *classnameCharArray = manager_alloc_array(vm->manager, lb_chararray, classnameSize);
-	MEMCPY(&classnameCharArray->data, clazz->name, classnameSize);
+	memcpy(&classnameCharArray->data, clazz->name, classnameSize); // normal memcpy - arrays on manager heap
 	object_set_object(classnameObject, "chars", classnameCharArray);
 
 	object_set_object(classObject, "name", classnameObject);
@@ -1612,7 +1612,7 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
-			MEMCPY(data, env->rip, sizeof(byte_t));
+			memcpy(data, env->rip, sizeof(byte_t));
 			env->rip += sizeof(byte_t);
 			break;
 		case lb_setw:
@@ -1621,7 +1621,7 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
-			MEMCPY(data, env->rip, sizeof(word_t));
+			memcpy(data, env->rip, sizeof(word_t));
 			env->rip += sizeof(word_t);
 			break;
 		case lb_setd:
@@ -1630,7 +1630,7 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
-			MEMCPY(data, env->rip, sizeof(dword_t));
+			memcpy(data, env->rip, sizeof(dword_t));
 			env->rip += sizeof(dword_t);
 			break;
 		case lb_setq:
@@ -1639,7 +1639,7 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
-			MEMCPY(data, env->rip, sizeof(qword_t));
+			memcpy(data, env->rip, sizeof(qword_t));
 			env->rip += sizeof(qword_t);
 			break;
 		case lb_setr4:
@@ -1648,7 +1648,7 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
-			MEMCPY(data, env->rip, sizeof(real4_t));
+			memcpy(data, env->rip, sizeof(real4_t));
 			env->rip += sizeof(real4_t);
 			break;
 		case lb_setr8:
@@ -1657,7 +1657,7 @@ int env_run(env_t *env, void *location)
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
-			MEMCPY(data, env->rip, sizeof(real8_t));
+			memcpy(data, env->rip, sizeof(real8_t));
 			env->rip += sizeof(real8_t);
 			break;
 		case lb_seto:
@@ -1786,7 +1786,7 @@ int env_run(env_t *env, void *location)
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
-			MEMCPY(&env->vret, data, value_sizeof((value_t *)&flags));
+			memcpy(&env->vret, data, value_sizeof((value_t *)&flags));
 			goto general_ret_command_handle;
 			break;
 		case lb_ret:
@@ -2187,7 +2187,7 @@ int env_handle_static_function_callv(env_t *env, function_t *function, frame_fla
 			size = sizeof_type(type);
 			val.flags = 0;
 			value_set_type(&val, type);
-			MEMCPY(&val.ovalue, ls, size);
+			memcpy(&val.ovalue, ls, size);
 			ls += size;
 
 			if (!(loc = stack_push(env, &val)))
@@ -2232,7 +2232,7 @@ int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_fl
 		value_t val;
 		val.flags = 0;
 		value_set_type(&val, type);
-		MEMCPY(&val.ovalue, ls, size);
+		memcpy(&val.ovalue, ls, size);
 		ls += size;
 
 		void *loc;
@@ -2491,7 +2491,7 @@ void *stack_push(env_t *env, value_t *value)
 	if (!mem)
 		return NULL;
 	*mem = value->flags;
-	MEMCPY(mem + 1, &value->ovalue, value_sizeof(value));
+	memcpy(mem + 1, &value->ovalue, value_sizeof(value));
 	return mem;
 }
 
@@ -2510,7 +2510,7 @@ void *stack_alloc(env_t *env, size_t words)
 static int stack_pop(env_t *env, size_t words, qword_t *dstWords)
 {
 	if (dstWords)
-		MEMCPY(dstWords, env->rsp, words * sizeof(size_t));
+		memcpy(dstWords, env->rsp, words * sizeof(size_t));
 	env->rsp -= words * sizeof(size_t);
 	return 1;
 }

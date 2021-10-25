@@ -57,7 +57,7 @@ heap_p create_heap(size_t size)
 		return NULL;
 	}
 #if defined(_DEBUG)
-	MEMSET(heap->block, 0xab, fullSize);
+	memset(heap->block, 0xab, fullSize);
 #endif
 	heap->block[0] = fullSize << 2;
 	heap->ptr = heap->block;
@@ -142,7 +142,7 @@ void *halloc(heap_p heap, size_t size)
 					heap->ptr = heap->block;
 
 #if defined(_DEBUG)
-				MEMSET(resultPtr, 0xcd, size);
+				memset(resultPtr, 0xcd, size);
 #endif
 				return resultPtr;
 			}
@@ -229,6 +229,6 @@ void coalesce_block(heap_p heap, tag_t *header)
 	*footer = *header;
 
 #if defined(_DEBUG)
-	MEMSET(header + 1, 0xab, freeSize - HEADER_SIZE - FOOTER_SIZE);
+	memset(header + 1, 0xab, freeSize - HEADER_SIZE - FOOTER_SIZE);
 #endif
 }

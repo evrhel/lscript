@@ -52,7 +52,7 @@ object_t *manager_alloc_object(manager_t *manager, class_t *clazz)
 	value->flags = 0;
 	value_set_type(value, lb_object);
 	value->ovalue = clazz;
-	MEMSET((char *)&value->ovalue + sizeof(lobject), 0, clazz->size);
+	memset((char *)&value->ovalue + sizeof(lobject), 0, clazz->size);
 	list_insert(manager->refs, value);
 	return (object_t *)value;
 }
@@ -99,7 +99,8 @@ array_t *manager_alloc_array(manager_t *manager, byte_t type, unsigned int lengt
 	value_set_type((value_t *)array, type);
 	array->length = length;
 	array->dummy = 0;
-	MEMSET(&array->data, 0, payloadSize);
+
+	memset(&array->data, 0, payloadSize);
 	list_insert(manager->refs, array);
 
 	return array;

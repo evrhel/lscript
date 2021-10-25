@@ -299,7 +299,7 @@ int parse_arguments(int argc, const char *const argv[], vm_args_t *argStruct)
 	int pathInd = 1;
 	if (argc <= 0)
 		return 0;
-	MEMSET(argStruct, 0, sizeof(vm_args_t));
+	memset(argStruct, 0, sizeof(vm_args_t));
 
 	static const char LIB_DIR[] = "lib\\";
 	char path[MAX_PATH];

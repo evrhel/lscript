@@ -172,6 +172,7 @@ void class_free(class_t *__restrict clazz, int freedata)
 {
 	map_iterator_t *it = map_create_iterator(clazz->functions);
 
+	__check_native_corruption();
 	while (it->node)
 	{	
 		function_t *func = (function_t *)it->value;
@@ -202,6 +203,7 @@ void class_free(class_t *__restrict clazz, int freedata)
 			it->key = NULL;
 
 			
+			//__dfree(func, "class.c", 205);
 			FREE(func);
 			it->value = NULL;
 		}
