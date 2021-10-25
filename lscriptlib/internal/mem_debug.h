@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <memory.h>
+#include <Windows.h>
 
 //#define FORCE_DEBUG
 
@@ -28,9 +29,9 @@ void __check_corruption();
 
 #else
 #define BEGIN_DEBUG()
-#define MALLOC(size) malloc(size)
-#define CALLOC(count, size) calloc((count), (size))
-#define FREE(block) free((void *)(block))
+#define MALLOC(size) HeapAlloc(GetProcessHeap(), 0, (size))
+#define CALLOC(count, size) ZeroMemory(MALLOC((count) * (size)), (count) * (size))
+#define FREE(block) HeapFree(GetProcessHeap(), 0, (block))
 #define MEMSET(dst, val, size) memset((dst), (val), (size))
 #define MEMCPY(dst, src, size) memcpy((dst), (src), (size))
 #define END_DEBUG()

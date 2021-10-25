@@ -172,15 +172,13 @@ void class_free(class_t *__restrict clazz, int freedata)
 {
 	map_iterator_t *it = map_create_iterator(clazz->functions);
 
-	__check_native_corruption();
+	//__check_native_corruption();
 	while (it->node)
 	{	
 		function_t *func = (function_t *)it->value;
 		func->references--;
 		if (func->references == 0)
 		{
-			printf("Free: %s.%s\n", func->parentClass->name, func->qualifiedName);
-
 			FREE(func->qualifiedName);
 			func->qualifiedName = NULL;
 
@@ -488,8 +486,6 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				list_iterator_free(it);
 
 				map_insert(clazz->functions, qualifiedName, func);
-
-				printf("Loaded: %s.%s\n", func->parentClass->name, func->qualifiedName);
 
 				if (argorder->next)
 				{
