@@ -43,7 +43,31 @@ LSCUEXPORT void lscu_destroy(LSCUCONTEXT context)
 
 LSCUEXPORT int lscu_add_classpath(LSCUCONTEXT context, const char *__restrict path)
 {
-    size_t i, len;
+    int i;
+    size_t len;
+    lscu_context_t *ctx = (lscu_context_t *)context;
+
+    if (!path) return 0;
+
+    for (i = LSCU_MAX_CLASSPATHS - 1; i >= 0; i--)
+    {
+        if (!ctx->classpaths[i])
+        {
+            len = strlen(path) + 1;
+            ctx->classpaths[i] = (char *)malloc(len);
+            if (!ctx->classpaths[i]) return 0;
+            strcpy_s(ctx->classpaths[i], len, path);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+LSCUEXPORT int lscu_add_unimportant_classpath(LSCUCONTEXT context, const char *__restrict path)
+{
+    int i;
+    size_t len;
     lscu_context_t *ctx = (lscu_context_t *)context;
 
     if (!path) return 0;
@@ -178,12 +202,12 @@ LSCUEXPORT int lscu_resolve_class(LSCUCONTEXT context, const char *__restrict cl
 
 int class_exists_on_path(lscu_context_t *__restrict ctx, const char *__restrict classname)
 {
-    size_t i, end, len;
+    int i, end, len;
     char fullpath[MAX_PATH];
 
-    for (i = 0; i < LSCU_MAX_CLASSPATHS; i++)
+    for (i = LSCU_MAX_CLASSPATHS - 1; i >= 0; i--)
     {
-        if (!ctx->classpaths[i]) break;
+        if (!ctx->classpaths[i]) continue;
 
         len = strlen(ctx->classpaths[i]);
         strcpy_s(fullpath, sizeof(fullpath), ctx->classpaths[i]);

@@ -14,6 +14,7 @@ LSCUEXPORT LSCUCONTEXT lscu_init();
 LSCUEXPORT void lscu_destroy(LSCUCONTEXT context);
 
 LSCUEXPORT int lscu_add_classpath(LSCUCONTEXT context, const char *__restrict path);
+LSCUEXPORT int lscu_add_unimportant_classpath(LSCUCONTEXT context, const char *__restrict path);
 LSCUEXPORT void lscu_remove_all_classpaths(LSCUCONTEXT context);
 
 LSCUEXPORT void lscu_set_package(LSCUCONTEXT context, const char *__restrict package);

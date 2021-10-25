@@ -300,6 +300,17 @@ compile_error_t *compile_data(data_compile_options_t *options)
 
 	cs.lscuctx = lscu_init();
 
+	static const char LIB_DIR[] = "lib\\";
+	char path[MAX_PATH];
+	ZeroMemory(path, sizeof(path));
+
+	if (!GetModuleFileNameA(NULL, path, sizeof(path)))
+		return 0;
+
+	char *libcursor = strrchr(path, '\\') + 1;
+	strcpy_s(libcursor, sizeof(path) - (libcursor - path), LIB_DIR);
+	lscu_add_unimportant_classpath(cs.lscuctx, path);
+
 	for (i = 0; i < LSCU_MAX_CLASSPATHS; i++)
 	{
 		if (!options->classpaths[i][0]) break;
