@@ -2095,57 +2095,60 @@ void handle_cast_cmd(compile_state_t *state)
 
 void handle_array_creation(compile_state_t *state)
 {
-	if (state->tokencount == 0)
+	if (state->tokencount == 2)
 	{
 		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Not enough array initialization arguments");
 		return;
 	}
-	else if (state->tokencount == 1)
+	else if (state->tokencount == 3)
 	{
 		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected array length specifier");
 		return;
 	}
 
-	byte_t type = get_primitive_type(state->tokens[0]);
+	byte_t type = get_primitive_type(state->tokens[2]);
 
 	data_t argData;
 	byte_t argType;
 	int argIsAbsolute;
-	size_t argSize = evaluate_constant(state->tokens[1], &argData, &argType, &argIsAbsolute);
+	size_t argSize = evaluate_constant(state->tokens[3], &argData, &argType, &argIsAbsolute);
 	if (argIsAbsolute)
 		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Array initialization does not support absolute type");
 	////else if (argSize == 0)
 		//return add_compile_error(back, srcFile, srcLine, error_error, "Invalid array length specifier");
-	switch (argSize)
+	PUT_BYTE(state->out, type);
+	if (argSize == 0)
 	{
-	case 0:
 		PUT_BYTE(state->out, lb_value);
-		PUT_STRING(state->out, state->tokens[1]);
-		goto post_init_array;
-		break;
-	case lb_byte:
-		argData.uivalue = (luint)argData.ucvalue;
-		break;
-	case lb_word:
-		argData.uivalue = (luint)argData.usvalue;
-		break;
-	case lb_dword:
-		break;
-	case lb_qword:
-		argData.uivalue = (luint)argData.ulvalue;
-		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Arrays have maximum 32-bit unsigned length but requested length is 64-bit");
-		break;
-	case lb_real4:
-	case lb_real8:
-		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Array initialization requires an integral length type");
-		break;
+		PUT_STRING(state->out, state->tokens[3]);
+	}
+	else
+	{
+		switch (argType)
+		{
+		case lb_byte:
+			argData.uivalue = (luint)argData.ucvalue;
+			break;
+		case lb_word:
+			argData.uivalue = (luint)argData.usvalue;
+			break;
+		case lb_dword:
+			break;
+		case lb_qword:
+			argData.uivalue = (luint)argData.ulvalue;
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Arrays have maximum 32-bit unsigned length but requested length is 64-bit");
+			break;
+		case lb_real4:
+		case lb_real8:
+			return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Array initialization requires an integral length type");
+			break;
+		}
+
+		PUT_BYTE(state->out, lb_dword);
+		PUT_INT(state->out, argData.uivalue);
 	}
 
-	PUT_BYTE(state->out, type);
-	PUT_UINT(state->out, argData.uivalue);
-
-	post_init_array:
-	if (state->tokencount > 2)
+	if (state->tokencount > 4)
 		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Unecessary arguments in array initialization");
 }
 

@@ -1709,10 +1709,59 @@ int env_run(env_t *env, void *location)
 			case lb_double:
 			case lb_object:
 				type = (*env->rip) + 0x0c;
-				data2->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++(env->rip))));
-				if (!data2->ovalue)
-					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
-				env->rip += 4;
+				switch (*env->rip)
+				{
+				case lb_value:
+					env->rip++;
+					if (!env_resolve_variable(env, env->rip, &data2, &flags2))
+						EXIT_RUN(env->exception);
+					env->rip += strlen(env->rip) + 1;
+					switch (value_typeof((value_t *)&flags2))
+					{
+					case lb_char:
+					case lb_uchar:
+						break;
+					case lb_short:
+					case lb_ushort:
+						break;
+					case lb_int:
+					case lb_uint:
+						break;
+					case lb_long:
+					case lb_ulong:
+						break;
+					case lb_bool:
+						break;
+					case lb_float:
+					case lb_double:
+					case lb_object:
+					case lb_chararray:
+					case lb_uchararray:
+					case lb_shortarray:
+					case lb_ushortarray:
+					case lb_intarray:
+					case lb_uintarray:
+					case lb_longarray:
+					case lb_ulongarray:
+					case lb_boolarray:
+					case lb_floatarray:
+					case lb_doublearray:
+					case lb_objectarray:
+						EXIT_RUN(env_raise_exception(env, exception_illegal_state, "init array requires integral size"));
+						break;
+					}
+					break;
+				case lb_dword:
+					env->rip++;
+					data2->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++(env->rip))));
+					if (!data2->ovalue)
+						EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
+					env->rip += 4;
+					break;
+				default:
+					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, "seto expected value or dword"));
+					break;
+				}
 				break;
 			case lb_string:
 				env->rip++;
@@ -1725,7 +1774,7 @@ int env_run(env_t *env, void *location)
 				data2->ovalue = NULL;
 				break;
 			default:
-				EXIT_RUN(env_raise_exception(env, exception_bad_command, "seto"));
+				EXIT_RUN(env_raise_exception(env, exception_bad_command, "seto expected type"));
 				break;
 			}
 			break;
