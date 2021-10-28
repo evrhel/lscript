@@ -58,25 +58,30 @@ class StringBuilder
 		int i
 		int j
 
-		setd i dword[0]
+		if num == ulong[0]
+			dynamic_call this.append(C) '0'
+		else
+			setd i dword[0]
 
-		# length 20 for the max number of base-10 digits in 64-bit integer
-		seto digits uchar dword[20]
+			# length 20 for the max number of base-10 digits in 64-bit integer
+			seto digits uchar dword[20]
 
-		while num > ulong[0]
-			mod digit num ulong[10]
-			setv digits[i] digit
-			add i i int[1]
-			div num num ulong[10]
+			while num > ulong[0]
+				mod digit num ulong[10]
+				setv digits[i] digit
+				add i i int[1]
+				div num num ulong[10]
+			end
+
+			sub i i int[1]
+			setv j i
+			while j > int[-1]
+				setv digit digits[j]
+				dynamic_call this.append(C) intMap[digit]
+				sub j j int[1]
+			end
 		end
 
-		sub i i int[1]
-		setv j i
-		while j > int[-1]
-			setv digit digits[j]
-			dynamic_call this.append(C) intMap[digit]
-			sub j j int[1]
-		end
 		ret
 
 	function dynamic interp void grow(uint required)

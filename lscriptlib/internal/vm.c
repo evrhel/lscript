@@ -1709,6 +1709,7 @@ int env_run(env_t *env, void *location)
 			case lb_double:
 			case lb_object:
 				type = (*env->rip) + 0x0c;
+				env->rip++;
 				switch (*env->rip)
 				{
 				case lb_value:
@@ -1752,14 +1753,13 @@ int env_run(env_t *env, void *location)
 					}
 					break;
 				case lb_dword:
-					env->rip++;
 					data2->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++(env->rip))));
 					if (!data2->ovalue)
 						EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
-					env->rip += 4;
+					env->rip += sizeof(unsigned int);
 					break;
 				default:
-					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, "seto expected value or dword"));
+					EXIT_RUN(env_raise_exception(env, exception_bad_command, "seto expected value or dword"));
 					break;
 				}
 				break;
