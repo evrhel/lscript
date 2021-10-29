@@ -1,43 +1,40 @@
-
-
 class Main
-	
-	global static const int myNum dword[22]
-	global static varying uint myNum2 dword[19]
-	
-	# main function
-	function static interp int main(objectarray String args)
-		
-		uint counter
-		setd counter dword[0]
 
-		dynamic_call System.stdout.println(LString;) "Printing arguments:"
+	function static interp void main(objectarray String args)
+		dynamic_call System.stdout.println(LString;) "Hello World!"
+		if args.length > uint[0]
+			dynamic_call System.stdout.println(LString;) "I will now print all the command line arguments:"
 
-		while counter < args.length
-			static_call Int.toString(I) counter
-			dynamic_call System.stdout.print(LString;) ret
-			dynamic_call System.stdout.println(LString;) args[counter]
-			add counter counter uint[1]
+			int counter
+			setd counter dword[0]
+
+			while counter < args.length
+				dynamic_call System.stdout.println(LString;) args[counter]
+				add counter counter int[1]
+			end
 		end
 
-		dynamic_call System.stdout.println(LString;) "Done."
+		static_call myFunc()
 
-		object input
-		dynamic_call System.stdin.readLine()
-		setr input
+		object myObject
+		seto myObject new Main <init>(LString;) "From dynamic function"
 
-		dynamic_call System.stdout.println(LString;) input
+		dynamic_call myObject.printMessage()
 
-		retd dword[25]
-
-
-	global dynamic varying object myString
-	
-	function dynamic interp void <init>(object String aString)
-		setv this.myString aString
 		ret
 
-	function dynamic interp void print()
-		dynamic_call System.stdout.println(LString;) this.myString
+	function static interp void myFunc()
+		dynamic_call System.stdout.println(LString;) "From static function"
 		ret
+
+	global dynamic varying object message;
+
+	function dynamic interp void <init>(object String message)
+		setv this.message message
+		ret
+
+	function dynamic interp void printMessage()
+		dynamic_call System.stdout.println(LString;) this.message
+		ret
+
 
