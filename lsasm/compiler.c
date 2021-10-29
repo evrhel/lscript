@@ -1856,6 +1856,7 @@ void handle_set_cmd(compile_state_t *state)
 			{
 				if (*constructorSig == 'L')
 				{
+					constructorSig++;
 					char *saved = constructorSig;
 					while (*constructorSig && *constructorSig != ';') constructorSig++;
 
@@ -1876,6 +1877,8 @@ void handle_set_cmd(compile_state_t *state)
 					*constructorSig = ';';
 
 					char *tempcursor = temp;
+					*qfnCursor = 'L';
+					qfnCursor++;
 					while (*tempcursor)
 					{
 						*qfnCursor = *tempcursor;
@@ -1981,7 +1984,7 @@ void handle_set_cmd(compile_state_t *state)
 			PUT_STRING(state->out, varname);
 			PUT_BYTE(state->out, lb_new);
 			PUT_STRING(state->out, fullname);
-			PUT_STRING(state->out, state->tokens[4]);
+			PUT_STRING(state->out, qualifiedfuncname);
 			PUT_BUF(state->out, argbuf);
 
 			free_derived_args(sig);

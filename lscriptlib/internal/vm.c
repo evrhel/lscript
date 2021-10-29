@@ -1088,7 +1088,7 @@ int env_resolve_object_field(env_t *env, object_t *object, char *name, data_t **
 			fieldData = object_get_field_data(object, name);
 			if (!fieldData)
 			{
-				env_raise_exception(env, exception_bad_variable_name, "field %s", name);
+				env_raise_exception(env, exception_bad_variable_name, "field %s.%s", object->clazz->name, name);
 				return 0;
 			}
 
