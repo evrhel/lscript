@@ -200,7 +200,7 @@ Finds a class with the requested classname if it is loaded into the virtual mach
 
 @return The respective class, or NULL if it was not found.
 */
-class_t *vm_get_class(vm_t *vm, const char *classname);
+class_t *vm_get_class(vm_t *__restrict vm, const char *__restrict classname);
 
 /*
 Loads a class with the requested classname if it is not loaded already. The virtual machine
@@ -212,7 +212,7 @@ will search on the classpath for a class of the requested name.
 @return The respective class, if it already is loaded or was loaded successfully, or NULL
 if the load failed.
 */
-class_t *vm_load_class(vm_t *vm, const char *classname);
+class_t *vm_load_class(vm_t *__restrict vm, const char *__restrict classname);
 
 /*
 Loads a class from a file onto the virtual machine.
@@ -223,7 +223,7 @@ Loads a class from a file onto the virtual machine.
 
 @return The loaded class, or NULL if the load failed.
 */
-class_t *vm_load_class_file(vm_t *vm, const char *filename, int loadSuperclasses);
+class_t *vm_load_class_file(vm_t *__restrict vm, const char *__restrict filename, int loadSuperclasses);
 
 /*
 Loads a class from binary data onto the virtual machine.

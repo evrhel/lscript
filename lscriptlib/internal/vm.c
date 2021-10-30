@@ -24,6 +24,8 @@
 
 #define EXIT_RUN(val) {__retVal=(val);goto done_call;}
 
+#define CLEAR_EXCEPTION(env) { env->exception = 0; env->message[0] = 0; }
+
 typedef unsigned long long frame_flags_t;
 
 static const char *const g_exceptionStrings[] =
@@ -56,17 +58,18 @@ enum
 	frame_flag_return_native = 0x2,
 };
 
-static class_t *class_load_raw(vm_t *vm, const char *classname, int loadSuperclasses);
-static class_t *class_load_to_vm(vm_t *vm, class_t *clazz);
+static int class_resolve_filename(vm_t *__restrict vm, const char *__restrict classname, char *filename, size_t filenameLen);
+static class_t *class_load_to_vm(vm_t *__restrict vm, class_t *__restrict clazz);
+static class_t *class_load_filename_override(vm_t *__restrict vm, const char *__restrict classname, const char *__restrict filename, int loadSuperClasses, int loadToVM, int checkExists);
 
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
-static int env_run(env_t *env, void *location);
-static inline int env_create_stack_frame(env_t *env, function_t *function, flags_t flags);
-static inline int env_cleanup_call(env_t *env, int onlyStackCleanup);
+static int env_run(env_t *__restrict env, void *__restrict location);
+static inline int env_create_stack_frame(env_t *__restrict env, function_t *__restrict function, flags_t flags);
+static inline int env_cleanup_call(env_t *__restrict env, int onlyStackCleanup);
 
-static int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls);
-static int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_flags_t flags, object_t *object, va_list ls);
+static int env_handle_static_function_callv(env_t *__restrict env, function_t *__restrict function, frame_flags_t flags, va_list ls);
+static int env_handle_dynamic_function_callv(env_t *__restrict env, function_t *__restrict function, frame_flags_t flags, object_t *object, va_list ls);
 
 static va_list env_gen_call_arg_list(env_t *env, function_t *function);
 static inline void env_free_call_arg_list(env_t *env, va_list callArgs);
@@ -79,7 +82,7 @@ static int is_varname_avaliable(env_t *env, const char *name);
 
 static int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags);
 
-static int try_link_function(vm_t *vm, function_t *func);
+static int try_link_function(vm_t *__restrict vm, function_t *__restrict func);
 
 static void vm_start_routine(start_args_t *args);
 
@@ -169,12 +172,6 @@ static inline int handle_if(env_t *env)
 	else
 		env->rip += sizeof(size_t);
 	return 0;
-}
-
-static inline void clear_exception(env_t *env)
-{
-	env->exception = 0;
-	env->message[0] = 0;
 }
 
 vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t flags, int pathCount, const char *const paths[], const ls_stdio_t *stdio)
@@ -271,8 +268,20 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	
 	// Load all the required classes
 
+	char classFilename[MAX_PATH];
+
+	static const char OBJECT_CLASS[] = "lscript.lang.Object";
+	static const char CLASS_CLASS[] = "lscript.lang.Class";
+	static const char STRING_CLASS[] = "lscript.lang.String";
+
 	// Load Object class
-	class_t *objectClass = class_load_raw(vm, "lscript.lang.Object", 0);
+	if (!class_resolve_filename(vm, OBJECT_CLASS, classFilename, sizeof(classFilename)))
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
+	class_t *objectClass = class_load_filename_override(vm, OBJECT_CLASS, classFilename, 0, 0, 0);
 	if (!objectClass)
 	{
 		vm_free(vm, 0);
@@ -280,7 +289,13 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load Class class
-	class_t *classClass = class_load_raw(vm, "lscript.lang.Class", 0);
+	if (!class_resolve_filename(vm, CLASS_CLASS, classFilename, sizeof(classFilename)))
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
+	class_t *classClass = class_load_filename_override(vm, CLASS_CLASS, classFilename, 0, 0, 0);
 	if (!classClass)
 	{
 		vm_free(vm, 0);
@@ -288,7 +303,13 @@ vm_t *vm_create(size_t heapSize, size_t stackSize, void *lsAPILib, vm_flags_t fl
 	}
 
 	// Load String class
-	class_t *stringClass = class_load_raw(vm, "lscript.lang.String", 0);
+	if (!class_resolve_filename(vm, STRING_CLASS, classFilename, sizeof(classFilename)))
+	{
+		vm_free(vm, 0);
+		return NULL;
+	}
+
+	class_t *stringClass = class_load_filename_override(vm, STRING_CLASS, classFilename, 0, 0, 0);
 	if (!stringClass)
 	{
 		vm_free(vm, 0);
@@ -458,20 +479,28 @@ int vm_start(vm_t *vm, int startOnNewThread, int argc, const char *const argv[])
 	return 1;
 }
 
-class_t *vm_get_class(vm_t *vm, const char *classname)
+class_t *vm_get_class(vm_t *__restrict vm, const char *__restrict classname)
 {
 	return (class_t *)map_at(vm->classes, classname);
 }
 
-class_t *vm_load_class(vm_t *vm, const char *classname)
+class_t *vm_load_class(vm_t *__restrict vm, const char *__restrict classname)
 {
-	class_t *result = class_load_raw(vm, classname, 1);
-	if (!result)
+	class_t *result = (class_t *)map_at(vm->classes, classname);
+	if (result) return result;
+
+	char filename[MAX_PATH];
+	if (!class_resolve_filename(vm, classname, filename, sizeof(filename)))
+	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+			printf("Class load error for \"%s\": Failed to locate on classpath.\n", classname);
 		return NULL;
-	return class_load_to_vm(vm, result);
+	}
+
+	return class_load_filename_override(vm, classname, filename, 1, 1, 0);
 }
 
-class_t *vm_load_class_file(vm_t *vm, const char *filename, int loadSuperclasses)
+class_t *vm_load_class_file(vm_t *__restrict vm, const char *__restrict filename, int loadSuperclasses)
 {
 	FILE *file;
 
@@ -769,6 +798,7 @@ int env_resolve_variable(env_t *env, char *name, data_t **data, flags_t *flags)
 			size_t strsize;
 			char classBuild[MAX_PATH];
 			char *classBuildCursor = classBuild;
+			char filename[MAX_PATH];
 	
 			do
 			{
@@ -778,8 +808,12 @@ int env_resolve_variable(env_t *env, char *name, data_t **data, flags_t *flags)
 				classBuildCursor += strsize;
 				*beg = '.';
 
-				if (clazz = vm_load_class(env->vm, classBuild)) break;
-	
+				if (class_resolve_filename(env->vm, classBuild, filename, sizeof(filename)))
+				{
+					clazz = class_load_filename_override(env->vm, classBuild, filename, 1, 1, 1);
+					break;
+				}
+
 				*classBuildCursor = '.';
 				classBuildCursor++;
 				
@@ -1160,7 +1194,7 @@ int env_resolve_function_name(env_t *env, char *name, function_t **function)
 		}
 		else
 		{
-			clear_exception(env);
+			CLEAR_EXCEPTION(env);
 
 			funcname = end + 1;
 			class_t *clazz = vm_load_class(env->vm, name);
@@ -1299,7 +1333,7 @@ array_t *env_new_string_array(env_t *env, unsigned int count, const char *const 
 
 int env_raise_exceptionv(env_t *env, int exception, const char *format, va_list ls)
 {
-	clear_exception(env);
+	CLEAR_EXCEPTION(env);
 	env->exception = exception;
 	if (format)
 		vsprintf_s(env->message, sizeof(env->message), format, ls);
@@ -1360,26 +1394,10 @@ void env_free(env_t *env)
 	FREE(env);
 }
 
-class_t *class_load_raw(vm_t *vm, const char *classname, int loadSuperclasses)
+int class_resolve_filename(vm_t *__restrict vm, const char *__restrict classname, char *filename, size_t filenameLen)
 {
-	class_t *result;
-	if (result = vm_get_class(vm, classname))
-		return result;
-
-	if (vm->flags & vm_flag_verbose)
-		printf("Loading class \"%s\".\n", classname);
-
-	unsigned int classnameSize = (unsigned int)(strlen(classname) + 1);
-	char *tempName = (char *)MALLOC(classnameSize);
-	if (!tempName)
-	{
-		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
-		{
-			printf("Class load error for class \"%s\": Failure to allocate name string.\n", classname);
-		}
-		return NULL;
-	}
-	MEMCPY(tempName, classname, classnameSize);
+	char tempName[MAX_PATH];
+	strcpy_s(tempName, sizeof(tempName), classname);
 
 	char *cursor = tempName;
 	while (*cursor)
@@ -1389,84 +1407,39 @@ class_t *class_load_raw(vm_t *vm, const char *classname, int loadSuperclasses)
 		cursor++;
 	}
 
-#if defined(_WIN32)
-	char fullpath[MAX_PATH];
+	static const char LB_EXT[] = ".lb";
+	memcpy(cursor, LB_EXT, sizeof(LB_EXT));
+
 	FILE *dummy;
+	DWORD dwAttrib;
+	size_t len;
+	char *pathCursor;
 
 	list_t *curr = vm->paths;
 	while (curr)
 	{
-		fullpath[0] = 0;
+		filename[0] = 0;
 		char *pathString = (char *)curr->data;
-		strcat_s(fullpath, sizeof(fullpath), pathString);
-		strcat_s(fullpath, sizeof(fullpath), tempName);
-		fopen_s(&dummy, fullpath, "rb");
-		if (dummy)
-		{
-			fclose(dummy);
-			result = vm_load_class_file(vm, fullpath, loadSuperclasses);
-			goto after_load_class_file;
-		}
-		strcat_s(fullpath, sizeof(fullpath), ".lb");
-		fopen_s(&dummy, fullpath, "rb");
-		if (dummy)
-		{
-			fclose(dummy);
-			result = vm_load_class_file(vm, fullpath, loadSuperclasses);
 
-		after_load_class_file:
-			if (!result)
-			{
-				if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
-				{
-					printf("Class load error for class \"%s\": Failed to parse binary (resolved to file \"%s\").\n", classname, fullpath);
-				}
-				return NULL;
-			}
-			break;
-		}
+		pathCursor = filename;
+		len = strlen(pathString);
+		memcpy(pathCursor, pathString, len);
+		pathCursor += len;
+
+		len = strlen(tempName) + 1;
+		memcpy(pathCursor, tempName, len);
+
+		dwAttrib = GetFileAttributesA(filename);
+		if (dwAttrib != INVALID_FILE_ATTRIBUTES && !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
+			return 1;
 
 		curr = curr->next;
 	}
 
-	if (!result)
-	{
-		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
-		{
-			printf("Class load error for \"%s\": Failed to resolve location on filesystem.\n", classname);
-		}
-		return NULL;
-	}
-
-	if (result && !(vm->flags & vm_flag_no_load_debug))
-	{
-		curr = vm->paths;
-
-		while (curr)
-		{
-			fullpath[0] = 0;
-			char *pathString = (char *)curr->data;
-			strcat_s(fullpath, sizeof(fullpath), pathString);
-			strcat_s(fullpath, sizeof(fullpath), tempName);
-			strcat_s(fullpath, sizeof(fullpath), ".lds");
-			fopen_s(&dummy, fullpath, "rb");
-			if (dummy)
-			{
-				fclose(dummy);
-				result->debug = load_debug(fullpath);
-				break;
-			}
-
-			curr = curr->next;
-		}
-	}
-#endif
-	FREE(tempName);
-
-	return result;
+	return 0;
 }
 
-class_t *class_load_to_vm(vm_t *vm, class_t *clazz)
+class_t *class_load_to_vm(vm_t *__restrict vm, class_t *__restrict clazz)
 {
 	assert(clazz);
 
@@ -1503,18 +1476,38 @@ class_t *class_load_to_vm(vm_t *vm, class_t *clazz)
 	return clazz;
 }
 
+class_t *class_load_filename_override(vm_t *__restrict vm, const char *__restrict classname,
+	const char *__restrict filename, int loadSuperClasses, int loadToVM, int checkExists)
+{
+	if (checkExists)
+	{
+		class_t *result = (class_t *)map_at(vm->classes, classname);
+		if (result) return result;
+	}
+
+	if (vm->flags & vm_flag_verbose)
+		printf("Loading class \"%s\".\n", classname);
+
+	class_t *result = vm_load_class_file(vm, filename, loadSuperClasses);
+	if (!result)
+	{
+		if ((vm->flags & vm_flag_verbose) || (vm->flags & vm_flag_verbose_errors))
+			printf("Class load error for class \"%s\": Failed to parse binary (resolved to file \"%s\").\n", classname, filename);
+		return NULL;
+	}
+
+	return loadToVM ? class_load_to_vm(vm, result) : result;
+}
+
 class_t *class_load_ext(const char *classname, vm_t *vm)
 {
 	return vm_load_class(vm, classname);
 }
 
-int env_run(env_t *env, void *location)
+int env_run(env_t *__restrict env, void *__restrict location)
 {
 	int __retVal;
-	//byte_t *ripSave = env->rip;
 	env->rip = (byte_t *)location;
-	//env->rip = location;
-	//byte_t *counter = env->rip;	// A counter on where we are currently executing
 
 	const char *name;			// An arbitrary string to store a name
 	data_t *data;				// An arbitrary data_t pointer
@@ -1534,37 +1527,15 @@ int env_run(env_t *env, void *location)
 
 	__retVal = exception_none;
 
-	/*if (env->vm->flags & vm_flag_verbose)
-	{
-		list_t *curr = env->variables->prev;
-		while (curr->prev)
-		{
-			putc(' ', stdout);
-			curr = curr->prev;
-		}
-
-		function_t *currfunc = CURR_FUNC(env);
-		debug_t *currdebug = currfunc->parentClass->debug;
-		if (currdebug)
-		{
-			debug_elem_t *elem = find_debug_elem(currdebug, (unsigned int)(env->rip - currfunc->parentClass->data));
-			if (elem)
-				printf("%s.%s.%u\n", currdebug->srcFile, CURR_FUNC(env)->name, elem->srcLine);
-			else
-				printf("%s.%s\n", currdebug->srcFile, CURR_FUNC(env)->name);
-		}
-		else
-		{
-			printf("<class %s>.%s\n", currfunc->parentClass->name, CURR_FUNC(env)->name);
-		}
-	}*/
-
 	while (env->rip)
 	{
-		env->cmdStart = env->rip;
+		env->cmdStart = env->rip; // Save the start of the current command
+
+		// Switch on the command
 		switch (*env->rip)
 		{
 		case lb_noop:
+			// noop command - just move forward 1 byte
 			env->rip++;
 			break;
 
@@ -1591,6 +1562,8 @@ int env_run(env_t *env, void *location)
 		case lb_floatarray:
 		case lb_doublearray:
 		case lb_objectarray:
+			// Handle variable declaration
+
 			type = *env->rip;
 			env->rip++;
 			name = env->rip;
@@ -1607,6 +1580,8 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_setb:
+			// Set variable to literal byte value
+
 			env->rip++;
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -1616,6 +1591,8 @@ int env_run(env_t *env, void *location)
 			env->rip += sizeof(byte_t);
 			break;
 		case lb_setw:
+			// Set variable to literal word value
+
 			env->rip++;
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -1625,6 +1602,8 @@ int env_run(env_t *env, void *location)
 			env->rip += sizeof(word_t);
 			break;
 		case lb_setd:
+			// Set variable to literal dword value
+
 			env->rip++;
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -1634,6 +1613,8 @@ int env_run(env_t *env, void *location)
 			env->rip += sizeof(dword_t);
 			break;
 		case lb_setq:
+			// Set variable to literal qword value
+
 			env->rip++;
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -1643,6 +1624,8 @@ int env_run(env_t *env, void *location)
 			env->rip += sizeof(qword_t);
 			break;
 		case lb_setr4:
+			// Set variable to literal real4 value
+
 			env->rip++;
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -1652,6 +1635,8 @@ int env_run(env_t *env, void *location)
 			env->rip += sizeof(real4_t);
 			break;
 		case lb_setr8:
+			// Set variable to literal real8 value
+
 			env->rip++;
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -1661,6 +1646,8 @@ int env_run(env_t *env, void *location)
 			env->rip += sizeof(real8_t);
 			break;
 		case lb_seto:
+			// Set a variable to an object
+
 			env->rip++;
 			name = (const char *)env->rip;
 			if (!env_resolve_variable(env, name, &data2, &flags))
@@ -1669,33 +1656,32 @@ int env_run(env_t *env, void *location)
 			switch (*env->rip)
 			{
 			case lb_new:
+				// Create a new object
+
 				env->rip++;
+
+				// Get the class to instantiate
 				name2 = (const char *)env->rip;
 				clazz = vm_load_class(env->vm, name2); // This function will only load the class if it is not loaded
 				if (!clazz)
 					EXIT_RUN(env_raise_exception(env, exception_class_not_found, name2));
 				env->rip += strlen(name2) + 1;
+
+				// Get the constructor function
 				name3 = (const char *)env->rip;
 				callFunc = class_get_function(clazz, name3);
 				if (!callFunc)
 					EXIT_RUN(env_raise_exception(env, exception_function_not_found, name3));
 				env->rip += strlen((const char *)env->rip) + 1;
+
+				// Allocate the new object
 				object = manager_alloc_object(env->vm->manager, clazz);
 				if (!object)
 					EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
 				data2->ovalue = object;
-				goto handle_dynamic_call_after_resolve;
-				//if (env_run_func(env, callFunc, object))
-				//	EXIT_RUN(env->exception);
+
+				goto handle_dynamic_call_after_resolve; // Call the constructor
 				break;
-			//case lb_value:
-			//	env->rip++;
-			//	name2 = (const char *)env->rip;
-			//	if (!env_resolve_variable(env, name2, &data2, &flags2))
-			//		EXIT_RUN(env->exception);
-			//	env->rip += strlen(name2) + 1;
-			//	data->ovalue = data2->ovalue;
-			//	break;
 			case lb_char:
 			case lb_uchar:
 			case lb_short:
@@ -1708,11 +1694,15 @@ int env_run(env_t *env, void *location)
 			case lb_float:
 			case lb_double:
 			case lb_object:
-				type = (*env->rip) + 0x0c;
+				// Create new array
+
+				type = (*env->rip) + 0x0c; // The type to store
 				env->rip++;
 				switch (*env->rip)
 				{
 				case lb_value:
+					// The size we want to allocate is stored in a variable
+
 					env->rip++;
 					if (!env_resolve_variable(env, env->rip, &data2, &flags2))
 						EXIT_RUN(env->exception);
@@ -1720,18 +1710,31 @@ int env_run(env_t *env, void *location)
 					switch (value_typeof((value_t *)&flags2))
 					{
 					case lb_char:
+						if (data2->ucvalue < 0)
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hhd", data2->ucvalue));
 					case lb_uchar:
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->ucvalue);
 						break;
 					case lb_short:
+						if (data2->ucvalue < 0)
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hd", data2->ucvalue));
 					case lb_ushort:
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->usvalue);
 						break;
 					case lb_int:
+						if (data2->ucvalue < 0)
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %d", data2->ucvalue));
 					case lb_uint:
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->uivalue);
 						break;
 					case lb_long:
+						if (data2->ucvalue < 0)
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %lld", data2->ucvalue));
 					case lb_ulong:
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->ulvalue);
 						break;
 					case lb_bool:
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->bvalue);
 						break;
 					case lb_float:
 					case lb_double:
@@ -1751,8 +1754,14 @@ int env_run(env_t *env, void *location)
 						EXIT_RUN(env_raise_exception(env, exception_illegal_state, "init array requires integral size"));
 						break;
 					}
+
+					if (!data2->ovalue)
+						EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
+
 					break;
 				case lb_dword:
+					// The size we want to allocate is in a dword
+
 					data2->ovalue = manager_alloc_array(env->vm->manager, type, *((unsigned int *)(++(env->rip))));
 					if (!data2->ovalue)
 						EXIT_RUN(env_raise_exception(env, exception_out_of_memory, NULL));
@@ -1764,6 +1773,8 @@ int env_run(env_t *env, void *location)
 				}
 				break;
 			case lb_string:
+				// Create new string
+
 				env->rip++;
 				data2->ovalue = env_new_string(env, env->rip);
 				if (env->exception)
@@ -1771,6 +1782,8 @@ int env_run(env_t *env, void *location)
 				env->rip += strlen(env->rip) + 1;
 				break;
 			case lb_null:
+				// Set to null
+
 				data2->ovalue = NULL;
 				break;
 			default:
@@ -1779,58 +1792,86 @@ int env_run(env_t *env, void *location)
 			}
 			break;
 		case lb_setv:
+			// Set variable to other variable
+
 			env->rip++;
+
+			// Destination variable
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
+
+			// Source variable
 			name2 = env->rip;
 			if (!env_resolve_variable(env, name2, &data2, &flags2))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name2) + 1;
+
+			// Set
 			if (!static_set(data, flags, data2, flags2))
 				EXIT_RUN(env_raise_exception(env, exception_bad_command, "On static set during setv"));
 			break;
 		case lb_setr:
+			// Set variable to the return value of the last function
+
 			env->rip++;
+
+			// Destination variable
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
+
+			// Set
 			store_return(env, data, flags);
 			break;
 
 		case lb_retb:
+			// Return literal byte value
+			
 			env->rip++;
 			env->bret = *(byte_t *)env->rip;
 			goto general_ret_command_handle;
 			break;
 		case lb_retw:
+			// Return literal word value
+
 			env->rip++;
 			env->wret = *(word_t *)env->rip;
 			goto general_ret_command_handle;
 			break;
 		case lb_retd:
+			// Return literal dword value
+
 			env->rip++;
 			env->dret = *(dword_t *)env->rip;
 			goto general_ret_command_handle;
 			break;
 		case lb_retq:
+			// Return literal qword value
+			
 			env->rip++;
 			env->qret = *(qword_t *)env->rip;
 			goto general_ret_command_handle;
 			break;
 		case lb_retr4:
+			// Return literal real4 value
+
 			env->rip++;
 			env->r4ret = *(real4_t *)env->rip;
 			goto general_ret_command_handle;
 			break;
 		case lb_retr8:
+			// Return literal real8 value
+
 			env->rip++;
 			env->r8ret = *(real8_t *)env->rip;
 			goto general_ret_command_handle;
 			break;
 		case lb_retv:
+			// Return variable value
+
 			env->rip++;
 			name = env->rip;
 			if (!env_resolve_variable(env, name, &data, &flags))
@@ -1840,7 +1881,11 @@ int env_run(env_t *env, void *location)
 			break;
 		case lb_ret:
 		case lb_retr:
-			general_ret_command_handle:
+		general_ret_command_handle:
+			// Pop stack frame
+			
+			// Return natively if the reason the function started was due
+			// to a native function call
 			if (CURR_FLAGS(env) & frame_flag_return_native)
 				EXIT_RUN(env_cleanup_call(env, 0));
 			if (env_cleanup_call(env, 0))
@@ -1848,16 +1893,22 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_static_call:
+			// Call a static function
+
 			env->rip++;
+
+			// Find function
 			name = env->rip;
 			if (!env_resolve_function_name(env, name, &callFunc))
 				EXIT_RUN(env->exception);
 			env->rip += strlen(name) + 1;
 			
+			// Get the function arguments as a list
 			callFuncArgs = env_gen_call_arg_list(env, callFunc);
 			if (!callFuncArgs)
 				EXIT_RUN(env->exception);
 
+			// Handle the function call
 			if (__retVal = env_handle_static_function_callv(env, callFunc, 0, callFuncArgs))
 				EXIT_RUN(__retVal);
 
@@ -1865,7 +1916,11 @@ int env_run(env_t *env, void *location)
 
 			break;
 		case lb_dynamic_call:
+			// Call a dynamic function
+
 			env->rip++;
+
+			// Find funuction
 			name = env->rip;
 			if (!env_resolve_dynamic_function_name(env, name, &callFunc, &data, &flags))
 				EXIT_RUN(env->exception);
@@ -1875,10 +1930,12 @@ int env_run(env_t *env, void *location)
 
 			handle_dynamic_call_after_resolve:
 
+			// Get the function arguments as a list
 			callFuncArgs = env_gen_call_arg_list(env, callFunc);
 			if (!callFuncArgs)
 				EXIT_RUN(env->exception);
 
+			// Handle the function call
 			if (__retVal = env_handle_dynamic_function_callv(env, callFunc, 0, object, (va_list)callFuncArgs))
 				EXIT_RUN(__retVal);
 
@@ -1886,94 +1943,124 @@ int env_run(env_t *env, void *location)
 			break;
 
 		case lb_add:
+			// add
+			
 			env->rip++;
 			if (!vmm_add(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_sub:
+			// subtract
+
 			env->rip++;
 			if (!vmm_sub(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_mul:
+			// multiply
+
 			env->rip++;
 			if (!vmm_mul(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_div:
+			// divide
+
 			env->rip++;
 			if (!vmm_div(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_mod:
+			// modulus
+
 			env->rip++;
 			if (!vmm_mod(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_and:
+			// bitwise and
+
 			env->rip++;
 			if (!vmm_and(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_or:
+			// birwise or
+
 			env->rip++;
 			if (!vmm_or(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_xor:
+			// exclusive or
+
 			env->rip++;
 			if (!vmm_xor(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_lsh:
+			// left shift
+
 			env->rip++;
 			if (!vmm_lsh(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_rsh:
+			// right shift
+
 			env->rip++;
 			if (!vmm_rsh(env, &env->rip))
 				return env->exception;
 			break;
 
 		case lb_neg:
+			// negate
+
 			env->rip++;
 			if (!vmm_neg(env, &env->rip))
 				return env->exception;
 			break;
 		case lb_not:
+			// bitwise not
+
 			env->rip++;
 			if (!vmm_not(env, &env->rip))
 				return env->exception;
 			break;
 
 		case lb_while:
+			// while loop
+
+			// Perform comparison
 			if (!vmc_compare(env, &env->rip))
 			{
 				if (env->exception)
 					EXIT_RUN(env->exception);
+
+				// exit while loop
 				env->rip = CURR_FUNC(env)->parentClass->data + *((size_t *)env->rip);
 			}
 			else
-				env->rip += sizeof(size_t);
+				env->rip += sizeof(size_t); // comparison suceeds, proceed into body
 			break;
 
 		case lb_if:
+			// if statement
+
  			if (handle_if(env))
 				EXIT_RUN(env->exception);
 			break;
 		case lb_else:
 		case lb_end:
+			// end command
+
 			env->rip++;
+
 			off = *((size_t *)env->rip);
 			if (off == (size_t)-1)
-			{
-				env->rip += sizeof(size_t);
-			}
+				env->rip += sizeof(size_t); // -1 indicates to proceed directly forward
 			else
-			{
-				env->rip = CURR_FUNC(env)->parentClass->data + off;
-			}
+				env->rip = CURR_FUNC(env)->parentClass->data + off; // otherwise, an offset from class data
 			break;
 
 		case lb_push:
@@ -2033,6 +2120,8 @@ int env_run(env_t *env, void *location)
 		case lb_castb:
 		case lb_castf:
 		case lb_castd:
+			// Cast variables
+
 			if (!handle_cast(env, &env->rip))
 				EXIT_RUN(env->exception);
 			break;
@@ -2047,7 +2136,7 @@ done_call:
 	return __retVal;
 }
 
-inline int env_create_stack_frame(env_t *env, function_t *function, flags_t flags)
+inline int env_create_stack_frame(env_t *__restrict env, function_t *__restrict function, flags_t flags)
 {
 	size_t *stackframe = stack_alloc(env, 4);
 	if (!stackframe)
@@ -2062,7 +2151,7 @@ inline int env_create_stack_frame(env_t *env, function_t *function, flags_t flag
 	return exception_none;
 }
 
-inline int env_cleanup_call(env_t *env, int onlyStackCleanup)
+inline int env_cleanup_call(env_t *__restrict env, int onlyStackCleanup)
 {
 	if (!onlyStackCleanup)
 	{
@@ -2092,7 +2181,7 @@ inline int env_cleanup_call(env_t *env, int onlyStackCleanup)
 	return exception_none;
 }
 
-int env_handle_static_function_callv(env_t *env, function_t *function, frame_flags_t flags, va_list ls)
+int env_handle_static_function_callv(env_t *__restrict env, function_t *__restrict function, frame_flags_t flags, va_list ls)
 {
 	if (env_create_stack_frame(env, function, flags) != exception_none)
 		return env->exception;
@@ -2261,7 +2350,7 @@ int env_handle_static_function_callv(env_t *env, function_t *function, frame_fla
 	}
 }
 
-int env_handle_dynamic_function_callv(env_t *env, function_t *function, frame_flags_t flags, object_t *object, va_list ls)
+int env_handle_dynamic_function_callv(env_t *__restrict env, function_t *__restrict function, frame_flags_t flags, object_t *object, va_list ls)
 {
 	// push the arg list to the stack
 
@@ -2636,7 +2725,7 @@ int static_set(data_t *dst, flags_t dstFlags, data_t *src, flags_t srcFlags)
 	}
 }
 
-int try_link_function(vm_t *vm, function_t *func)
+int try_link_function(vm_t *__restrict vm, function_t *__restrict func)
 {
 #if defined(_WIN32)
 	char decName[512];
@@ -2807,12 +2896,12 @@ void print_stack_trace(FILE *file, env_t *env, int printVars)
 			}
 			else
 			{
-				fprintf(file, "<class %s>.<unknown>\n", clazz->name);
+				fprintf(file, "<class %s>.<function %s>\n", clazz->name, func->qualifiedName);
 			}
 		}
 		else
 		{
-			fprintf(file, "<class %s>.<unknown>\n", clazz->name);
+			fprintf(file, "<class %s>.<function %s>\n", clazz->name, func->qualifiedName);
 		}
 
 		rbp = PREV_FRAME(rbp);

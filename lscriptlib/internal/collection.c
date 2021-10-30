@@ -1,6 +1,7 @@
 #include "collection.h"
 
 #include <string.h>
+#include <assert.h>
 
 #include "mem_debug.h"
 
@@ -67,6 +68,8 @@ list_t *list_find(list_t *list, const void *data)
 
 list_t *list_find_start(list_t *list)
 {
+    assert(list);
+
     while (list->prev)
         list = list->prev;
     return list;
@@ -74,6 +77,8 @@ list_t *list_find_start(list_t *list)
 
 list_t *list_find_end(list_t *list)
 {
+    assert(list);
+
     while (list->next)
         list = list->next;
     return list;
@@ -81,9 +86,6 @@ list_t *list_find_end(list_t *list)
 
 list_t *list_copy(list_t *src, copy_func_t copyFunc)
 {
-    if (!src)
-        return NULL;
-
     list_t *result = list_create();
     if (!result)
         return NULL;
@@ -104,8 +106,7 @@ list_t *list_copy(list_t *src, copy_func_t copyFunc)
 
 list_iterator_t *list_create_iterator(list_t *list)
 {
-    if (!list)
-        return NULL;
+    if (list == NULL) return NULL;
 
     list_iterator_t *iterator = (list_iterator_t *)MALLOC(sizeof(list_iterator_t));
     if (!iterator)

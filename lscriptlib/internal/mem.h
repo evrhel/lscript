@@ -101,7 +101,7 @@ visible set or an object has at least one strong reference to it.
 @param visibleSet A set of values which are known to be visible - stored in the key field of
 each pair.
 */
-void manager_gc(manager_t *manager, map_t *visibleSet);\
+void manager_gc(manager_t *manager, map_t *visibleSet);
 
 /*
 Frees a memory manager allocated with manager_create.

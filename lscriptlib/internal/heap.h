@@ -8,9 +8,13 @@ typedef unsigned long long tag_t;
 typedef struct heap_s heap_t;
 struct heap_s
 {
+#if defined(NO_NATIVE_HEAP_IMPL)
 	tag_t *block;
 	tag_t *ptr;
 	tag_t *end;
+#else
+	void *handle;
+#endif
 };
 
 typedef heap_t *heap_p;

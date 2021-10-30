@@ -1,10 +1,9 @@
 #include "heap.h"
 
-#if defined(_WIN32)
 #include <Windows.h>
-#endif
 
 #include <memory.h>
+#include <assert.h>
 
 #include "mem_debug.h"
 
@@ -35,13 +34,16 @@ HEADER
 
 */
 
+#if defined(NO_NATIVE_HEAP_IMPL)
 static void coalesce_block(heap_p heap, tag_t *header);
+#endif
 
 heap_p create_heap(size_t size)
 {
 	heap_t *heap = (heap_t *)MALLOC(sizeof(heap_t));
 	if (!heap)
 		return NULL;
+#if defined(NO_NATIVE_HEAP_IMPL)
 	size_t adjSize = size + (size % WORD_SIZE);
 	const size_t fullSize = adjSize + HEADER_SIZE + FOOTER_SIZE;
 #if defined(_WIN32)
@@ -63,20 +65,27 @@ heap_p create_heap(size_t size)
 	heap->ptr = heap->block;
 	heap->end = heap->block + (fullSize / WORD_SIZE);
 	*(heap->end - 1) = fullSize << 2;
+#else
+	heap->handle = HeapCreate(0, 0, size);
+#endif
 	return heap;
 }
 
 void free_heap(heap_p heap)
 {
-#if defined(_WIN32)
+	if (!heap) return;
+	
+#if defined(NO_NATIVE_HEAP_IMPL)
 	HeapFree(GetProcessHeap(), 0, heap->block);
 #else
 #endif
+	HeapDestroy(heap->handle);
 	FREE(heap);
 }
 
 void *halloc(heap_p heap, size_t size)
 {
+#if defined(NO_NATIVE_HEAP_IMPL)
 	// Make the size 8-byte aligned
 	size_t desiredSize;
 	if (size % WORD_SIZE)
@@ -152,24 +161,20 @@ void *halloc(heap_p heap, size_t size)
 	} while (start != heap->ptr);
 
 	return NULL;
+#else
+	return HeapAlloc(heap->handle, 0, size);
+#endif
 }
 
 void hfree(heap_p heap, void *block)
 {
+#if defined(NO_NATIVE_HEAP_IMPL)
 	if (!block)
 		return;
 
 	tag_t *sBlock = (tag_t *)block;
 
-	if (sBlock <= heap->block || sBlock >= heap->end - 1)
-	{
-		// Invalid free pointer
-#if defined(_DEBUG) && defined(_WIN32)
-		MessageBoxA(NULL, "Free pointer is outside of heap range!", "Invalid free pointer", MB_OK);
-		RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
-#endif
-		return;
-	}
+	assert(sBlock <= heap->block || sBlock >= heap->end - 1);
 
 	tag_t *blockHeader = sBlock - 1;
 
@@ -177,14 +182,7 @@ void hfree(heap_p heap, void *block)
 
 	tag_t *blockFooter = blockHeader + (blockSize / WORD_SIZE) - 1;
 
-#if defined(_DEBUG) && defined(_WIN32)
-	if (*blockFooter != *blockHeader)
-	{
-		MessageBoxA(NULL, "Heap corruption detected:\nheader != footer!", "Heap corruption", MB_OK | MB_ICONERROR);
-		RaiseException(EXCEPTION_BREAKPOINT, 0, 0, NULL);
-		return;
-	}
-#endif
+	assert(*blockFooter != *blockHeader);
 
 	*blockHeader &= ~ALLOCATED_MASK;
 	*blockFooter = *blockHeader;
@@ -199,8 +197,12 @@ void hfree(heap_p heap, void *block)
 	}
 
 	coalesce_block(heap, blockHeader);
+#else
+	HeapFree(heap->handle, 0, block);
+#endif
 }
 
+#if defined(NO_NATIVE_HEAP_IMPL)
 void coalesce_block(heap_p heap, tag_t *header)
 {
 	if (!(*header & PREC_ALLOCATED_MASK) && header != heap->block)
@@ -232,3 +234,4 @@ void coalesce_block(heap_p heap, tag_t *header)
 	memset(header + 1, 0xab, freeSize - HEADER_SIZE - FOOTER_SIZE);
 #endif
 }
+#endif

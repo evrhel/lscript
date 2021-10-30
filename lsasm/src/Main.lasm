@@ -27,7 +27,7 @@ class Main
 		dynamic_call System.stdout.println(LString;) "From static function"
 		ret
 
-	global dynamic varying object message;
+	global dynamic varying object message
 
 	function dynamic interp void <init>(object String message)
 		setv this.message message
