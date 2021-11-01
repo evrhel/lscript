@@ -15,9 +15,9 @@
 /*
 The maximum length of an exception string.
 */
-#define MAX_EXCEPTION_STRING_LENGTH 100
+#define MAX_EXCEPTION_STRING_LENGTH 256
 
-#define EMSGLEN 64
+#define EMSGLEN 256
 #define HISTLEN 64
 
 #define CLASS_CLASSNAME "lscript.lang.Class"

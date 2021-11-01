@@ -61,6 +61,7 @@ enum
 static int class_resolve_filename(vm_t *__restrict vm, const char *__restrict classname, char *filename, size_t filenameLen);
 static class_t *class_load_to_vm(vm_t *__restrict vm, class_t *__restrict clazz);
 static class_t *class_load_filename_override(vm_t *__restrict vm, const char *__restrict classname, const char *__restrict filename, int loadSuperClasses, int loadToVM, int checkExists);
+static char *resolve_first_class(vm_t *vm, char *name, class_t **result);
 
 static class_t *class_load_ext(const char *classname, vm_t *vm);
 
@@ -791,37 +792,11 @@ int env_resolve_variable(env_t *env, char *name, data_t **data, flags_t *flags)
 		}
 		else
 		{
-			class_t *clazz = NULL;
-
-			char *start = name;
-	
-			size_t strsize;
 			char classBuild[MAX_PATH];
-			char *classBuildCursor = classBuild;
-			char filename[MAX_PATH];
-	
-			do
-			{
-				*beg = 0;
-				strsize = strlen(start);
-				strcpy_s(classBuildCursor, sizeof(classBuild) - 1 - (classBuildCursor - classBuild), start);
-				classBuildCursor += strsize;
-				*beg = '.';
-
-				if (class_resolve_filename(env->vm, classBuild, filename, sizeof(filename)))
-				{
-					clazz = class_load_filename_override(env->vm, classBuild, filename, 1, 1, 1);
-					break;
-				}
-
-				*classBuildCursor = '.';
-				classBuildCursor++;
-				
-				beg++;
-				
-				start = beg;
-				beg = strchr(beg, '.');
-			} while (beg);
+			class_t *clazz;
+			
+			*beg = '.';
+			beg = resolve_first_class(env->vm, name, &clazz);
 
 			if (!clazz)
 			{
@@ -1170,7 +1145,14 @@ int env_resolve_function_name(env_t *env, char *name, function_t **function)
 
 	const char *funcname;
 	function_t *result;
+	
+	char *paren = strrchr(name, '(');
+	assert(paren);
+
+	*paren = 0;
 	char *end = strrchr(name, '.');
+	*paren = '(';
+
 	if (end)
 	{
 		*end = 0;
@@ -1194,16 +1176,22 @@ int env_resolve_function_name(env_t *env, char *name, function_t **function)
 		}
 		else
 		{
-			CLEAR_EXCEPTION(env);
+			class_t *clazz;
 
-			funcname = end + 1;
-			class_t *clazz = vm_load_class(env->vm, name);
+			CLEAR_EXCEPTION(env);	
+
+			//*end = '.';
+			end = resolve_first_class(env->vm, name, &clazz);
+
 			if (!clazz)
 			{
 				env_raise_exception(env, exception_class_not_found, name);
 				return 0;
 			}
+
 			*end = '.';
+			funcname = end + 1;
+
 			result = class_get_function(clazz, funcname);
 			if (!result)
 			{
@@ -1499,6 +1487,46 @@ class_t *class_load_filename_override(vm_t *__restrict vm, const char *__restric
 	return loadToVM ? class_load_to_vm(vm, result) : result;
 }
 
+static char *resolve_first_class(vm_t *vm, char *name, class_t **result)
+{
+	char filename[MAX_PATH];
+	char classBuild[MAX_PATH];
+	size_t strsize;
+	const char *start = name;
+	char *buildCursor = classBuild;
+	char *beg = strchr(name, '.');
+
+	do
+	{
+		*beg = 0;
+
+		strsize = strlen(start);
+		strcpy_s(buildCursor, sizeof(classBuild) - 1 - (buildCursor - classBuild), start);
+		buildCursor += strsize;
+		*beg = '.';
+
+		if (class_resolve_filename(vm, classBuild, filename, sizeof(filename)))
+		{
+			*result = class_load_filename_override(vm, classBuild, filename, 1, 1, 1);
+			return beg;
+		}
+
+		*buildCursor = '.';
+		buildCursor++;
+
+		beg++;
+
+		start = beg;
+		beg = strchr(beg, '.');
+	} while (beg);
+	start += strlen(start);
+
+	*result = NULL;
+	if (class_resolve_filename(vm, name, filename, sizeof(filename)))
+		*result = class_load_filename_override(vm, name, filename, 1, 1, 1);
+	return start;
+}
+
 class_t *class_load_ext(const char *classname, vm_t *vm)
 {
 	return vm_load_class(vm, classname);
@@ -1704,37 +1732,37 @@ int env_run(env_t *__restrict env, void *__restrict location)
 					// The size we want to allocate is stored in a variable
 
 					env->rip++;
-					if (!env_resolve_variable(env, env->rip, &data2, &flags2))
+					if (!env_resolve_variable(env, env->rip, &data, &flags))
 						EXIT_RUN(env->exception);
 					env->rip += strlen(env->rip) + 1;
-					switch (value_typeof((value_t *)&flags2))
+					switch (value_typeof((value_t *)&flags))
 					{
 					case lb_char:
 						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hhd", data2->ucvalue));
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hhd", data->ucvalue));
 					case lb_uchar:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->ucvalue);
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->ucvalue);
 						break;
 					case lb_short:
 						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hd", data2->ucvalue));
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hd", data->ucvalue));
 					case lb_ushort:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->usvalue);
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->usvalue);
 						break;
 					case lb_int:
 						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %d", data2->ucvalue));
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %d", data->ucvalue));
 					case lb_uint:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->uivalue);
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->uivalue);
 						break;
 					case lb_long:
 						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %lld", data2->ucvalue));
+							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %lld", data->ucvalue));
 					case lb_ulong:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->ulvalue);
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->ulvalue);
 						break;
 					case lb_bool:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data2->bvalue);
+						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->bvalue);
 						break;
 					case lb_float:
 					case lb_double:

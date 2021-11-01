@@ -6,9 +6,16 @@ class Main
 			dynamic_call System.stdout.println(LString;) "I will now print all the command line arguments:"
 
 			int counter
+			int num
 			setd counter dword[0]
 
 			while counter < args.length
+				setv num counter
+				add num num int[1]
+				static_call Int.toString(I) num
+				dynamic_call System.stdout.print(LString;) ret
+				dynamic_call System.stdout.print(LString;) ". "
+
 				dynamic_call System.stdout.println(LString;) args[counter]
 				add counter counter int[1]
 			end

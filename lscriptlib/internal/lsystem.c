@@ -52,6 +52,18 @@ LNIFUNC lobject LNICALL lscript_lang_System_arraycopy(LEnv venv, lclass vclazz, 
 	array_t *dstarr = (array_t *)dst;
 	array_t *srcarr = (array_t *)src;
 
+	if (!dst)
+	{
+		env_raise_exception(env, exception_null_dereference, "arraycopy dst");
+		return NULL;
+	}
+
+	if (!src)
+	{
+		env_raise_exception(env, exception_null_dereference, "arraycopy src");
+		return NULL;
+	}
+
 	byte_t dsttype = value_typeof((value_t *)dst);
 	byte_t srctype = value_typeof((value_t *)src);
 
