@@ -16,6 +16,13 @@ class Object extends null
 		static_call Long.toString(Q) this
 		retr
 
+	function dynamic interp bool equals(object Object other)
+		if this == other
+			retb byte[1]
+		else
+			retb byte[0]
+		end
+
 	function dynamic interp uint hashCode()
 		retv this
 
