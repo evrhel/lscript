@@ -1,6 +1,6 @@
 package lscript.lang
 
-class Int
+class Int extends Number
 
 	function static interp object toString(int value)
 		long lval
@@ -14,6 +14,50 @@ class Int
 		setv this.value value
 		ret
 
+	function dynamic interp char charValue()
+		retv this.value
+
+	function dynamic interp uchar ucharValue()
+		retv this.value
+
+	function dynamic interp short shortValue()
+		retv this.value
+
+	function dynamic interp ushort ushortValue()
+		retv this.value
+
+	function dynamic interp int intValue()
+		retv this.value
+
+	function dynamic interp uint uintValue()
+		retv this.value
+
+	function dynamic interp long longValue()
+		retv this.value
+
+	function dynamic interp ulong ulongValue()
+		retv this.value
+
+	function dynamic interp float floatValue()
+		retv this.value
+
+	function dynamic interp double doubleValue()
+		retv this.value
+
 	function dynamic interp object toString()
 		static_call toString(I) this.value
 		retr
+
+	function dynamic interp bool equals(object Object other)
+		object Class otherClass
+		static_call Class.classOf(LObject;) other
+		if otherClass == Int.class
+			if this.value == other.value
+				retb byte[1]
+			end
+		end
+		retb byte[0]
+
+
+	function dynamic interp uint hashCode()
+		retv this.value
