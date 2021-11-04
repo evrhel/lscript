@@ -245,7 +245,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 	unsigned char argtype;
 	const char *argname;
 	unsigned char isStatic;
-	unsigned char isNative;
+	byte_t execType;
 	byte_t returnType;
 
 	map_t *argTypes;
@@ -275,11 +275,8 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 			}
 			curr++;
 
-			if (*curr == lb_interp)
-				isNative = 0;
-			else if (*curr == lb_native)
-				isNative = 1;
-			else
+			execType = *curr;
+			if (execType < lb_interp || execType > lb_abstract)
 			{
 				map_free(clazz->functions, 0);
 				return 0;
@@ -455,7 +452,7 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				strcpy_s(func->qualifiedName, qualnameSize, qualifiedName);
 
 				func->name = funcName;
-				func->location = isNative ? NULL : (void *)curr;
+				func->location = execType == lb_interp ? (void *)curr : NULL;
 				func->argTypes = argTypes;
 				func->numargs = numArgs;
 				func->parentClass = clazz;
@@ -467,8 +464,10 @@ int register_functions(class_t *clazz, const byte_t *dataStart, const byte_t *da
 				if (isStatic)
 					func->flags |= FUNCTION_FLAG_STATIC;
 
-				if (isNative)
+				if (execType == lb_native)
 					func->flags |= FUNCTION_FLAG_NATIVE;
+				else if (execType == lb_abstract)
+					func->flags |= FUNCTION_FLAG_ABSTRACT;
 
 				func->args = MALLOC(numArgs * sizeof(const char *));
 				if (!func->args)
@@ -642,4 +641,9 @@ int register_field_offests(class_t *clazz, const byte_t *dataStart, const byte_t
 
 	clazz->size = currentOffset;
 	return 1;
+}
+
+const char *class_get_last_error()
+{
+	return NULL;
 }

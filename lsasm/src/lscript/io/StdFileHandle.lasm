@@ -40,7 +40,7 @@ class StdFileHandle
 		retr
 
 	function dynamic interp object readLine()
-		object result
+		object String result
 		static_call freadline(q) this.nativeHandle
 		seto result new String <init>()
 		setr result.chars

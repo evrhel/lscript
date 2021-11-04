@@ -45,14 +45,14 @@ class Vector
 		ret
 
 	function dynamic interp objectarray toArray()
-		objectarray arr
+		objectarray Object arr
 		seto arr object this.size
 		static_call System.arraycopy(LObject;iLObject;ii) arr this.size this.data dword[0] this.size
 		retv arr
 
 	# grows the vector to have more elements
 	function dynamic interp void grow()
-		objectarray newArr
+		objectarray Object newArr
 		uint newSize
 
 		setv newSize this.data.length

@@ -3,7 +3,7 @@ package lscript.lang
 class Long
 
 	function static interp object toString(long value)
-		object builder
+		object StringBuilder builder
 		seto builder new StringBuilder <init>()
 		dynamic_call builder.append(Q) value
 		dynamic_call builder.toString()

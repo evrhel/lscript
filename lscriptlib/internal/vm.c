@@ -2336,6 +2336,14 @@ int env_handle_static_function_callv(env_t *__restrict env, function_t *__restri
 	}
 	else
 	{
+		if (function->flags & FUNCTION_FLAG_ABSTRACT)
+		{
+			assert(!function->location);
+			env_raise_exception(env, exception_illegal_state, "attempting to call abstract virtual function %s.%s", function->parentClass->name, function->qualifiedName);
+			return env->exception;
+		}
+		assert(function->location);
+
 		env->variables->next = list_create();
 		env->variables->next->prev = env->variables;
 		env->variables = env->variables->next;

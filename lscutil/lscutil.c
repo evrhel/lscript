@@ -178,7 +178,7 @@ LSCUEXPORT int lscu_resolve_class(LSCUCONTEXT context, const char *__restrict cl
 
     if (class_exists_on_path(ctx, tocheck))
     {
-        strcpy_s(fullname, bufsize, tocheck);
+        if (fullname) strcpy_s(fullname, bufsize, tocheck);
         return 1;
     }
 
@@ -192,7 +192,7 @@ LSCUEXPORT int lscu_resolve_class(LSCUCONTEXT context, const char *__restrict cl
 
         if (class_exists_on_path(ctx, tocheck))
         {
-            strcpy_s(fullname, bufsize, tocheck);
+            if (fullname) strcpy_s(fullname, bufsize, tocheck);
             return 1;
         }
     }

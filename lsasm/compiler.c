@@ -393,7 +393,6 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			case lb_ulong:
 			case lb_float:
 			case lb_double:
-			case lb_object:
 			case lb_boolarray:
 			case lb_chararray:
 			case lb_uchararray:
@@ -405,20 +404,38 @@ compile_error_t *compile_data(data_compile_options_t *options)
 			case lb_ulongarray:
 			case lb_floatarray:
 			case lb_doublearray:
-			case lb_objectarray:
 				if (cs.tokencount == 2)
 				{
 					cs.out = PUT_BYTE(cs.out, cs.cmd);
 					cs.out = PUT_STRING(cs.out, cs.tokens[1]);
 				}
 				else if (cs.tokencount == 1)
+					cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Missing variable name declaration");
+				else
+					cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_warning, "Unecessary arguments following variable declaration");
+				break;
+			case lb_object:
+			case lb_objectarray:
+				if (cs.tokencount == 3)
 				{
+					if (lscu_resolve_class(cs.lscuctx, cs.tokens[1], NULL, 0))
+					{
+						cs.out = PUT_BYTE(cs.out, cs.cmd);
+						cs.out = PUT_STRING(cs.out, cs.tokens[2]);
+					}
+					else
+						cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Unresolved symbol \"%s\"", cs.tokens[1]);
+				}
+				else if (cs.tokencount == 2)
+				{
+					if (!lscu_resolve_class(cs.lscuctx, cs.tokens[1], NULL, 0))
+						cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Unresolved symbol \"%s\"", cs.tokens[1]);
 					cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Missing variable name declaration");
 				}
+				else if (cs.tokencount == 1)
+					cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Missing variable object class");
 				else
-				{
 					cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_warning, "Unecessary arguments following variable declaration");
-				}
 				break;
 
 			case lb_setb:
@@ -1675,7 +1692,8 @@ void handle_function_def(compile_state_t *state)
 		return;
 	}
 
-	int isStatic, isInterp;
+	int isStatic;
+	byte_t execType;
 	byte_t returnType;
 	if (!strcmp(state->tokens[1], "static"))
 		isStatic = 1;
@@ -1688,11 +1706,16 @@ void handle_function_def(compile_state_t *state)
 	}
 
 	if (!strcmp(state->tokens[2], "interp"))
-		isInterp = 1;
+		execType = lb_interp;
 	else if (!strcmp(state->tokens[2], "native"))
-		isInterp = 0;
+		execType = lb_native;
+	else if (!strcmp(state->tokens[2], "abstract"))
+		execType = lb_abstract;
 	else
-		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"interp\" or \"native\"", state->tokens[2]);
+		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"interp\", \"native\", or \"abstract\"", state->tokens[2]);
+
+	if (isStatic && execType == lb_abstract)
+		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "static function cannot be declared as abstract");
 
 	returnType = get_command_byte(state->tokens[3]);
 	if (returnType < lb_void || returnType > lb_objectarray)
@@ -1771,7 +1794,7 @@ void handle_function_def(compile_state_t *state)
 
 	PUT_BYTE(state->out, lb_function);
 	PUT_BYTE(state->out, isStatic ? lb_static : lb_dynamic);
-	PUT_BYTE(state->out, isInterp ? lb_interp : lb_native);
+	PUT_BYTE(state->out, execType);
 	PUT_BYTE(state->out, returnType);
 	PUT_STRING(state->out, name);
 	PUT_BYTE(state->out, argCount);

@@ -7,7 +7,7 @@ class System
 	global static const object stdin null
 
 	function static interp object startProcess(object String processName, object String commandLine, object String workingDir)
-		object procObj
+		object Process procObj
 		seto procObj new Process <init>()
 		static_call Process.startProcess(LString;LString;LString;) processName commandLine workingDir
 		#static_call Process.test(III) dword[10] dword[11] dword[12]

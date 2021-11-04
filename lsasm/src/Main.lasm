@@ -23,7 +23,7 @@ class Main
 
 		static_call myFunc()
 
-		object myObject
+		object Main myObject
 		seto myObject new Main <init>(LString;) "From dynamic function"
 
 		dynamic_call myObject.printMessage()

@@ -18,7 +18,8 @@ enum
 enum
 {
 	FUNCTION_FLAG_STATIC = 0x1,
-	FUNCTION_FLAG_NATIVE = 0x2
+	FUNCTION_FLAG_NATIVE = 0x2,
+	FUNCTION_FLAG_ABSTRACT = 0x4
 };
 
 typedef struct function_s function_t;
@@ -128,5 +129,7 @@ Frees a class loaded with class_load.
 @param freedata Whether to free the binary data associated with the class.
 */
 void class_free(class_t *__restrict clazz, int freedata);
+
+const char *class_get_last_error();
 
 #endif

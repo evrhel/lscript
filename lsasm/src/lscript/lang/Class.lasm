@@ -13,7 +13,7 @@ class Class
 		retv this.name
 
 	function dynamic interp object toString()
-		object builder
+		object StringBuilder builder
 		seto builder new StringBuilder <init>()
 		dynamic_call builder.append(LString;) "class "
 		dynamic_call builder.append(LString;) this.name

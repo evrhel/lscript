@@ -16,6 +16,7 @@ enum
 	lb_dynamic,
 	lb_interp,
 	lb_native,
+	lb_abstract,
 	lb_global,
 	lb_const,
 	lb_varying,
