@@ -1,0 +1,6 @@
+package lscript.lang.reflect
+
+class Qualifier
+	global static const int STATIC dword[0]
+	global static const int DYNAMIC dword[1]
+	global static const int ABSTRACT dword[2]

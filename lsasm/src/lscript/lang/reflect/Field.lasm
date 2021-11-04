@@ -1,0 +1,29 @@
+package lscript.lang.reflect
+
+class Field
+	global dynamic const object name
+	global dynamic const object fieldClass
+	global dynamic const int accessQualifier
+	global dynamic const int mutability
+	global dynamic const int primitiveType
+
+	function dynamic interp void <init>()
+		ret
+
+	function dynamic interp object getName()
+		retv this.name
+
+	function dynamic interp int getFieldClass()
+		retv this.fieldClass
+
+	function dynamic interp int getAccessQualifier()
+		retv this.accessQualifier
+
+	function dynamic interp int getMutability()
+		retv this.mutability
+
+	function dynamic interp int getPrimitiveType()
+		retv this.primitiveType
+
+	function dynamic interp object toString()
+		retv this.name

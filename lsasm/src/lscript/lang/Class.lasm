@@ -1,16 +1,31 @@
 package lscript.lang
 
+using lscript.lang.reflect
+
 class Class
 
-	global dynamic varying ulong handle
+	global dynamic const ulong handle
 
-	global dynamic varying object name
+	global dynamic const object name
+	global dynamic const objectarray fields
+	global dynamic const objectarray functions
 
 	function dynamic interp void <init>()
+
 		ret
 
 	function dynamic interp object getName()
 		retv this.name
+
+	function dynamic interp objectarray getFields()
+		objectarray Field resultFields
+		seto resultFields object fields.length
+		uint i
+		setd i dword[0]
+		while i < fields.length
+			setv resultFields[i] fields[i]
+		end
+		retv resultFields
 
 	function dynamic interp object toString()
 		object StringBuilder builder

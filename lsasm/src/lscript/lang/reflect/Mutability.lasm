@@ -1,0 +1,5 @@
+package lscript.lang.reflect
+
+class Mutability
+	global static const int CONST dword[0]
+	global static const int VARYING dword[1]

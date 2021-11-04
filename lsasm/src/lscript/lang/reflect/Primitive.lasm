@@ -1,0 +1,15 @@
+package lscript.lang.reflect
+
+class Primitive
+	global static const int NONE dword[0]
+	global static const int CHAR dword[1]
+	global static const int UCHAR dword[2]
+	global static const int SHORT dword[3]
+	global static const int USHORT dword[4]
+	global static const int INT dword[5]
+	global static const int UINT dword[6]
+	global static const int LONG dword[7]
+	global static const int ULONG dword[8]
+	global static const int BOOL dword[9]
+	global static const int FLOAT dword[10]
+	global static const int DOUBLE dword[11]
