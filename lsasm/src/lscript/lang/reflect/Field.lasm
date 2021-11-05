@@ -1,6 +1,7 @@
 package lscript.lang.reflect
 
 class Field
+	global dynamic const ulong handle
 	global dynamic const object name
 	global dynamic const object fieldClass
 	global dynamic const int accessQualifier
@@ -27,3 +28,50 @@ class Field
 
 	function dynamic interp object toString()
 		retv this.name
+
+	function dynamic interp char getChar()
+		static_call Reflect.getByteField(q) this.handle
+		retr
+
+	function dynamic interp uchar getUChar()
+		static_call Reflect.getByteField(q) this.handle
+		retr
+
+	function dynamic interp short getShort()
+		static_call Reflect.getWordField(q) this.handle
+		retr
+
+	function dynamic interp ushort getUShort()
+		static_call Reflect.getWordField(q) this.handle
+		retr
+
+	function dynamic interp int getInt()
+		static_call Reflect.getDwordField(q) this.handle
+		retr
+
+	function dynamic interp uint getUInt()
+		static_call Reflect.getDwordField(q) this.handle
+		retr
+
+	function dynamic interp long getLong()
+		static_call Reflect.getQwordField(q) this.handle
+		retr
+
+	function dynamic interp ulong getULong()
+		static_call Reflect.getQwordField(q) this.handle
+		retr
+
+	function dynamic interp float getFloat()
+		static_call Reflect.getReal4Field(q) this.handle
+		retr
+
+	function dynamic interp double getDouble()
+		static_call Reflect.getReal8Field(q) this.handle
+		retr
+
+	function dynamic interp bool getBool()
+		static_call Reflect.getByteField(q) this.handle
+		retr
+
+	function dynamic interp object getObject()
+		static_call Reflect.getObjectField(q) this.handle
