@@ -1,6 +1,6 @@
-package lscript.util
+package lscript.collections
 
-class Vector
+class Vector extends Collection
 
 	global dynamic varying objectarray data
 	global dynamic varying uint size
@@ -36,13 +36,65 @@ class Vector
 		setv this.data[index] value
 		retb true
 
-	function dynamic interp void add(object Object elem)
+	function dynamic interp bool add(object Object elem)
 		if this.size == data.size
 			dynamic_call this.grow()
 		end
 		setv this.data[this.size] elem
 		add this.size uint[1] this.size
-		ret
+		retb byte[1]
+
+	function dynamic interp bool remove(object Object elem)
+		uint index
+		dynamic_call this.indexOf(LObject;) elem
+		setr index
+		if index == uint[-1]
+			retb byte[0]
+		end
+		sub this.size this.size uint[1]
+
+		if this.size == uint[0]
+		elif index == this.size
+		else
+			seto newarr object this.size
+
+			uint i
+			sub i index uint[1]
+
+
+			while i < this.size
+				
+				add i i uint[1]
+			end
+
+		end
+		retb byte[1]
+
+	# Find the first index of a element
+	#
+	# Parameters:
+	# elem - The element to find
+	#
+	# Returns: the first index of elem, or -1 if not found.
+	function dynamic interp uint indexOf(object Object elem)
+		uint index
+		setd index dword[0]
+		while index < size
+
+			# test equality
+			if this.data[index] == null
+				if elem == null
+					retv index
+				end
+			else
+				dynamic_call this.data[index].equals(LObject;) elem
+				if ret
+					retv index
+				end
+			end
+			add index index uint[1]
+		end
+		retv dword[-1]
 
 	function dynamic interp objectarray toArray()
 		objectarray Object arr
