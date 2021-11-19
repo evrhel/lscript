@@ -1,0 +1,7 @@
+package lscript.collections
+
+class Collection extends Iterable
+	function dynamic abstract uint size()
+	function dynamic abstract bool add(object Object elem)
+	function dynamic abstract bool remove(object Object elem)
+	function dynamic abstract objectarray toArray()

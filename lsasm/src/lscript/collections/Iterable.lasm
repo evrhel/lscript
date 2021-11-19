@@ -1,0 +1,5 @@
+package lscript.collections
+
+class Iterable
+	function dynamic abstract object iterator()
+	function dynamic abstract object riterator()

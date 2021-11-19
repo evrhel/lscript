@@ -1,0 +1,36 @@
+package lscript.collections
+
+class VectorIterator extends Iterator
+
+	global dynamic varying object vector
+	global dynamic varying uint step
+	global dynamic varying uint index
+
+	function dynamic interp void <init>(object Vector vector, uint step)
+		setv this.vector vector
+		setv this.step step
+		if isReverse
+			dynamic_call vector.size()
+			setr this.index
+			sub this.index this.index uint[1]
+		else
+			setd this.index dword[0]
+		end
+		setv this.isReverse isReverse
+		ret
+
+	function dynamic interp object next()
+		object Object result
+		dynamic_call vector.at(i) this.index
+		add this.index this.index this.step
+		retv result
+
+	function dynamic interp bool hasNext()
+		uint size
+		dynamic_call vector.size()
+		setr size
+		if this.index >= size
+			retb byte[0]
+		else
+			retb byte[1]
+		end

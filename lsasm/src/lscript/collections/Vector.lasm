@@ -54,19 +54,19 @@ class Vector extends Collection
 		sub this.size this.size uint[1]
 
 		if this.size == uint[0]
-		elif index == this.size
 		else
-			seto newarr object this.size
+			if index != this.size
+				seto newarr object this.size
 
-			uint i
-			sub i index uint[1]
+				uint i
+				sub i index uint[1]
 
 
-			while i < this.size
-				
-				add i i uint[1]
+				while i < this.size
+					
+					add i i uint[1]
+				end
 			end
-
 		end
 		retb byte[1]
 
@@ -82,8 +82,8 @@ class Vector extends Collection
 		while index < size
 
 			# test equality
-			if this.data[index] == null
-				if elem == null
+			if this.data[index] == ulong[0]
+				if elem == ulong[0]
 					retv index
 				end
 			else
@@ -101,6 +101,16 @@ class Vector extends Collection
 		seto arr object this.size
 		static_call System.arraycopy(LObject;iLObject;ii) arr this.size this.data dword[0] this.size
 		retv arr
+
+	function dynamic interp object iterator()
+		object VectorIterator iterator
+		seto iterator new VectorIterator <init>(LVector;i) this dword[1] 
+		retv iterator
+
+	function dynamic interp object riterator()
+		object VectorIterator riterator
+		seto riterator new VectorIterator <init>(LVector;i) this dword[-1]
+		retv riterator
 
 	# grows the vector to have more elements
 	function dynamic interp void grow()

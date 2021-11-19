@@ -1,0 +1,5 @@
+package lscript.collections
+
+class Iterator
+	function dynamic abstract object next()
+	function dynamic abstract bool hasNext()
