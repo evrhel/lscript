@@ -16,25 +16,25 @@ class Math
 
 	function static interp double abs(double a)
 		if a < double[0.0]
-			sub a double[0.0] a
+			neg a a
 		end
 		retv a
 
 	function static interp float abs(float a)
 		if a < float[0.0]
-			sub a float[0.0] a
+			neg a a
 		end
 		retv a
 
 	function static interp int abs(int a)
 		if a < int[0]
-			sub a int[0] a
+			neg a a
 		end
 		retv a
 
 	function static interp long abs(long a)
 		if a < long[0]
-			sub a long[0] a
+			neg a a
 		end
 		retv a
 

@@ -1,6 +1,14 @@
 class Main
 
 	function static interp void main(objectarray String args)
+		int negative
+		setd negative dword[-2]
+
+		dynamic_call System.stdout.print(LString;) "abs(-2) = "
+		static_call Math.abs(I) negative
+		static_call Int.toString(I) ret
+		dynamic_call System.stdout.println(LString;) ret
+
 		dynamic_call System.stdout.println(LString;) "Hello World!"
 		if args.length > uint[0]
 			dynamic_call System.stdout.println(LString;) "I will now print all the command line arguments:"

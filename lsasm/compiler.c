@@ -318,7 +318,7 @@ compile_error_t *compile_data(data_compile_options_t *options)
 	}
 	
 	packageAllowed = 1;
-	importsAllowed = 0;
+	importsAllowed = 1;
 
 	curr = formatted;
 	while (curr)

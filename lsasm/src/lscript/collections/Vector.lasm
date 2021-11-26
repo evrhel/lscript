@@ -54,18 +54,16 @@ class Vector extends Collection
 		sub this.size this.size uint[1]
 
 		if this.size == uint[0]
-		else
-			if index != this.size
-				seto newarr object this.size
+		elif index != this.size
+			seto newarr object this.size
 
-				uint i
-				sub i index uint[1]
+			uint i
+			sub i index uint[1]
 
 
-				while i < this.size
-					
-					add i i uint[1]
-				end
+			while i < this.size
+				
+				add i i uint[1]
 			end
 		end
 		retb byte[1]
