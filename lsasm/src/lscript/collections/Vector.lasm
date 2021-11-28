@@ -102,7 +102,7 @@ class Vector extends Collection
 
 	function dynamic interp object iterator()
 		object VectorIterator iterator
-		seto iterator new VectorIterator <init>(LVector;i) this dword[1] 
+		seto iterator new VectorIterator <init>(LVector;i) this dword[1]
 		retv iterator
 
 	function dynamic interp object riterator()

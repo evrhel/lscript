@@ -24,7 +24,7 @@ class StdFileHandle
 		ret
 
 	function dynamic interp void close()
-		static_call fclose(q[Cii) this.nativeHandle
+		static_call fclose(q) this.nativeHandle
 		ret
 
 	function dynamic interp void putc(char c)

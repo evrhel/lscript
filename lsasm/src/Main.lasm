@@ -44,7 +44,7 @@ class Main
 
 	global dynamic varying object message
 
-	function dynamic interp void <init>(object String message)
+	constructor(object String message)
 		setv this.message message
 		ret
 

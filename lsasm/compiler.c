@@ -83,6 +83,7 @@ static byte_t get_primitive_type(const char *stringType);
 static void handle_class_def(compile_state_t *state);
 static void handle_field_def(compile_state_t *state);
 static void handle_function_def(compile_state_t *state);
+static void handle_constructor_def(compile_state_t *state);
 static void handle_set_cmd(compile_state_t *state);
 static void handle_cast_cmd(compile_state_t *state);
 static void handle_array_creation(compile_state_t *state);
@@ -377,6 +378,11 @@ compile_error_t *compile_data(data_compile_options_t *options)
 				alignAmount = options->alignment.functionAlignment - ((size_t)(cs.out->cursor - cs.out->buf) % (size_t)options->alignment.functionAlignment);
 				cs.out = PUT_BYTES(cs.out, lb_align, alignAmount);
 				handle_function_def(&cs);
+				break;
+			case lb_constructor:
+				alignAmount = options->alignment.functionAlignment - ((size_t)(cs.out->cursor - cs.out->buf) % (size_t)options->alignment.functionAlignment);
+				cs.out = PUT_BYTES(cs.out, lb_align, alignAmount);
+				handle_constructor_def(&cs);
 				break;
 
 			case lb_void:
@@ -681,6 +687,8 @@ byte_t get_command_byte(const char *string)
 		return lb_package;
 	else if (!strcmp(string, "using"))
 		return lb_using;
+	else if (!strcmp(string, "constructor"))
+		return lb_constructor;
 
 	else if (!strcmp(string, "void"))
 		return lb_void;
@@ -935,6 +943,41 @@ char **tokenize_string(const char *string, size_t *tokenCount)
 			}
 			else
 				PUT_CHAR(currstring, '0');
+			break;
+		case '(':
+		case ')':
+		case ',':
+			if (inDoubleQuotes || inSingleQuotes)
+				PUT_CHAR(currstring, c);
+			else
+			{
+				char *curbuf;
+				if (currstring->cursor > currstring->buf)
+				{
+					currstring = PUT_CHAR(currstring, 0);
+					curbuf = (char *)MALLOC((size_t)(currstring->cursor - currstring->buf));
+					if (!curbuf)
+						return NULL;
+					MEMCPY(curbuf, currstring->buf, (size_t)(currstring->cursor - currstring->buf));
+
+					list = PUT_ULONG(list, (size_t)curbuf);
+					(*tokenCount)++;
+				}
+
+				// Put the delimeter as a new token
+
+				curbuf = (char *)MALLOC(2);
+				if (!curbuf)
+					return NULL;
+				curbuf[0] = c;
+				curbuf[1] = 0;
+
+				list = PUT_ULONG(list, (size_t)curbuf);
+				(*tokenCount)++;
+
+				FREE_BUFFER(currstring);
+				currstring = NEW_BUFFER(32);
+			}
 			break;
 		case ' ':
 			if (inDoubleQuotes || inSingleQuotes)
@@ -1688,6 +1731,15 @@ void handle_function_def(compile_state_t *state)
 		case 4:
 			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name declaration");
 			break;
+		case 5:
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument declaration");
+			break;
+		case 6:
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected '('");
+			break;
+		case 7:
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected ')'");
+			break;
 		}
 		return;
 	}
@@ -1724,16 +1776,27 @@ void handle_function_def(compile_state_t *state)
 		return;
 	}
 
-	size_t functionTokenCount;
-	char **functionData = tokenize_function(state->tokens + 4, state->tokencount - 4, &functionTokenCount);
 	buffer_t *build = NEW_BUFFER(64);
+	const char *name = state->tokens[4];
 
-	const char *name = functionData[0];
-	byte_t argCount = 0;
-
-	for (size_t i = 1; i < functionTokenCount; i++, argCount++)
+	if (strcmp(state->tokens[5], "("))
 	{
-		byte_t type = get_command_byte(functionData[i]);
+		state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[5]);
+		return;
+	}
+
+	byte_t argCount = 0;
+	for (size_t i = 6;; i++, argCount++)
+	{
+		if (!strcmp(state->tokens[i], ")")) break;
+		if (i >= state->tokencount)
+		{
+			FREE_BUFFER(build);
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function declaration");
+			return;
+		}
+
+		byte_t type = get_command_byte(state->tokens[i]);
 		if (type < lb_char || type > lb_objectarray)
 		{
 			FREE_BUFFER(build);
@@ -1746,38 +1809,38 @@ void handle_function_def(compile_state_t *state)
 		i++;
 		if (type == lb_object || type == lb_objectarray)
 		{
-			if (i == functionTokenCount)
+			if (i == state->tokencount)
 			{
 				FREE_BUFFER(build);
 				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument object classname");
 				return;
 			}
 
-			const char *classname = functionData[i];
+			const char *classname = state->tokens[i];
 
 			char fullname[MAX_PATH];
 			if (!lscu_resolve_class(state->lscuctx, classname, fullname, sizeof(fullname)))
 			{
 				FREE_BUFFER(build);
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", functionData[i]);
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", state->tokens[i]);
 				return;
 			}
 
 			i++;
-			if (i == functionTokenCount)
+			if (i == state->tokencount)
 			{
 				FREE_BUFFER(build);
 				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
 				return;
 			}
 
-			argName = functionData[i];
+			argName = state->tokens[i];
 
 			PUT_BYTE(build, type);
 			PUT_STRING(build, fullname);
 			PUT_STRING(build, argName);
 		}
-		else if (i == functionTokenCount)
+		else if (i == state->tokencount)
 		{
 			FREE_BUFFER(build);
 			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
@@ -1785,10 +1848,22 @@ void handle_function_def(compile_state_t *state)
 		}
 		else
 		{
-			argName = functionData[i];
+			argName = state->tokens[i];
 
 			PUT_BYTE(build, type);
 			PUT_STRING(build, argName);
+		}
+
+		// Require ',' separating arguments (exclude last argument)
+		if (i < state->tokencount - 2)
+		{
+			i++;
+			if (strcmp(state->tokens[i], ","))
+			{
+				FREE_BUFFER(build);
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexepcted token \"%s\"", state->tokens[i]);
+				return;
+			}
 		}
 	}
 
@@ -1801,7 +1876,125 @@ void handle_function_def(compile_state_t *state)
 	PUT_BUF(state->out, build);
 
 	FREE_BUFFER(build);
-	free_tokenized_data(functionData, functionTokenCount);
+}
+
+void handle_constructor_def(compile_state_t *state)
+{
+	if (state->tokencount < 3)
+	{
+		switch (state->tokencount)
+		{
+		case 1:
+			state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Expected \"(\"");
+			break;
+		case 2:
+			state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Expected formal arguments");
+			break;
+		}
+		return;
+	}
+
+	buffer_t *build = NEW_BUFFER(64);
+
+	if (strcmp(state->tokens[1], "("))
+	{
+		state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[5]);
+		return;
+	}
+
+	byte_t argCount = 0;
+	for (size_t i = 2;; i++, argCount++)
+	{
+		if (!strcmp(state->tokens[i], ")")) break;
+		if (i >= state->tokencount)
+		{
+			FREE_BUFFER(build);
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function declaration");
+			return;
+		}
+
+		byte_t type = get_command_byte(state->tokens[i]);
+		if (type < lb_char || type > lb_objectarray)
+		{
+			FREE_BUFFER(build);
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Illegal argument type");
+			return;
+		}
+
+		const char *argName;
+
+		i++;
+		if (type == lb_object || type == lb_objectarray)
+		{
+			if (i == state->tokencount)
+			{
+				FREE_BUFFER(build);
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument object classname");
+				return;
+			}
+
+			const char *classname = state->tokens[i];
+
+			char fullname[MAX_PATH];
+			if (!lscu_resolve_class(state->lscuctx, classname, fullname, sizeof(fullname)))
+			{
+				FREE_BUFFER(build);
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", state->tokens[i]);
+				return;
+			}
+
+			i++;
+			if (i == state->tokencount)
+			{
+				FREE_BUFFER(build);
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
+				return;
+			}
+
+			argName = state->tokens[i];
+
+			PUT_BYTE(build, type);
+			PUT_STRING(build, fullname);
+			PUT_STRING(build, argName);
+		}
+		else if (i == state->tokencount)
+		{
+			FREE_BUFFER(build);
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
+			return;
+		}
+		else
+		{
+			argName = state->tokens[i];
+
+			PUT_BYTE(build, type);
+			PUT_STRING(build, argName);
+		}
+
+		// Require ',' separating arguments (exclude last argument)
+		if (i < state->tokencount - 2)
+		{
+			i++;
+			if (strcmp(state->tokens[i], ","))
+			{
+				FREE_BUFFER(build);
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexepcted token \"%s\"", state->tokens[i]);
+				return;
+			}
+		}
+	}
+
+	static const char CONSTRUCTOR_NAME[] = "<init>";
+
+	PUT_BYTE(state->out, lb_function);
+	PUT_BYTE(state->out, lb_dynamic);
+	PUT_BYTE(state->out, lb_interp);
+	PUT_BYTE(state->out, lb_void);
+	PUT_STRING(state->out, CONSTRUCTOR_NAME);
+	PUT_BYTE(state->out, argCount);
+	PUT_BUF(state->out, build);
+
+	FREE_BUFFER(build);
 }
 
 void handle_set_cmd(compile_state_t *state)
@@ -1837,14 +2030,26 @@ void handle_set_cmd(compile_state_t *state)
 	case lb_seto:
 		if (!strcmp(state->tokens[2], "new"))
 		{
-			if (state->tokencount < 4)
+			if (state->tokencount < 7)
 			{
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected instantiated class name");
+				switch (state->tokencount)
+				{
+				case 4:
+					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected instantiated class name");
+					break;
+				case 5:
+					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected constructor call");
+					break;
+				case 6:
+					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \")\"");
+					break;
+				}
 				return;
 			}
-			else if (state->tokencount < 5)
+			
+			if (strcmp(state->tokens[5], "("))
 			{
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected constructor call");
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[5]);
 				return;
 			}
 
@@ -1856,40 +2061,74 @@ void handle_set_cmd(compile_state_t *state)
 				return;
 			}
 
-			char temp[MAX_PATH];
-			char qualifiedfuncname[MAX_PATH];
-			char *qfnCursor = qualifiedfuncname;
-			char *constructorSig = state->tokens[4];
+			if (strcmp(state->tokens[4], "<init>"))
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Using non-constructor as constructor");
 
-			// Seek to the start of the signature
-			while (*constructorSig && *constructorSig != '(')
+			if (!strcmp(state->tokens[6], ")"))
 			{
-				*qfnCursor = *constructorSig;
-				constructorSig++;
-				qfnCursor++;
-			}
+				PUT_BYTE(state->out, lb_seto);
+				PUT_STRING(state->out, varname);
+				PUT_BYTE(state->out, lb_new);
+				PUT_STRING(state->out, fullname);
 
-			if (!*constructorSig)
-			{
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+				char towrite[MAX_PATH];
+				strcpy_s(towrite, sizeof(towrite), state->tokens[4]);
+				strcat_s(towrite, sizeof(towrite), "(");
+
+				PUT_STRING(state->out, towrite);
 				return;
 			}
 
-			while (*constructorSig && *constructorSig != ')')
+			if (state->tokencount < 8)
 			{
-				if (*constructorSig == 'L')
-				{
-					constructorSig++;
-					char *saved = constructorSig;
-					while (*constructorSig && *constructorSig != ';') constructorSig++;
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \")\"");
+				return;
+			}
 
-					if (!*constructorSig)
+			char temp[MAX_PATH];
+			char qualifiedfuncname[MAX_PATH];
+			char *qfnCursor;
+
+			size_t namelen = strlen(state->tokens[4]);
+			memcpy(qualifiedfuncname, state->tokens[4], namelen);
+			qfnCursor = qualifiedfuncname + namelen;
+			*qfnCursor = '('; qfnCursor++;
+
+			char *sig = state->tokens[6];
+
+			size_t argcount = 0;
+			while (*sig)
+			{
+				if (*sig == '[')
+				{
+					*qfnCursor = *sig;
+					qfnCursor++;
+					sig++;
+				}
+
+				if (!*sig)
+				{
+					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+					return;
+				}
+
+				if (*sig == 'L')
+				{
+					*qfnCursor = *sig;
+					qfnCursor++;
+					sig++;
+
+					char *saved = sig;
+
+					while (*sig && *sig != ';') sig++;
+
+					if (!*sig)
 					{
 						state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
 						return;
 					}
 
-					*constructorSig = 0;
+					*sig = 0;
 
 					if (!lscu_resolve_class(state->lscuctx, saved, temp, sizeof(temp)))
 					{
@@ -1897,11 +2136,9 @@ void handle_set_cmd(compile_state_t *state)
 						return;
 					}
 
-					*constructorSig = ';';
+					*sig = ';';
 
 					char *tempcursor = temp;
-					*qfnCursor = 'L';
-					qfnCursor++;
 					while (*tempcursor)
 					{
 						*qfnCursor = *tempcursor;
@@ -1911,96 +2148,101 @@ void handle_set_cmd(compile_state_t *state)
 					*qfnCursor = ';';
 
 					qfnCursor++;
-					constructorSig++;
+					sig++;
 				}
 				else
 				{
-					*qfnCursor = *constructorSig;
+					*qfnCursor = *sig;
 					qfnCursor++;
-					constructorSig++;
+					sig++;
 				}
+				argcount++;
 			}
 
-			if (!*constructorSig)
+			if (strcmp(state->tokens[7], ")"))
 			{
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[4]);
 				return;
 			}
 
-			*constructorSig = 0; // Remove ')'
-
 			*qfnCursor = 0;
 
-			buffer_t *argbuf = NEW_BUFFER(16);
+			buffer_t *argBuffer = NEW_BUFFER(128);
 
-			size_t argc;
-			byte_t *sig = derive_function_args(qualifiedfuncname, &argc);
-
-			for (size_t i = 0, j = 5; i < argc; i++, j++)
+			size_t i, currarrg;
+			for (currarrg = 0, i = 8; i < state->tokencount; currarrg++, i++)
 			{
-				const char *argstr = state->tokens[j];
-
-				byte_t reqArgType;
-				size_t reqArgSize = get_type_properties(sig[i], &reqArgType);
+				if (currarrg == argcount)
+				{
+					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Too many arguments for constructor %s", qualifiedfuncname);
+					FREE_BUFFER(argBuffer);
+					return;
+				}
 
 				data_t argData;
 				byte_t argType;
-				int argIsAbsolute;
-				size_t argSize = evaluate_constant(argstr, &argData, &argType, &argIsAbsolute);
+				int isAbsoluteType;
+				size_t argSize = evaluate_constant(state->tokens[i], &argData, &argType, &isAbsoluteType);
 
 				if (argSize == 0)
 				{
-					if (state->tokens[j][0] == SIG_STRING_CHAR)
+					if (state->tokens[i][0] == SIG_STRING_CHAR)
 					{
-						PUT_BYTE(argbuf, lb_string);
-						PUT_STRING(argbuf, state->tokens[j] + 1);
+						PUT_BYTE(argBuffer, lb_string);
+						PUT_STRING(argBuffer, state->tokens[i] + 1);
+					}
+					else if (state->tokens[i][0] == SIG_CHAR_CHAR)
+					{
+						PUT_BYTE(argBuffer, lb_byte);
+						PUT_BYTE(argBuffer, state->tokens[i][1]);
 					}
 					else
 					{
-						PUT_BYTE(argbuf, lb_value);
-						PUT_STRING(argbuf, state->tokens[j]);
+						if (!strcmp(state->tokens[i], "ret"))
+						{
+							PUT_BYTE(argBuffer, lb_ret);
+						}
+						else
+						{
+							PUT_BYTE(argBuffer, lb_value);
+							PUT_STRING(argBuffer, state->tokens[i]);
+						}
 					}
 					continue;
 				}
-				else
+
+				if (isAbsoluteType)
+					get_type_properties(argType, &argType);
+
+				PUT_BYTE(argBuffer, argType);
+				switch (argType)
 				{
-					if (reqArgSize != argSize)
-					{
-						FREE_BUFFER(argbuf);
-						state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Type size mismatch (got: %d, needs: %d)", (int)argSize, (int)reqArgSize);
-						return;
-					}
-
-					if (reqArgType != argType)
-						state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Value types do not match");
-
-					PUT_BYTE(argbuf, reqArgType);
-					switch (reqArgType)
-					{
-					case lb_byte:
-						PUT_CHAR(argbuf, argData.cvalue);
-						break;
-					case lb_word:
-						PUT_SHORT(argbuf, argData.svalue);
-						break;
-					case lb_dword:
-						PUT_INT(argbuf, argData.ivalue);
-						break;
-					case lb_qword:
-						PUT_LONG(argbuf, argData.lvalue);
-						break;
-					case lb_real4:
-						PUT_FLOAT(argbuf, argData.fvalue);
-						break;
-					case lb_real8:
-						PUT_DOUBLE(argbuf, argData.dvalue);
-						break;
-					case lb_object:
-						break;
-					default:
-						break;
-					}
+				case lb_byte:
+					PUT_CHAR(argBuffer, argData.cvalue);
+					break;
+				case lb_word:
+					PUT_SHORT(argBuffer, argData.svalue);
+					break;
+				case lb_dword:
+					PUT_INT(argBuffer, argData.ivalue);
+					break;
+				case lb_qword:
+					PUT_LONG(argBuffer, argData.lvalue);
+					break;
+				case lb_real4:
+					PUT_FLOAT(argBuffer, argData.fvalue);
+					break;
+				case lb_real8:
+					PUT_DOUBLE(argBuffer, argData.dvalue);
+					break;
 				}
+			}
+
+			if (currarrg != argcount)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Not enough arguments for constructor %s", qualifiedfuncname);
+				FREE_BUFFER(argBuffer);
+				return;
 			}
 
 			PUT_BYTE(state->out, lb_seto);
@@ -2008,11 +2250,9 @@ void handle_set_cmd(compile_state_t *state)
 			PUT_BYTE(state->out, lb_new);
 			PUT_STRING(state->out, fullname);
 			PUT_STRING(state->out, qualifiedfuncname);
-			PUT_BUF(state->out, argbuf);
+			PUT_BUF(state->out, argBuffer);
 
-			free_derived_args(sig);
-
-			FREE_BUFFER(argbuf);
+			FREE_BUFFER(argBuffer);
 		}
 		else if (!strcmp(state->tokens[2], "null"))
 		{
@@ -2287,17 +2527,32 @@ void handle_ret_cmd(compile_state_t *state)
 
 void handle_call_cmd(compile_state_t *state)
 {
-	if (state->tokencount < 2)
-		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name");
+	if (state->tokencount < 4)
+	{
+		switch (state->tokencount)
+		{
+		case 1:
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name");
+			break;
+		case 2:
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"(\"");
+			break;
+		case 3:
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function signature");
+			break;
+		}
+		return;
+	}
 
+	if (strcmp(state->tokens[2], "("))
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[2]);
+		return;
+	}
+
+	char *functionName = state->tokens[1];
 	char unqualbuf[MAX_PATH];
 	char temp[MAX_PATH];
-	char qualifiedfuncname[MAX_PATH];
-	char *functionName = state->tokens[1];
-	char *qfnCursor = qualifiedfuncname;
-
-	//if (state->cmd == lb_static_call)
-	//{
 
 	// If the first part of the function call is a class, replace with qualified name
 	char *dot = strchr(functionName, '.');
@@ -2310,8 +2565,6 @@ void handle_call_cmd(compile_state_t *state)
 			*dot = '.';
 			strcpy_s(unqualbuf, sizeof(unqualbuf), temp);
 			strcat_s(unqualbuf, sizeof(unqualbuf), dot);
-			//state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", functionName);
-			//return;
 		}
 		else
 		{
@@ -2319,49 +2572,69 @@ void handle_call_cmd(compile_state_t *state)
 			*dot = '.';
 			strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
 		}
-
-		//strcpy_s(unqualbuf, sizeof(unqualbuf), temp);
-		//strcat_s(unqualbuf, sizeof(unqualbuf), dot);
 	}
 	else strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
-	//}
-	//else strcpy_s(unqualbuf, sizeof(unqualbuf), functionName);
 
 	functionName = unqualbuf;
 
-	// Seek to the start of the signature
-	while (*functionName && *functionName != '(')
-	{
-		*qfnCursor = *functionName;
-		functionName++;
-		qfnCursor++;
-	}
+	if (!strcmp(functionName, "<init>"))
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Calling constructor as function");
 
-	if (!*functionName)
+	if (!strcmp(state->tokens[3], ")"))
 	{
-		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+		PUT_BYTE(state->out, state->cmd);
+
+		char towrite[MAX_PATH];
+		strcpy_s(towrite, sizeof(towrite), functionName);
+		strcat_s(towrite, sizeof(towrite), "(");
+
+		PUT_STRING(state->out, towrite);
 		return;
 	}
 
-	while (*functionName && *functionName != ')')
+	char qualifiedfuncname[MAX_PATH];
+	char *qfnCursor;
+
+	size_t namelen = strlen(functionName);
+	memcpy(qualifiedfuncname, functionName, namelen);
+	qfnCursor = qualifiedfuncname + namelen;
+	*qfnCursor = '('; qfnCursor++;
+
+	char *sig = state->tokens[3];
+
+	size_t argcount = 0;
+	while (*sig)
 	{
-		if (*functionName == 'L')
+		if (*sig == '[')
 		{
-			*qfnCursor = *functionName;
+			*qfnCursor = *sig;
 			qfnCursor++;
-			functionName++;
+			sig++;
+		}
 
-			char *saved = functionName;
+		if (!*sig)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+			return;
+		}
 
-			while (*functionName && *functionName != ';') functionName++;
+		if (*sig == 'L')
+		{
+			*qfnCursor = *sig;
+			qfnCursor++;
+			sig++;
 
-			if (!*functionName)
+			char *saved = sig;
+
+			while (*sig && *sig != ';') sig++;
+
+			if (!*sig)
 			{
 				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
 				return;
 			}
 
-			*functionName = 0;
+			*sig = 0;
 
 			if (!lscu_resolve_class(state->lscuctx, saved, temp, sizeof(temp)))
 			{
@@ -2369,7 +2642,7 @@ void handle_call_cmd(compile_state_t *state)
 				return;
 			}
 
-			*functionName = ';';
+			*sig = ';';
 
 			char *tempcursor = temp;
 			while (*tempcursor)
@@ -2381,19 +2654,20 @@ void handle_call_cmd(compile_state_t *state)
 			*qfnCursor = ';';
 
 			qfnCursor++;
-			functionName++;
+			sig++;
 		}
 		else
 		{
-			*qfnCursor = *functionName;
+			*qfnCursor = *sig;
 			qfnCursor++;
-			functionName++;
+			sig++;
 		}
+		argcount++;
 	}
 
-	if (!*functionName)
+	if (strcmp(state->tokens[4], ")"))
 	{
-		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected end of function signature");
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[4]);
 		return;
 	}
 
@@ -2401,8 +2675,16 @@ void handle_call_cmd(compile_state_t *state)
 
 	buffer_t *argBuffer = NEW_BUFFER(128);
 	
-	for (size_t i = 2; i < state->tokencount; i++)
+	size_t i, currarrg;
+	for (currarrg = 0, i = 5; i < state->tokencount; currarrg++, i++)
 	{
+		if (currarrg == argcount)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Too many arguments for function %s", qualifiedfuncname);
+			FREE_BUFFER(argBuffer);
+			return;
+		}
+
 		data_t argData;
 		byte_t argType;
 		int isAbsoluteType;
@@ -2460,6 +2742,13 @@ void handle_call_cmd(compile_state_t *state)
 			PUT_DOUBLE(argBuffer, argData.dvalue);
 			break;
 		}
+	}
+
+	if (currarrg != argcount)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Not enough arguments for function %s", qualifiedfuncname);
+		FREE_BUFFER(argBuffer);
+		return;
 	}
 
 	PUT_BYTE(state->out, state->cmd);
