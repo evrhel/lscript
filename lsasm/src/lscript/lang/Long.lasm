@@ -11,7 +11,7 @@ class Long
 
 	global dynamic varying long value
 
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
 	function dynamic interp void <init>(long value)

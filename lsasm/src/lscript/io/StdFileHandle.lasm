@@ -10,10 +10,10 @@ class StdFileHandle
 	global dynamic varying ulong nativeHandle
 	global dynamic varying int fileMode
 
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
-	function dynamic interp void <init>(ulong handle, int mode)
+	constructor(ulong handle, int mode)
 		setv this.nativeHandle handle
 		setv this.fileMode mode
 		ret

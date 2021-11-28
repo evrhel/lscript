@@ -2,7 +2,7 @@ package lscript.lang
 
 class Object extends null
 
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
 	function dynamic interp object getClass()

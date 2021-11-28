@@ -8,7 +8,7 @@ class Field
 	global dynamic const int mutability
 	global dynamic const int primitiveType
 
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
 	function dynamic interp object getName()

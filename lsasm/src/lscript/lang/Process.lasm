@@ -6,7 +6,7 @@ class Process
 
 	global dynamic varying ulong nativeHandle
 
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
 	function dynamic interp uint getPID()

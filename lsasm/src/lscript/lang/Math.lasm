@@ -11,9 +11,6 @@ class Math
 	global static const double PHI real8[1.61803398875]
 	global static const float PHIF real4[1.61803398875]
 
-	function dynamic interp void <init>()
-		ret
-
 	function static interp double abs(double a)
 		if a < double[0.0]
 			neg a a

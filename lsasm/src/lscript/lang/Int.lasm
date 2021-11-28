@@ -10,7 +10,7 @@ class Int extends Number
 
 	global dynamic varying int value
 
-	function dynamic interp void <init>(int value)
+	constructor(int value)
 		setv this.value value
 		ret
 

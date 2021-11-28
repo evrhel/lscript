@@ -6,7 +6,7 @@ class VectorIterator extends Iterator
 	global dynamic varying uint step
 	global dynamic varying uint index
 
-	function dynamic interp void <init>(object Vector vector, uint step)
+	constructor(object Vector vector, uint step)
 		setv this.vector vector
 		setv this.step step
 		if isReverse

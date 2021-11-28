@@ -4,7 +4,7 @@ class String
 
 	global dynamic varying chararray chars
 
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
 	function dynamic interp void <init>(chararray chars)

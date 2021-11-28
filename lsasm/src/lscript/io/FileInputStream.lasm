@@ -4,10 +4,10 @@ class FileInputStream
 
 	global dynamic varying object handle
 	
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
-	function dynamic interp void <init>(object StdFileHandle handle)
+	constructor(object StdFileHandle handle)
 		setv this.handle handle
 		ret
 

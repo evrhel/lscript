@@ -10,7 +10,7 @@ class Class
 	global dynamic const objectarray fields
 	global dynamic const objectarray functions
 
-	function dynamic interp void <init>()
+	constructor()
 		ret
 
 	function dynamic interp object getName()

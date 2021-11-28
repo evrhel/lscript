@@ -6,13 +6,13 @@ class Vector extends Collection
 	global dynamic varying uint size
 
 	# Create blank vector
-	function dynamic interp void <init>()
+	constructor()
 		seto this.data object dword[10]
 		setd this.size dword[0]
 		ret
 
 	# Copy constructor
-	function dynamic interp void <init>(object Vector other)
+	constructor(object Vector other)
 		uint index
 		seto this.data object other.length
 		setv this.size other.size

@@ -21,7 +21,7 @@ class StringBuilder
 	global dynamic varying chararray chars
 	global dynamic varying uint stringLength
 
-	function dynamic interp void <init>()
+	constructor()
 		seto this.chars char dword[32]
 		setd this.stringLength dword[0]
 		ret
