@@ -28,7 +28,7 @@ class Class
 
 	function dynamic interp object toString()
 		object StringBuilder builder
-		seto builder new StringBuilder <init>()
+		seto builder new StringBuilder()
 		dynamic_call builder.append(LString;) "class "
 		dynamic_call builder.append(LString;) this.name
 		dynamic_call builder.toString()

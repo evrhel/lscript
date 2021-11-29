@@ -98,8 +98,9 @@ class StringBuilder
 
 	function dynamic interp object toString()
 		object String result
-		seto result new String <init>()
-		seto result.chars char this.stringLength
-		static_call System.arraycopy(LObject;iLObject;ii) result.chars dword[0] this.chars dword[0] this.stringLength
+		chararray resultarr
+		seto resultarr char this.stringLength
+		static_call System.arraycopy(LObject;iLObject;ii) resultarr dword[0] this.chars dword[0] this.stringLength
+		seto result new String([C) resultarr
 		retv result
 

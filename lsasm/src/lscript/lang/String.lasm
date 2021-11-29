@@ -7,7 +7,7 @@ class String
 	constructor()
 		ret
 
-	function dynamic interp void <init>(chararray chars)
+	constructor(chararray chars)
 		setv this.chars chars
 		ret
 

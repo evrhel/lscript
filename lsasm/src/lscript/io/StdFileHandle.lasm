@@ -42,8 +42,7 @@ class StdFileHandle
 	function dynamic interp object readLine()
 		object String result
 		static_call freadline(q) this.nativeHandle
-		seto result new String <init>()
-		setr result.chars
+		seto result new String([C) result.chars
 		retv result
 
 	function static native ulong fopen(object String filepath, int mode)

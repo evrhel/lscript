@@ -2030,7 +2030,7 @@ void handle_set_cmd(compile_state_t *state)
 	case lb_seto:
 		if (!strcmp(state->tokens[2], "new"))
 		{
-			if (state->tokencount < 7)
+			if (state->tokencount < 6)
 			{
 				switch (state->tokencount)
 				{
@@ -2038,16 +2038,13 @@ void handle_set_cmd(compile_state_t *state)
 					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected instantiated class name");
 					break;
 				case 5:
-					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected constructor call");
-					break;
-				case 6:
 					state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \")\"");
 					break;
 				}
 				return;
 			}
 			
-			if (strcmp(state->tokens[5], "("))
+			if (strcmp(state->tokens[4], "("))
 			{
 				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[5]);
 				return;
@@ -2061,10 +2058,8 @@ void handle_set_cmd(compile_state_t *state)
 				return;
 			}
 
-			if (strcmp(state->tokens[4], "<init>"))
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Using non-constructor as constructor");
-
-			if (!strcmp(state->tokens[6], ")"))
+			static const char CONSTRUCTOR_NAME[] = "<init>";
+			if (!strcmp(state->tokens[5], ")"))
 			{
 				PUT_BYTE(state->out, lb_seto);
 				PUT_STRING(state->out, varname);
@@ -2072,7 +2067,7 @@ void handle_set_cmd(compile_state_t *state)
 				PUT_STRING(state->out, fullname);
 
 				char towrite[MAX_PATH];
-				strcpy_s(towrite, sizeof(towrite), state->tokens[4]);
+				strcpy_s(towrite, sizeof(towrite), CONSTRUCTOR_NAME);
 				strcat_s(towrite, sizeof(towrite), "(");
 
 				PUT_STRING(state->out, towrite);
@@ -2089,12 +2084,12 @@ void handle_set_cmd(compile_state_t *state)
 			char qualifiedfuncname[MAX_PATH];
 			char *qfnCursor;
 
-			size_t namelen = strlen(state->tokens[4]);
+			size_t namelen = sizeof(CONSTRUCTOR_NAME) - 1;
 			memcpy(qualifiedfuncname, state->tokens[4], namelen);
 			qfnCursor = qualifiedfuncname + namelen;
 			*qfnCursor = '('; qfnCursor++;
 
-			char *sig = state->tokens[6];
+			char *sig = state->tokens[5];
 
 			size_t argcount = 0;
 			while (*sig)
@@ -2159,7 +2154,7 @@ void handle_set_cmd(compile_state_t *state)
 				argcount++;
 			}
 
-			if (strcmp(state->tokens[7], ")"))
+			if (strcmp(state->tokens[6], ")"))
 			{
 				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[4]);
 				return;
@@ -2170,7 +2165,7 @@ void handle_set_cmd(compile_state_t *state)
 			buffer_t *argBuffer = NEW_BUFFER(128);
 
 			size_t i, currarrg;
-			for (currarrg = 0, i = 8; i < state->tokencount; currarrg++, i++)
+			for (currarrg = 0, i = 7; i < state->tokencount; currarrg++, i++)
 			{
 				if (currarrg == argcount)
 				{

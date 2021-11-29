@@ -102,12 +102,12 @@ class Vector extends Collection
 
 	function dynamic interp object iterator()
 		object VectorIterator iterator
-		seto iterator new VectorIterator <init>(LVector;i) this dword[1]
+		seto iterator new VectorIterator(LVector;i) this dword[1]
 		retv iterator
 
 	function dynamic interp object riterator()
 		object VectorIterator riterator
-		seto riterator new VectorIterator <init>(LVector;i) this dword[-1]
+		seto riterator new VectorIterator(LVector;i) this dword[-1]
 		retv riterator
 
 	# grows the vector to have more elements
