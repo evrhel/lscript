@@ -2,7 +2,7 @@ package lscript.lang
 
 class Long
 
-	function static interp object toString(long value)
+	function static String toString(long value)
 		object StringBuilder builder
 		seto builder new StringBuilder()
 		dynamic_call builder.append(Q) value
@@ -14,10 +14,10 @@ class Long
 	constructor()
 		ret
 
-	function dynamic interp void <init>(long value)
+	constructor(long value)
 		setv this.value value
 		ret
 
-	function dynamic interp object toString()
+	function String toString()
 		static_call toString(Q) this.value
 		retr

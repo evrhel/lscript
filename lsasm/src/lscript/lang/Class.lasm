@@ -13,10 +13,10 @@ class Class
 	constructor()
 		ret
 
-	function dynamic interp object getName()
+	function String getName()
 		retv this.name
 
-	function dynamic interp objectarray getFields()
+	function Field[] getFields()
 		objectarray Field resultFields
 		seto resultFields object fields.length
 		uint i
@@ -26,7 +26,7 @@ class Class
 		end
 		retv resultFields
 
-	function dynamic interp object toString()
+	function String toString()
 		object StringBuilder builder
 		seto builder new StringBuilder()
 		dynamic_call builder.append(LString;) "class "
@@ -34,5 +34,5 @@ class Class
 		dynamic_call builder.toString()
 		retr
 
-	function static native object classOf(object Object obj)
+	function static native object classOf(Object obj)
 

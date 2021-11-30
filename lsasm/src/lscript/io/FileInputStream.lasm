@@ -11,15 +11,15 @@ class FileInputStream
 		setv this.handle handle
 		ret
 
-	function dynamic interp uint read(chararray dst, int off, int length)
+	function uint read(chararray dst, int off, int length)
 		dynamic_call this.handle.read([Cii) dst off length
 		retr
 
-	function dynamic interp object readLine()
+	function object readLine()
 		dynamic_call this.handle.readLine()
 		retr
 
-	function dynamic interp void close()
+	function void close()
 		dynamic_call this.handle.close()
 		setq this.handle null
 		ret

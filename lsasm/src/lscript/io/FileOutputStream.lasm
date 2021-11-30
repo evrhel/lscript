@@ -11,24 +11,24 @@ class FileOutputStream
 		setv this.handle handle
 		ret
 
-	function dynamic interp uint write(chararray data, int off, int length)
+	function uint write(chararray data, int off, int length)
 		dynamic_call this.handle.write([Cii) data off length
 		retr
 
-	function dynamic interp void print(object String str)
+	function void print(String str)
 		dynamic_call this.handle.write([Cii) str.chars dword[0] str.chars.length
 		ret
 
-	function dynamic interp void println()
+	function void println()
 		dynamic_call this.handle.putc(C) byte[10]
 		ret
 
-	function dynamic interp void println(object String str)
+	function void println(String str)
 		dynamic_call this.print(LString;) str
 		dynamic_call this.println()
 		ret
 
-	function dynamic interp void close()
+	function void close()
 		dynamic_call handle.close()
 		setq this.handle null
 		ret

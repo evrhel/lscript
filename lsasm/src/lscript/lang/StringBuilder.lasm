@@ -4,7 +4,7 @@ class StringBuilder
 
 	global static const chararray intMap null
 
-	function static interp void <staticinit>()
+	function static void <staticinit>()
 		seto intMap char dword[10]
 		setb intMap[0] '0'
 		setb intMap[1] '1'
@@ -26,7 +26,7 @@ class StringBuilder
 		setd this.stringLength dword[0]
 		ret
 
-	function dynamic interp void append(object String string)
+	function void append(String string)
 		uint tmp
 		add tmp this.stringLength string.chars.length
 		if tmp >= this.chars.length
@@ -36,7 +36,7 @@ class StringBuilder
 		add this.stringLength this.stringLength string.chars.length
 		ret
 
-	function dynamic interp void append(char c)
+	function void append(char c)
 		if this.stringLength == this.chars.length
 			dynamic_call this.grow(i) dword[1]
 		end
@@ -44,7 +44,7 @@ class StringBuilder
 		add this.stringLength this.stringLength uint[1]
 		ret
 
-	function dynamic interp void append(long num)
+	function void append(long num)
 		if num < long[0]
 			dynamic_call this.append(C) '-'
 			neg num num
@@ -52,7 +52,7 @@ class StringBuilder
 		dynamic_call this.append(q) num
 		ret
 
-	function dynamic interp void append(ulong num)
+	function void append(ulong num)
 		uchararray digits
 		ulong digit
 		int i
@@ -84,7 +84,7 @@ class StringBuilder
 
 		ret
 
-	function dynamic interp void grow(uint required)
+	function void grow(uint required)
 		chararray newarr
 		uint newlen
 		mul newlen this.stringLength uint[2]
@@ -96,7 +96,7 @@ class StringBuilder
 		end
 		ret
 
-	function dynamic interp object toString()
+	function String toString()
 		object String result
 		chararray resultarr
 		seto resultarr char this.stringLength

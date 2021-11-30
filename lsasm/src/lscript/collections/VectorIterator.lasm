@@ -19,13 +19,13 @@ class VectorIterator extends Iterator
 		setv this.isReverse isReverse
 		ret
 
-	function dynamic interp object next()
+	function Object next()
 		object Object result
 		dynamic_call vector.at(i) this.index
 		add this.index this.index this.step
 		retv result
 
-	function dynamic interp bool hasNext()
+	function bool hasNext()
 		uint size
 		dynamic_call vector.size()
 		setr size

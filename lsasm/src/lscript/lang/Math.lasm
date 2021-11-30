@@ -11,80 +11,80 @@ class Math
 	global static const double PHI real8[1.61803398875]
 	global static const float PHIF real4[1.61803398875]
 
-	function static interp double abs(double a)
+	function static double abs(double a)
 		if a < double[0.0]
 			neg a a
 		end
 		retv a
 
-	function static interp float abs(float a)
+	function static float abs(float a)
 		if a < float[0.0]
 			neg a a
 		end
 		retv a
 
-	function static interp int abs(int a)
+	function static int abs(int a)
 		if a < int[0]
 			neg a a
 		end
 		retv a
 
-	function static interp long abs(long a)
+	function static long abs(long a)
 		if a < long[0]
 			neg a a
 		end
 		retv a
 
-	function static interp double max(double a, double b)
+	function static double max(double a, double b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp float max(float a, float b)
+	function static float max(float a, float b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp int max(int a, int b)
+	function static int max(int a, int b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp long max(long a, long b)
+	function static long max(long a, long b)
 		if a > b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp double min(double a, double b)
+	function static double min(double a, double b)
 		if a < b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp float min(float a, float b)
+	function static float min(float a, float b)
 		if a < b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp int min(int a, int b)
+	function static int min(int a, int b)
 		if a < b
 			retv a
 		else
 			retv b
 		end
 
-	function static interp long min(long a, long b)
+	function static long min(long a, long b)
 		if a < b
 			retv a
 		else

@@ -79,6 +79,7 @@ static byte_t *derive_function_args(const char *functionSig, size_t *argc);
 static void free_derived_args(byte_t *args);
 static byte_t get_comparator_byte(const char *comparatorString);
 static byte_t get_primitive_type(const char *stringType);
+static byte_t resolve_data_type(compile_state_t *state, char *declared, char *classname, size_t namelen);
 
 static void handle_class_def(compile_state_t *state);
 static void handle_field_def(compile_state_t *state);
@@ -1514,6 +1515,47 @@ byte_t get_primitive_type(const char *stringType)
 	return 0;
 }
 
+byte_t resolve_data_type(compile_state_t *state, char *declared, char *classname, size_t namelen)
+{
+	byte_t returnType = get_command_byte(declared);
+	if (returnType < lb_void || returnType > lb_objectarray)
+	{
+		returnType = lb_object;
+
+		// Test for array
+		char *startBracket = strchr(declared, '[');
+		if (startBracket)
+		{
+			char *shouldEnd = startBracket + 1;
+			if (!*shouldEnd || *shouldEnd != ']')
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"]\"");
+				return 0;
+			}
+
+			if (*(shouldEnd + 1))
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Malformed type \"%s\"");
+				return 0;
+			}
+
+			*startBracket = 0;
+
+			returnType = lb_objectarray;
+		}
+
+		if (!lscu_resolve_class(state->lscuctx, declared, classname, namelen))
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", state->tokens[3]);
+			return 0;
+		}
+
+		if (startBracket) *startBracket = '[';
+	}
+
+	return returnType;
+}
+
 void handle_class_def(compile_state_t *state)
 {
 	if (state->tokencount < 2)
@@ -1715,78 +1757,190 @@ void handle_field_def(compile_state_t *state)
 
 void handle_function_def(compile_state_t *state)
 {
-	if (state->tokencount < 5)
+	int isStatic;
+	byte_t execType = 0;
+	byte_t returnType = 0;
+
+	if (state->tokencount < 2)
 	{
-		switch (state->tokencount)
-		{
-		case 1:
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function execution mode specifier");
-			break;
-		case 2:
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function linkage mode specifier");
-			break;
-		case 3:
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function return type specifier");
-			break;
-		case 4:
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name declaration");
-			break;
-		case 5:
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument declaration");
-			break;
-		case 6:
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected '('");
-			break;
-		case 7:
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected ')'");
-			break;
-		}
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected return type");
 		return;
 	}
 
-	int isStatic;
-	byte_t execType;
-	byte_t returnType;
 	if (!strcmp(state->tokens[1], "static"))
 		isStatic = 1;
 	else if (!strcmp(state->tokens[1], "dynamic"))
 		isStatic = 0;
-	else
+	else if (!strcmp(state->tokens[1], "abstract"))
 	{
-		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"static\" or \"dynamic\"", state->tokens[1]);
+		isStatic = 0;
+		execType = lb_abstract;
+	}
+	else if (!strcmp(state->tokens[1], "interp") || !strcmp(state->tokens[1], "native"))
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "%s not allowed here", state->tokens[3]);
 		return;
 	}
-
-	if (!strcmp(state->tokens[2], "interp"))
-		execType = lb_interp;
-	else if (!strcmp(state->tokens[2], "native"))
-		execType = lb_native;
-	else if (!strcmp(state->tokens[2], "abstract"))
-		execType = lb_abstract;
+	else if (!(returnType = resolve_data_type(state, state->tokens[1], NULL, 0))) return;
 	else
-		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\", expected \"interp\", \"native\", or \"abstract\"", state->tokens[2]);
-
-	if (isStatic && execType == lb_abstract)
-		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "static function cannot be declared as abstract");
-
-	returnType = get_command_byte(state->tokens[3]);
-	if (returnType < lb_void || returnType > lb_objectarray)
 	{
-		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Invalid return type \"%s\"", state->tokens[3]);
+		isStatic = 0;
+		execType = lb_interp;
+	}
+
+	char *funcName;
+	int argStart;
+
+	if (returnType)
+	{
+		if (state->tokencount < 3)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name declaration");
+			return;
+		}
+		funcName = state->tokens[2];
+
+		if (state->tokencount < 4)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"(\"");
+			return;
+		}
+		
+		if (strcmp(state->tokens[3], "("))
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[3]);
+			return;
+		}
+
+		argStart = 4;
+	}
+	else if (execType)
+	{
+		assert(execType == lb_abstract);
+
+		if (state->tokencount < 3)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected return type");
+			return;
+		}
+
+		if (!(returnType = resolve_data_type(state, state->tokens[2], NULL, 0))) return;
+
+		if (state->tokencount < 4)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name declaration");
+			return;
+		}
+
+		funcName = state->tokens[3];
+
+		if (state->tokencount < 5)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"(\"");
+			return;
+		}
+
+		if (strcmp(state->tokens[4], "("))
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[4]);
+			return;
+		}
+
+		argStart = 5;
+	}
+	else
+	{
+		if (state->tokencount < 3)
+		{
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"interp\", \"native\", or \"abstract\"");
+			return;
+		}
+		if (!strcmp(state->tokens[2], "interp")) execType = lb_interp;
+		else if (!strcmp(state->tokens[2], "native")) execType = lb_native;
+		else if (!strcmp(state->tokens[2], "abstract")) execType = lb_abstract;
+		else if (returnType = resolve_data_type(state, state->tokens[2], NULL, 0))
+			execType = lb_interp;
+		else return;
+
+		if (!returnType)
+		{
+			if (execType == lb_abstract && isStatic)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "static function cannot be declared as abstract");
+				return;
+			}
+
+			if (state->tokencount < 4)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected return type");
+				return;
+			}
+
+			if (!(returnType = resolve_data_type(state, state->tokens[3], NULL, 0))) return;
+
+			if (state->tokencount < 5)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name declaration");
+				return;
+			}
+
+			funcName = state->tokens[4];
+
+			if (state->tokencount < 6)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"(\"");
+				return;
+			}
+
+			if (strcmp(state->tokens[5], "("))
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[4]);
+				return;
+			}
+
+			argStart = 6;
+		}
+		else
+		{
+			if (state->tokencount < 4)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function name declaration");
+				return;
+			}
+
+			funcName = state->tokens[3];
+
+			if (state->tokencount < 5)
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"(\"");
+				return;
+			}
+
+			if (strcmp(state->tokens[4], "("))
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[4]);
+				return;
+			}
+
+			argStart = 5;
+		}
+	}
+
+	if (state->tokencount <= argStart)
+	{
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \")\"");
 		return;
 	}
 
 	buffer_t *build = NEW_BUFFER(64);
-	const char *name = state->tokens[4];
 
-	if (strcmp(state->tokens[5], "("))
-	{
-		state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[5]);
-		return;
-	}
+	byte_t argType;
+	char classname[MAX_PATH] = { 0 };
+	int writeClassname;
+	char *argumentName;
 
 	byte_t argCount = 0;
-	for (size_t i = 6;; i++, argCount++)
+	for (size_t i = argStart;; i++, argCount++)
 	{
 		if (!strcmp(state->tokens[i], ")")) break;
 		if (i >= state->tokencount)
@@ -1796,63 +1950,44 @@ void handle_function_def(compile_state_t *state)
 			return;
 		}
 
-		byte_t type = get_command_byte(state->tokens[i]);
-		if (type < lb_char || type > lb_objectarray)
+		writeClassname = 1;
+		argType = get_command_byte(state->tokens[i]);
+		if (argType < lb_char || argType > lb_objectarray)
 		{
-			FREE_BUFFER(build);
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Illegal argument type");
-			return;
+			if (!(argType = resolve_data_type(state, state->tokens[i], classname, sizeof(classname)))) return;
 		}
-
-		const char *argName;
-
-		i++;
-		if (type == lb_object || type == lb_objectarray)
+		else if (argType == lb_object || argType == lb_objectarray)
 		{
-			if (i == state->tokencount)
-			{
-				FREE_BUFFER(build);
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument object classname");
-				return;
-			}
-
-			const char *classname = state->tokens[i];
-
-			char fullname[MAX_PATH];
-			if (!lscu_resolve_class(state->lscuctx, classname, fullname, sizeof(fullname)))
-			{
-				FREE_BUFFER(build);
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", state->tokens[i]);
-				return;
-			}
-
 			i++;
 			if (i == state->tokencount)
 			{
 				FREE_BUFFER(build);
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument classname");
 				return;
 			}
 
-			argName = state->tokens[i];
-
-			PUT_BYTE(build, type);
-			PUT_STRING(build, fullname);
-			PUT_STRING(build, argName);
+			if (!lscu_resolve_class(state->lscuctx, state->tokens[i], classname, sizeof(classname)))
+			{
+				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", state->tokens[i]);
+				return;
+			}
 		}
-		else if (i == state->tokencount)
+		else
+			writeClassname = 0;
+
+		i++;
+		if (i == state->tokencount)
 		{
 			FREE_BUFFER(build);
 			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected function argument name");
 			return;
 		}
-		else
-		{
-			argName = state->tokens[i];
 
-			PUT_BYTE(build, type);
-			PUT_STRING(build, argName);
-		}
+		argumentName = state->tokens[i];
+
+		PUT_BYTE(build, argType);
+		if (writeClassname) PUT_STRING(build, classname);
+		PUT_STRING(build, argumentName);
 
 		// Require ',' separating arguments (exclude last argument)
 		if (i < state->tokencount - 2)
@@ -1871,7 +2006,7 @@ void handle_function_def(compile_state_t *state)
 	PUT_BYTE(state->out, isStatic ? lb_static : lb_dynamic);
 	PUT_BYTE(state->out, execType);
 	PUT_BYTE(state->out, returnType);
-	PUT_STRING(state->out, name);
+	PUT_STRING(state->out, funcName);
 	PUT_BYTE(state->out, argCount);
 	PUT_BUF(state->out, build);
 
@@ -2057,8 +2192,8 @@ void handle_set_cmd(compile_state_t *state)
 				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unresolved symbol \"%s\"", classname);
 				return;
 			}
-
-			static const char CONSTRUCTOR_NAME[] = "<init>";
+			
+			static const char CONSTRUCTOR_FUNCNAME[] = "<init>(";
 			if (!strcmp(state->tokens[5], ")"))
 			{
 				PUT_BYTE(state->out, lb_seto);
@@ -2067,8 +2202,7 @@ void handle_set_cmd(compile_state_t *state)
 				PUT_STRING(state->out, fullname);
 
 				char towrite[MAX_PATH];
-				strcpy_s(towrite, sizeof(towrite), CONSTRUCTOR_NAME);
-				strcat_s(towrite, sizeof(towrite), "(");
+				strcpy_s(towrite, sizeof(towrite), CONSTRUCTOR_FUNCNAME);
 
 				PUT_STRING(state->out, towrite);
 				return;
@@ -2084,10 +2218,8 @@ void handle_set_cmd(compile_state_t *state)
 			char qualifiedfuncname[MAX_PATH];
 			char *qfnCursor;
 
-			size_t namelen = sizeof(CONSTRUCTOR_NAME) - 1;
-			memcpy(qualifiedfuncname, state->tokens[4], namelen);
-			qfnCursor = qualifiedfuncname + namelen;
-			*qfnCursor = '('; qfnCursor++;
+			strcpy_s(qualifiedfuncname, sizeof(qualifiedfuncname), CONSTRUCTOR_FUNCNAME);
+			qfnCursor = qualifiedfuncname + strlen(qualifiedfuncname);
 
 			char *sig = state->tokens[5];
 

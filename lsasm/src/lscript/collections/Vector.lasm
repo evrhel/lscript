@@ -20,23 +20,23 @@ class Vector extends Collection
 		ret
 
 	# Returns the number of elements in the vector
-	function dynamic interp uint size()
+	function uint size()
 		retv this.size
 
-	function dynamic interp object at(uint index)
+	function Object at(uint index)
 		if index >= this.size
 			reto null
 		end
 		retv this.data[index]
 
-	function dynamic interp bool set(uint index, object Object value)
+	function bool set(uint index, Object value)
 		if index >= this.size
 			retb false
 		end
 		setv this.data[index] value
 		retb true
 
-	function dynamic interp bool add(object Object elem)
+	function bool add(Object elem)
 		if this.size == data.size
 			dynamic_call this.grow()
 		end
@@ -44,7 +44,7 @@ class Vector extends Collection
 		add this.size uint[1] this.size
 		retb byte[1]
 
-	function dynamic interp bool remove(object Object elem)
+	function bool remove(Object elem)
 		uint index
 		dynamic_call this.indexOf(LObject;) elem
 		setr index
@@ -74,7 +74,7 @@ class Vector extends Collection
 	# elem - The element to find
 	#
 	# Returns: the first index of elem, or -1 if not found.
-	function dynamic interp uint indexOf(object Object elem)
+	function uint indexOf(Object elem)
 		uint index
 		setd index dword[0]
 		while index < size
@@ -94,24 +94,24 @@ class Vector extends Collection
 		end
 		retv dword[-1]
 
-	function dynamic interp objectarray toArray()
+	function objectarray toArray()
 		objectarray Object arr
 		seto arr object this.size
 		static_call System.arraycopy(LObject;iLObject;ii) arr this.size this.data dword[0] this.size
 		retv arr
 
-	function dynamic interp object iterator()
+	function Iterator iterator()
 		object VectorIterator iterator
 		seto iterator new VectorIterator(LVector;i) this dword[1]
 		retv iterator
 
-	function dynamic interp object riterator()
+	function Iterator riterator()
 		object VectorIterator riterator
 		seto riterator new VectorIterator(LVector;i) this dword[-1]
 		retv riterator
 
 	# grows the vector to have more elements
-	function dynamic interp void grow()
+	function void grow()
 		objectarray Object newArr
 		uint newSize
 

@@ -1,13 +1,13 @@
 package lscript.lang
 
 class Number
-	function dynamic abstract char charValue()
-	function dynamic abstract uchar ucharValue()
-	function dynamic abstract short shortValue()
-	function dynamic abstract ushort ushortValue()
-	function dynamic abstract int intValue()
-	function dynamic abstract uint uintValue()
-	function dynamic abstract long longValue()
-	function dynamic abstract ulong ulongValue()
-	function dynamic abstract float floatValue()
-	function dynamic abstract double doubleValue()
+	function abstract char charValue()
+	function abstract uchar ucharValue()
+	function abstract short shortValue()
+	function abstract ushort ushortValue()
+	function abstract int intValue()
+	function abstract uint uintValue()
+	function abstract long longValue()
+	function abstract ulong ulongValue()
+	function abstract float floatValue()
+	function abstract double doubleValue()

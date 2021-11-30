@@ -11,10 +11,10 @@ class String
 		setv this.chars chars
 		ret
 
-	function dynamic interp chararray getChars()
+	function chararray getChars()
 		reto chars
 
-	function dynamic interp bool equals(object String other)
+	function bool equals(String other)
 		# If the lengths are different, exit early
 		if this.chars.length != other.chars.length
 			retb byte[0]

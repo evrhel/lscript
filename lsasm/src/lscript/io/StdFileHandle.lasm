@@ -18,34 +18,34 @@ class StdFileHandle
 		setv this.fileMode mode
 		ret
 
-	function dynamic interp void open(object String filepath, int mode)
+	function void open(String filepath, int mode)
 		static_call fopen(LString;I) filepath mode
 		setr this.nativeHandle
 		ret
 
-	function dynamic interp void close()
+	function void close()
 		static_call fclose(q) this.nativeHandle
 		ret
 
-	function dynamic interp void putc(char c)
+	function void putc(char c)
 		static_call fputc(qC) this.nativeHandle c
 		ret
 
-	function dynamic interp uint write(chararray data, uint off, uint length)
+	function uint write(chararray data, uint off, uint length)
 		static_call fwrite(q[Cii) this.nativeHandle data off length
 		retr
 
-	function dynamic interp uint read(chararray buf, uint off, uint count)
+	function uint read(chararray buf, uint off, uint count)
 		static_call fread(q[Cii) this.nativeHandle buf off count
 		retr
 
-	function dynamic interp object readLine()
+	function object readLine()
 		object String result
 		static_call freadline(q) this.nativeHandle
 		seto result new String([C) result.chars
 		retv result
 
-	function static native ulong fopen(object String filepath, int mode)
+	function static native ulong fopen(String filepath, int mode)
 	function static native void fclose(ulong handle)
 	function static native void fputc(ulong handle, char c)
 	function static native uint fwrite(ulong handle, chararray data, uint off, uint length)

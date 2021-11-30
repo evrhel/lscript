@@ -2,7 +2,7 @@ package lscript.lang
 
 class Int extends Number
 
-	function static interp object toString(int value)
+	function static String toString(int value)
 		long lval
 		castl lval value
 		static_call Long.toString(Q) lval
@@ -14,43 +14,44 @@ class Int extends Number
 		setv this.value value
 		ret
 
-	function dynamic interp char charValue()
+	function char charValue()
 		retv this.value
 
-	function dynamic interp uchar ucharValue()
+	function uchar ucharValue()
 		retv this.value
 
-	function dynamic interp short shortValue()
+	function short shortValue()
 		retv this.value
 
-	function dynamic interp ushort ushortValue()
+	function ushort ushortValue()
 		retv this.value
 
-	function dynamic interp int intValue()
+	function int intValue()
 		retv this.value
 
-	function dynamic interp uint uintValue()
+	function uint uintValue()
 		retv this.value
 
-	function dynamic interp long longValue()
+	function long longValue()
 		retv this.value
 
-	function dynamic interp ulong ulongValue()
+	function ulong ulongValue()
 		retv this.value
 
-	function dynamic interp float floatValue()
+	function float floatValue()
 		retv this.value
 
-	function dynamic interp double doubleValue()
+	function double doubleValue()
 		retv this.value
 
-	function dynamic interp object toString()
+	function String toString()
 		static_call toString(I) this.value
 		retr
 
-	function dynamic interp bool equals(object Object other)
+	function bool equals(Object other)
 		object Class otherClass
 		static_call Class.classOf(LObject;) other
+		setr otherClass
 		if otherClass == Int.class
 			if this.value == other.value
 				retb byte[1]
@@ -59,5 +60,5 @@ class Int extends Number
 		retb byte[0]
 
 
-	function dynamic interp uint hashCode()
+	function uint hashCode()
 		retv this.value

@@ -5,28 +5,28 @@ class Object extends null
 	constructor()
 		ret
 
-	function dynamic interp object getClass()
+	function Class getClass()
 		static_call Class.classOf(LObject;) this
 		retr
 
-	function dynamic interp void threadEntry()
+	function void threadEntry()
 		ret
 
-	function dynamic interp object toString()
+	function String toString()
 		static_call Long.toString(Q) this
 		retr
 
-	function dynamic interp bool equals(object Object other)
+	function bool equals(Object other)
 		if this == other
 			retb byte[1]
 		else
 			retb byte[0]
 		end
 
-	function dynamic interp uint hashCode()
+	function uint hashCode()
 		retv this
 
-	function dynamic interp void finalize()
+	function void finalize()
 		ret
 
 

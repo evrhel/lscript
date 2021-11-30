@@ -11,67 +11,67 @@ class Field
 	constructor()
 		ret
 
-	function dynamic interp object getName()
+	function String getName()
 		retv this.name
 
-	function dynamic interp int getFieldClass()
+	function int getFieldClass()
 		retv this.fieldClass
 
-	function dynamic interp int getAccessQualifier()
+	function int getAccessQualifier()
 		retv this.accessQualifier
 
-	function dynamic interp int getMutability()
+	function int getMutability()
 		retv this.mutability
 
-	function dynamic interp int getPrimitiveType()
+	function int getPrimitiveType()
 		retv this.primitiveType
 
-	function dynamic interp object toString()
+	function String toString()
 		retv this.name
 
-	function dynamic interp char getChar()
+	function char getChar()
 		static_call Reflect.getByteField(q) this.handle
 		retr
 
-	function dynamic interp uchar getUChar()
+	function uchar getUChar()
 		static_call Reflect.getByteField(q) this.handle
 		retr
 
-	function dynamic interp short getShort()
+	function short getShort()
 		static_call Reflect.getWordField(q) this.handle
 		retr
 
-	function dynamic interp ushort getUShort()
+	function ushort getUShort()
 		static_call Reflect.getWordField(q) this.handle
 		retr
 
-	function dynamic interp int getInt()
+	function int getInt()
 		static_call Reflect.getDwordField(q) this.handle
 		retr
 
-	function dynamic interp uint getUInt()
+	function uint getUInt()
 		static_call Reflect.getDwordField(q) this.handle
 		retr
 
-	function dynamic interp long getLong()
+	function long getLong()
 		static_call Reflect.getQwordField(q) this.handle
 		retr
 
-	function dynamic interp ulong getULong()
+	function ulong getULong()
 		static_call Reflect.getQwordField(q) this.handle
 		retr
 
-	function dynamic interp float getFloat()
+	function float getFloat()
 		static_call Reflect.getReal4Field(q) this.handle
 		retr
 
-	function dynamic interp double getDouble()
+	function double getDouble()
 		static_call Reflect.getReal8Field(q) this.handle
 		retr
 
-	function dynamic interp bool getBool()
+	function bool getBool()
 		static_call Reflect.getByteField(q) this.handle
 		retr
 
-	function dynamic interp object getObject()
+	function object getObject()
 		static_call Reflect.getObjectField(q) this.handle

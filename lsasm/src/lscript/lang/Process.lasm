@@ -9,35 +9,35 @@ class Process
 	constructor()
 		ret
 
-	function dynamic interp uint getPID()
+	function uint getPID()
 		static_call getPID(q) this.nativeHandle
 		retr
 
-	function dynamic interp uint wait(uint length)
+	function uint wait(uint length)
 		static_call wait(qi) this.nativeHandle length
 		retr
 
-	function dynamic interp uint wait()
+	function uint wait()
 		dynamic_call this.wait(i) Process.INFINITE
 		retr
 
-	function dynamic interp bool isRunning()
+	function bool isRunning()
 		static_call isRunning(q) this.nativeHandle
 		retr
 
-	function dynamic interp bool stop()
+	function bool stop()
 		static_call stop(q) this.nativeHandle
 		retr
 
-	function dynamic interp bool forceStop()
+	function bool forceStop()
 		static_call forceStop(q) this.nativeHandle
 		retr
 
-	function dynamic interp void finalize()
+	function void finalize()
 		static_call freeProcessData(q) this.nativeHandle
 		ret
 
-	function static native ulong startProcess(object String processName, object String commandLine, object String workingDir)
+	function static native ulong startProcess(String processName, String commandLine, String workingDir)
 	function static native uint getPID(ulong nativeHandle)
 	function static native uint wait(ulong nativeHandle, uint length)
 	function static native bool isRunning(ulong nativeHandle)
