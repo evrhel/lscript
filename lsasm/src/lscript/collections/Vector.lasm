@@ -54,7 +54,8 @@ class Vector extends Collection
 		sub this.size this.size uint[1]
 
 		if this.size == uint[0]
-		elif index != this.size
+			retb byte[0]
+		else if index != this.size
 			seto newarr object this.size
 
 			uint i
@@ -92,7 +93,7 @@ class Vector extends Collection
 			end
 			add index index uint[1]
 		end
-		retv dword[-1]
+		retd dword[-1]
 
 	function objectarray toArray()
 		objectarray Object arr

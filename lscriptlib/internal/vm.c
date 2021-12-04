@@ -166,6 +166,7 @@ static inline int handle_if(env_t *env)
 		if (env->exception)
 			return env->exception;
 		class_t *c = CURR_FUNC(env)->parentClass;
+		assert(*((size_t *)(env->rip)) != (size_t)-1);
 		env->rip = c->data + *((size_t *)(env->rip));
 		//env->rip += *((size_t *)(env->rip));
 		//env->rip += sizeof(size_t);
@@ -2073,11 +2074,12 @@ int env_run(env_t *__restrict env, void *__restrict location)
 			break;
 
 		case lb_if:
-			// if statement
+			// if or elif statement
 
  			if (handle_if(env))
 				EXIT_RUN(env->exception);
 			break;
+		case lb_elif:
 		case lb_else:
 		case lb_end:
 			// end command
@@ -2155,7 +2157,7 @@ int env_run(env_t *__restrict env, void *__restrict location)
 			break;
 
 		default:
-			EXIT_RUN(env_raise_exception(env, exception_bad_command, "Unknown instruction %02x", (unsigned int)(*env->rip)));
+			EXIT_RUN(env_raise_exception(env, exception_bad_command, "Unknown instruction 0x%02x", (unsigned int)(*env->rip)));
 		}
 	}
 

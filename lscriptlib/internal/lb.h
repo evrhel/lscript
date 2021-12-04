@@ -102,6 +102,7 @@ enum
 	lb_else,
 	lb_while,
 	lb_end,
+	lb_jmp,
 
 	lb_equal = 0xa0,
 	lb_nequal,
@@ -124,6 +125,7 @@ enum
 	lb_castf,
 	lb_castd,
 
+	lb_ext = 0xf0,
 	lb_align = 0xfe,
 	lb_debug = 0xff
 };

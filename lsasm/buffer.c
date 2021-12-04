@@ -411,7 +411,7 @@ buffer_t *__new_buffer(size_t size)
 	buffer_t *buf = (buffer_t *)malloc(sizeof(buffer_t));
 	if (!buf)
 		return NULL;
-	buf->buf = (char *)malloc(size);
+	buf->buf = (char *)calloc(size, sizeof(char));
 	if (!buf->buf)
 	{
 		free(buf);
@@ -508,14 +508,18 @@ buffer_t *__ensure_capacity(buffer_t *buf, size_t required)
 		size_t cursorOff = (size_t)(buf->cursor - buf->buf);
 		size_t newSize = totalSize * 2;
 		char *nbuf = (char *)realloc(buf->buf, newSize);
+		
 			//malloc(newSize);
 		if (!nbuf)
 			return NULL;
+		
 		//memcpy(nbuf, buf->buf, cursorOff);
 		//free(buf->buf);
 		buf->buf = nbuf;
 		buf->end = buf->buf + newSize;
 		buf->cursor = buf->buf + cursorOff;
+
+		memset(buf->cursor, 0, newSize - cursorOff);
 		return __ensure_capacity(buf, required);
 	}
 	return buf;

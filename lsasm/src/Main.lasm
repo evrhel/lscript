@@ -1,6 +1,17 @@
 class Main
 
 	function static interp void main(objectarray String args)
+		int number
+		setd number dword[10]
+
+		if number == int[20]
+			dynamic_call System.stdout.println(LString;) "Number is 10"
+		else if number == int[20]
+			dynamic_call System.stdout.println(LString;) "Number is 20"
+		else
+			dynamic_call System.stdout.println(LString;) "Number is neither 10 nor 20"
+		end
+
 		int negative
 		setd negative dword[-2]
 
@@ -28,28 +39,4 @@ class Main
 				add counter counter int[1]
 			end
 		end
-
-		static_call myFunc()
-
-		object Main myObject
-		seto myObject new Main(LString;) "From dynamic function"
-
-		dynamic_call myObject.printMessage()
-
 		ret
-
-	function static interp void myFunc()
-		dynamic_call System.stdout.println(LString;) "From static function"
-		ret
-
-	global dynamic varying object message
-
-	constructor(object String message)
-		setv this.message message
-		ret
-
-	function dynamic interp void printMessage()
-		dynamic_call System.stdout.println(LString;) this.message
-		ret
-
-

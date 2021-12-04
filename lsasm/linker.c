@@ -9,7 +9,8 @@ enum
 {
 	search_end = 0x1,
 	search_else = 0x2,
-	search_no_link = 0x4
+	search_no_link = 0x4,
+	search_no_level = 0x8
 };
 
 static compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int linkVersion);
@@ -134,8 +135,14 @@ compile_error_t *link_data(byte_t *data, size_t len, const char *srcFile, compil
 		case lb_while:
 			counter = link_while_cmd(data, counter, end, search_end, srcFile, &back);
 			break;
+		case lb_elif:
+			// Skip the elif statement, it should have already been linked
+			counter++;
+			counter += sizeof(size_t);
+			counter = seek_past_if_style_cmd(counter, NULL, srcFile, &back);
+			break;
 		case lb_end:
-			// Just skip past the end statement, it should have already been linked
+			// Skip the end statement, it should have already been linked
 			counter++;
 			counter += sizeof(size_t);
 			break;
@@ -156,16 +163,16 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 	value_t *val;
 	while (off < end)
 	{
+		assert(*off != lb_class);
+
 		switch (*off)
 		{
 		case lb_if:
 		case lb_else:
+		case lb_elif:
 		case lb_while:
 		case lb_end:
 			return off;
-			break;
-
-		case lb_class:
 			break;
 
 		case lb_global:
@@ -232,6 +239,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 		case lb_ushort:
 		case lb_int:
 		case lb_uint:
+		case lb_long:
 		case lb_ulong:
 		case lb_bool:
 		case lb_float:
@@ -278,8 +286,36 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 			{
 			case lb_new:
 				off += strlen(off) + 1;	// Classname
+				argCount = infer_argument_count((char *)off);
 				off += strlen(off) + 1;	// Constructor signature
 				// Custom constructors not supported yet :'(
+				for (i = 0; i < argCount; i++)
+				{
+					switch (*off)
+					{
+					case lb_byte:
+						off++;
+						off += sizeof(byte_t);
+						break;
+					case lb_word:
+						off++;
+						off += sizeof(word_t);
+						break;
+					case lb_dword:
+						off++;
+						off += sizeof(dword_t);
+						break;
+					case lb_qword:
+						off++;
+						off += sizeof(qword_t);
+						break;
+					case lb_string:
+					case lb_value:
+						off++;
+						off += strlen(off) + 1;
+						break;
+					}
+				}
 				break;
 			case lb_value:
 				off += strlen(off) + 1;
@@ -335,7 +371,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 		case lb_static_call:
 		case lb_dynamic_call:
 			off++;
-			argCount = infer_argument_count((const char *)off);
+			argCount = infer_argument_count((char *)off);
 			off += strlen(off) + 1;	// Function name
 			for (i = 0; i < argCount; i++)
 			{
@@ -425,8 +461,14 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 			off += strlen(off) + 1;	// Source variable name
 			break;
 
+		case lb_align:
+			off++;
+			break;
+
 		default:
-			off++; // This is potentially dangerous, but is here to skip over alignment bytes
+			assert(0);
+			return NULL;
+			//off++; // This is potentially dangerous, but is here to skip over alignment bytes
 			break;
 		}
 	}
@@ -457,22 +499,46 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, con
 					return off;
 				goto perform_if_link;
 			}
+			else off += sizeof(size_t);
+			break;
+		case lb_elif:
+			off++;
+			if (searchType & search_else)
+			{
+				exitLinkLoc = (size_t *)off;
+				off += sizeof(size_t);
+				assert(*off == lb_if);
+
+				failLoc = off; // Next should be if statement
+
+				exitLoc = link_if_cmd(start, off, end, search_end | search_no_link | search_else, srcFile, backPtr);
+				if (searchType & search_no_link)
+					return off;
+				goto perform_if_link;
+			}
 			else
 			{
 				off += sizeof(size_t);
-				if (*off == lb_if)
-					off = seek_past_if_style_cmd(off, NULL, srcFile, backPtr);
+				off = seek_past_if_style_cmd(off, NULL, srcFile, backPtr);
 			}
-			break;
 		case lb_if:
 		case lb_while:
-			level++;
+			//if (!(searchType & search_no_level))
+				level++;
+			// Remove search_no_level
+			//searchType &= ~((int)search_no_level);
+
 			off = seek_past_if_style_cmd(off, NULL, srcFile, backPtr);
+			
 			if (level == 1)
 				failLinkLoc = (size_t *)(off - sizeof(size_t));
 			break;
 		case lb_end:
-			level--;
+			//if (!(searchType & search_no_level))
+				level--;
+			// Remove search_no_level
+			//searchType &= ~((int)search_no_level);
+
 			if (level <= 0 && searchType & search_end)
 			{
 				exitLoc = off;
@@ -515,9 +581,19 @@ byte_t *link_while_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, 
 		switch (*off)
 		{
 		case lb_else:
-			*backPtr = add_compile_error(*backPtr, srcFile, 0, error_error, "Unexepected else command while linking while command.");
-			return NULL;
+			if (level == 1)
+			{
+				*backPtr = add_compile_error(*backPtr, srcFile, 0, error_error, "Unexepected else command while linking while command.");
+				return NULL;
+			}
+
+			off++;
+			off += sizeof(size_t);
 			break;
+		case lb_elif:
+			off++;
+			off += sizeof(size_t);
+			assert(*off == lb_if);
 		case lb_if:
 		case lb_while:
 			level++;
@@ -570,6 +646,8 @@ perform_while_link:
 
 byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart, const char *srcFile, compile_error_t **backPtr)
 {
+	assert(*start == lb_if || *start == lb_while);
+
 	byte_t *off = start;
 	off++;
 	byte_t count = *off;

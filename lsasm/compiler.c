@@ -512,11 +512,32 @@ compile_error_t *compile_data(data_compile_options_t *options)
 				handle_if_style_cmd(&cs);
 				break;
 			case lb_else:
-				options->out = PUT_BYTE(options->out, lb_else);
-				options->out = PUT_LONG(options->out, -1);
 				//out = put_byte(out, tokenCount > 1);
 				if (cs.tokencount > 1)
+				{
+					cs.out = PUT_BYTE(cs.out, lb_elif);
+					cs.out = PUT_LONG(cs.out, -1);
+
+					if (strcmp(cs.tokens[1], "if"))
+					{
+						cs.back = add_compile_error(cs.back, cs.srcfile, cs.srcline, error_error, "Unexpected token \"%s\"", cs.tokens[1]);
+						break;
+					}
+					cs.tokens += 1;
+					cs.tokencount -= 1;
+					cs.cmd = lb_if;
+
 					handle_if_style_cmd(&cs);
+
+					cs.cmd = lb_else;
+					cs.tokencount += 1;
+					cs.tokens -= 1;
+				}
+				else
+				{
+					options->out = PUT_BYTE(options->out, lb_else);
+					options->out = PUT_LONG(options->out, -1);
+				}
 				break;
 			case lb_end:
 				cs.out = PUT_BYTE(cs.out, cs.cmd);
