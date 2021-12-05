@@ -23,6 +23,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lscriptapi", "lscriptapi\ls
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lscutil", "lscutil\lscutil.vcxproj", "{9DF4C45D-CA74-486D-B768-A3A7D90641D0}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lsdump", "lsdump\lsdump.vcxproj", "{569F082C-BD02-4F42-A8CA-3F76124612D9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -71,6 +73,14 @@ Global
 		{9DF4C45D-CA74-486D-B768-A3A7D90641D0}.Release|x64.Build.0 = Release|x64
 		{9DF4C45D-CA74-486D-B768-A3A7D90641D0}.Release|x86.ActiveCfg = Release|Win32
 		{9DF4C45D-CA74-486D-B768-A3A7D90641D0}.Release|x86.Build.0 = Release|Win32
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Debug|x64.ActiveCfg = Debug|x64
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Debug|x64.Build.0 = Debug|x64
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Debug|x86.ActiveCfg = Debug|Win32
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Debug|x86.Build.0 = Debug|Win32
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Release|x64.ActiveCfg = Release|x64
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Release|x64.Build.0 = Release|x64
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Release|x86.ActiveCfg = Release|Win32
+		{569F082C-BD02-4F42-A8CA-3F76124612D9}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

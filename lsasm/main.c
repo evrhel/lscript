@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <Windows.h>
+#include <strutil/strutil.h>
 
 #include "compiler.h"
 #include "linker.h"
@@ -16,7 +17,6 @@
 #define RETURN_COMPILE_ERROR 0x03
 #define RETURN_LINK_ERROR 0x04
 
-static int equals_ignore_case(const char *s1, const char *s2);
 static void display_help();
 static void display_version();
 static int are_errors(const compile_error_t *list);
@@ -53,17 +53,17 @@ int main(int argc, char *argv[])
 		else if (argv[i][0] != '-')
 			readingInputs = 1;
 
-		if (equals_ignore_case(argv[i], "-help") || equals_ignore_case(argv[i], "-h") || equals_ignore_case(argv[i], "-?"))
+		if (str_equals_ignore_case(argv[i], "-help") || str_equals_ignore_case(argv[i], "-h") || str_equals_ignore_case(argv[i], "-?"))
 		{
 			display_help();
 			return RETURN_NORMAL;
 		}
-		else if (equals_ignore_case(argv[i], "-version") || equals_ignore_case(argv[i], "-v"))
+		else if (str_equals_ignore_case(argv[i], "-version") || str_equals_ignore_case(argv[i], "-v"))
 		{
 			display_version();
 			return RETURN_NORMAL;
 		}
-		else if (equals_ignore_case(argv[i], "-o"))
+		else if (str_equals_ignore_case(argv[i], "-o"))
 		{
 			i++;
 			if (i == argc)
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 			}
 			outputDirectory = argv[i];
 		}
-		else if (equals_ignore_case(argv[i], "-i"))
+		else if (str_equals_ignore_case(argv[i], "-i"))
 		{
 			i++;
 			if (i == argc)
@@ -92,11 +92,11 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		else if (equals_ignore_case(argv[i], "-r"))
+		else if (str_equals_ignore_case(argv[i], "-r"))
 		{
 			inputDirRec = 1;
 		}
-		else if (equals_ignore_case(argv[i], "-cp"))
+		else if (str_equals_ignore_case(argv[i], "-cp"))
 		{
 			i++;
 			if (i == argc)
@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		else if (equals_ignore_case(argv[i], "-s"))
+		else if (str_equals_ignore_case(argv[i], "-s"))
 		{
 			i++;
 			if (i == argc)
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 			}
 			version = atoi(argv[i]);
 		}
-		else if (equals_ignore_case(argv[i], "-fa"))
+		else if (str_equals_ignore_case(argv[i], "-fa"))
 		{
 			i++;
 			if (i == argc)
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 			if (alignment.functionAlignment == 0)
 				alignment.functionAlignment = 1;
 		}
-		else if (equals_ignore_case(argv[i], "-ga"))
+		else if (str_equals_ignore_case(argv[i], "-ga"))
 		{
 			i++;
 			if (i == argc)
@@ -148,15 +148,15 @@ int main(int argc, char *argv[])
 			if (alignment.globalAlignment == 0)
 				alignment.globalAlignment = 1;
 		}
-		else if (equals_ignore_case(argv[i], "-nc"))
+		else if (str_equals_ignore_case(argv[i], "-nc"))
 		{
 			runCompiler = 0;
 		}
-		else if (equals_ignore_case(argv[i], "-nl"))
+		else if (str_equals_ignore_case(argv[i], "-nl"))
 		{
 			runLinker = 0;
 		}
-		else if (equals_ignore_case(argv[i], "-d"))
+		else if (str_equals_ignore_case(argv[i], "-d"))
 		{
 			compileDebug = 1;
 		}
@@ -229,29 +229,6 @@ int main(int argc, char *argv[])
 
 	END_DEBUG();
 	return RETURN_NORMAL;
-}
-
-int equals_ignore_case(const char *s1, const char *s2)
-{
-	while (*s1 && *s2)
-	{
-		if (*s1 >= 64 && *s1 <= 90)
-		{
-			if (*s1 != *s2 && *s1 + 32 != *s2)
-				return 0;
-		}
-		else if (*s1 >= 97 && *s1 <= 121)
-		{
-			if (*s1 != *s2 && *s1 - 32 != *s2)
-				return 0;
-		}
-		else if (*s1 != *s2)
-			return 0;
-
-		s1++;
-		s2++;
-	}
-	return *s1 == *s2;
 }
 
 void display_help()
@@ -339,7 +316,7 @@ input_file_t *add_source_files_in_directory(const char *directory, input_file_t 
 		else
 		{
 			char *ext = strrchr(ffd.cFileName, '.');
-			if (ext && equals_ignore_case(ext + 1, "lasm"))
+			if (ext && str_equals_ignore_case(ext + 1, "lasm"))
 			{
 				strcpy_s(szPrefix + prefixLen, sizeof(szPrefix) - prefixLen, ffd.cFileName);
 				files = add_file(files, szPrefix, szFilePath);

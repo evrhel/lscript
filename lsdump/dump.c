@@ -1,0 +1,741 @@
+#include "dump.h"
+
+#include <stdlib.h>
+#include <assert.h>
+#include <internal/lb.h>
+#include <internal/types.h>
+#include <internal/value.h>
+
+#define printbyte(out, byte) fprintf(out, "[%02hhX]", byte)
+#define printbytespc(out, byte) fprintf(out, "[%02hhX] ", byte)
+
+typedef struct disasm_state_s
+{
+	FILE *out;
+	byte_t *cursor;
+	const char *lastfunc;
+} disasm_state_t;
+
+static int disasm(FILE *out, byte_t *data, long datalen);
+static int expsyb(FILE *out, byte_t *data, long datalen);
+static const char *type_name(byte_t lb);
+
+static int determine_arg_count(const char *funcname);
+
+/*
+Handles a generic function call. state->cursor should point to the function signature.
+*/
+static void print_function_call_generic(disasm_state_t *state);
+
+static void print_function(disasm_state_t *state);
+static void print_global(disasm_state_t *state);
+static void print_valdef(disasm_state_t *state);
+static void print_setcmd(disasm_state_t *state);
+static void print_retcmd(disasm_state_t *state);
+static void print_mathcmd(disasm_state_t *state);
+
+int dump_file(dump_options_t *dumpOptions)
+{
+	FILE *in = NULL, *out = NULL;
+	long datalen = 0;
+	byte_t *data = NULL;
+	int err = dump_no_error;
+
+	in = fopen(dumpOptions->infile, "rb");
+	if (!in) return dump_io_error;
+
+	fseek(in, 0, SEEK_END);
+	datalen = ftell(in);
+
+	data = (byte_t *)malloc(datalen);
+	if (!data)
+	{
+		err = dump_out_of_memory;
+		goto finalize;
+	}
+
+	fclose(in);
+	in = NULL;
+
+	out = dumpOptions->outfile ? fopen(dumpOptions->outfile, "w") : stdout;
+
+	if (dumpOptions->disasm)
+	{
+		err = disasm(out, data, datalen);
+		if (err) goto finalize;
+	}
+
+	if (dumpOptions->symb)
+	{
+		err = expsyb(out, data, datalen);
+		if (err) goto finalize;
+	}
+
+finalize:
+
+	if (in) fclose(in);
+	if (out && out != stdout) fclose(out);
+
+	return err;
+}
+
+int disasm(FILE *out, byte_t *data, long datalen)
+{
+	disasm_state_t state;
+	byte_t *end;
+	const char *cmdname;
+
+	state.cursor = data;
+	end = data + datalen;
+
+	while (state.cursor < end)
+	{
+		size_t off = state.cursor - data;
+#if defined(_WIN32)
+#if defined (_WIN64)
+		fprintf(out, "%08zX: ", off);
+#else
+		fprintf(out, "%04zX: ", off);
+#endif
+#endif
+		switch (*state.cursor)
+		{
+		case lb_noop:
+			state.cursor++;
+			fprintf(out, "noop");
+			break;
+		case lb_class:
+			state.cursor++;
+			fprintf(out, "class %s extends ", state.cursor);
+			state.cursor += strlen(state.cursor) + 1;
+			if (*state.cursor == lb_extends)
+			{
+				state.cursor++;
+				fprintf(out, "%s\n", state.cursor);
+			}
+			else fprintf(out, "null\n");
+			break;
+		case lb_function:
+			print_function(&state);
+			break;
+		case lb_global:
+			print_global(&state);
+			break;
+		case lb_char:
+		case lb_uchar:
+		case lb_short:
+		case lb_ushort:
+		case lb_int:
+		case lb_uint:
+		case lb_long:
+		case lb_ulong:
+		case lb_float:
+		case lb_double:
+		case lb_object:
+		case lb_chararray:
+		case lb_uchararray:
+		case lb_shortarray:
+		case lb_ushortarray:
+		case lb_intarray:
+		case lb_uintarray:
+		case lb_longarray:
+		case lb_ulongarray:
+		case lb_boolarray:
+		case lb_floatarray:
+		case lb_doublearray:
+		case lb_objectarray:
+			print_valdef(&state);
+			break;
+		case lb_setb:
+		case lb_setw:
+		case lb_setd:
+		case lb_setq:
+		case lb_setr4:
+		case lb_setr8:
+		case lb_seto:
+		case lb_setv:
+		case lb_setr:
+			print_setcmd(&state);
+			break;
+		case lb_retb:
+		case lb_retw:
+		case lb_retd:
+		case lb_retq:
+		case lb_retr4:
+		case lb_retr8:
+		case lb_retv:
+		case lb_ret:
+		case lb_retr:
+			break;
+		case lb_static_call:
+			fprintf(state.out, "static_call ");
+			state.cursor++;
+			print_function_call_generic(&state);
+			break;
+		case lb_dynamic_call:
+			fprintf(state.out, "dynamic_call ");
+			state.cursor++;
+			print_function_call_generic(&state);
+			break;
+		case lb_add:
+			cmdname = "add";
+			goto handle_math_cmd;
+			break;
+		case lb_sub:
+			cmdname = "sub";
+			goto handle_math_cmd;
+			break;
+		case lb_mul:
+			cmdname = "mul";
+			goto handle_math_cmd;
+			break;
+		case lb_div:
+			cmdname = "div";
+			goto handle_math_cmd;
+			break;
+		case lb_mod:
+			cmdname = "mod";
+			goto handle_math_cmd;
+			break;
+		case lb_and:
+			cmdname = "and";
+			goto handle_math_cmd;
+			break;
+		case lb_or:
+			cmdname = "or";
+			goto handle_math_cmd;
+			break;
+		case lb_xor:
+			cmdname = "xor";
+			goto handle_math_cmd;
+			break;
+		case lb_lsh:
+			cmdname = "lsh";
+			goto handle_math_cmd;
+			break;
+		case lb_rsh:
+			cmdname = "rsh";
+		handle_math_cmd:
+			state.cursor++;
+			fprintf(state.out, "%s %s", cmdname, state.cursor); // cmd dest
+			state.cursor += strlen(state.cursor) + 1;
+			fprintf(state.out, "%s ", state.cursor); // src
+			state.cursor += strlen(state.cursor) + 1;
+			fprintf(state.out, "%s", state.cursor); // arg
+			state.cursor += strlen(state.cursor) + 1;
+			break;
+		case lb_neg:
+			cmdname = "neg";
+			goto handle_unary_math_cmd;
+		case lb_not:
+			cmdname = "not";
+		handle_unary_math_cmd:
+			state.cursor++;
+			fprintf(state.out, "%s %s", cmdname, state.cursor);
+			state.cursor += strlen(state.cursor) + 1;
+			fprintf(state.out, "%s ", state.cursor);
+			state.cursor += strlen(state.cursor) + 1;
+			break;
+		default:
+			printbyte(out, *state.cursor);
+			state.cursor++;
+			break;
+		}
+
+		fprintf(out, "\n");
+	}
+
+	return dump_no_error;
+}
+
+int expsyb(FILE *out, byte_t *data, long datalen)
+{
+	return dump_no_error;
+}
+
+const char *type_name(byte_t lb)
+{
+	switch (lb)
+	{
+	case lb_void:
+		return "void";
+	case lb_char:
+		return "char";
+	case lb_uchar:
+		return "uchar";
+	case lb_short:
+		return "short";
+	case lb_ushort:
+		return "ushort";
+	case lb_int:
+		return "int";
+	case lb_uint:
+		return "uint";
+	case lb_long:
+		return "long";
+	case lb_ulong:
+		return "ulong";
+	case lb_bool:
+		return "bool";
+	case lb_float:
+		return "float";
+	case lb_double:
+		return "double";
+	case lb_object:
+		return "object";
+	case lb_chararray:
+		return "chararray";
+	case lb_uchararray:
+		return "uchararray";
+	case lb_shortarray:
+		return "shortarray";
+	case lb_ushortarray:
+		return "ushortarray";
+	case lb_intarray:
+		return "intarray";
+	case lb_uintarray:
+		return "uintarray";
+	case lb_longarray:
+		return "longarray";
+	case lb_ulongarray:
+		return "ulongarray";
+	case lb_boolarray:
+		return "boolarray";
+	case lb_floatarray:
+		return "floatarray";
+	case lb_doublearray:
+		return "doublearray";
+	case lb_objectarray:
+		return "objectarray";
+	case lb_byte:
+		return "byte";
+	case lb_word:
+		return "word";
+	case lb_dword:
+		return "dword";
+	case lb_qword:
+		return "qword";
+	case lb_real4:
+		return "real4";
+	case lb_real8:
+		return "real8";
+	default:
+		return NULL;
+	}
+}
+
+int determine_arg_count(const char *funcname)
+{
+	const char *cursor = funcname;
+	int count = 0;
+	while (*cursor && *cursor != '(') cursor++;
+	for (; *cursor; cursor++)
+	{
+		if (*cursor == '[') continue;
+		if (*cursor == 'L')
+		{
+			while (*cursor && *cursor != ';') cursor++;
+		}
+		count++;
+	}
+	return count;
+}
+
+void print_function_call_generic(disasm_state_t *state)
+{
+	int i, argc;
+
+	fprintf(state->out, "%s", state->cursor);
+	argc = determine_arg_count(state->cursor);
+
+	state->cursor += strlen(state->cursor) + 1;
+	for (i = 0; i < argc; i++)
+	{
+		fputc(' ', state->out);
+		switch (*state->cursor)
+		{
+		case lb_byte:
+			fprintf(state->out, "byte[% hhu]", *((byte_t *)state->cursor));
+			state->cursor += sizeof(byte_t);
+			break;
+		case lb_word:
+			fprintf(state->out, "word[%hu]", *((word_t *)state->cursor));
+			state->cursor += sizeof(word_t);
+			break;
+		case lb_dword:
+			fprintf(state->out, "dword[%u]", *((dword_t *)state->cursor));
+			state->cursor += sizeof(dword_t);
+			break;
+		case lb_qword:
+			fprintf(state->out, "qword[%llu]", *((qword_t *)state->cursor));
+			state->cursor += sizeof(qword_t);
+			break;
+		case lb_real4:
+			fprintf(state->out, "real4[%g]", (real8_t) * ((real4_t *)state->cursor));
+			state->cursor += sizeof(real4_t);
+			break;
+		case lb_real8:
+			fprintf(state->out, "real8[%g]", *((real8_t *)state->cursor));
+			state->cursor += sizeof(real8_t);
+			break;
+		case lb_value:
+			state->cursor++;
+			fprintf("%s", state->cursor);
+			state->cursor += strlen(state->cursor) + 1;
+			break;
+		case lb_string:
+			state->cursor++;
+			fprintf("\"%s\"", state->cursor);
+			state->cursor += strlen(state->cursor) + 1;
+			break;
+		default:
+			printbyte(state->out, *state->cursor);
+			state->cursor++;
+			break;
+		}
+	}
+}
+
+void print_function(disasm_state_t *state)
+{
+	const char *dataTypeName, *classname;
+	byte_t argcount, i;
+	byte_t type;
+
+	fprintf(state->out, "function ");
+	state->cursor++;
+
+	if (*state->cursor == lb_static)
+		fprintf(state->out, "static ");
+	else if (*state->cursor == lb_dynamic)
+		fprintf(state->out, "dynamic ");
+	else
+		printbytespc(state->out, *state->cursor);
+	state->cursor++;
+
+	if (*state->cursor == lb_interp)
+		fprintf(state->out, "interp ");
+	else if (*state->cursor == lb_native)
+		fprintf(state->out, "native ");
+	else if (*state->cursor == lb_abstract)
+		fprintf(state->out, "abstract ");
+	else
+		printbytespc(state->out, *state->cursor);
+	state->cursor++;
+
+	dataTypeName = type_name(*state->cursor);
+	if (dataTypeName)
+		fprintf(state->out, "%s ", dataTypeName);
+	else
+		printbytespc(state->out, *state->cursor);
+	state->cursor++;
+
+	fprintf(state->out, "%s(", state->cursor);
+	state->cursor += strlen(state->cursor) + 1;
+
+	argcount = *state->cursor;
+	state->cursor++;
+
+	for (i = 0; i < argcount; i++)
+	{
+		type = *state->cursor;
+		state->cursor++;
+
+		dataTypeName = type_name(type);
+		if (!dataTypeName)
+			printbytespc(state->out, type);
+		else
+		{
+			fprintf("%s ", dataTypeName);
+			if (*state->cursor == lb_object || *state->cursor == lb_objectarray)
+			{
+				classname = state->cursor;
+				state->cursor += strlen(state->cursor) + 1;
+				fprintf("%s ", classname);
+			}
+		}
+
+		// arg name
+		fprintf("%s", state->cursor);
+		state->cursor += strlen(state->cursor) + 1;
+
+		if (i < argcount - 1)
+			fprintf(state->out, ", ");
+	}
+
+	fprintf(state->out, ")");
+}
+
+void print_global(disasm_state_t *state)
+{
+	const char *name, *typeName;
+	byte_t accesstype, accessmodifier, datatype;
+
+	state->cursor++;
+
+	name = state->cursor;
+	state->cursor += strlen(state->cursor + 1);
+
+	accesstype = *state->cursor; state->cursor++;
+	accessmodifier = *state->cursor; state->cursor++;
+	state->cursor += 5;
+	datatype = *state->cursor; state->cursor++;
+
+	fprintf(state->out, "global ");
+
+	if (accesstype == lb_dynamic)
+		fprintf(state->out, "dynamic ");
+	else if (accesstype == lb_static)
+		fprintf(state->out, "static");
+	else
+		printbytespc(state->out, accesstype);
+
+	if (accessmodifier == lb_varying)
+		fprintf(state->out, "varying ");
+	else if (accessmodifier == lb_static)
+		fprintf(state->out, "static ");
+	else
+		printbytespc(state->out, accessmodifier);
+
+	typeName = type_name(datatype);
+	if (typeName)
+		fprintf(state->out, "%s", typeName);
+	else
+		printbytespc(state->out, datatype);
+
+	if (accesstype == lb_static)
+	{
+		if (datatype == lb_float)
+		{
+			fprintf(state->out, "real4[%g]", (real8_t)*((real4_t *)state->cursor));
+			state->cursor += sizeof(real8_t);
+		}
+		else if (datatype == lb_double)
+		{
+			fprintf(state->out, "real8[%g]", *((real8_t *)state->cursor));
+			state->cursor += sizeof(real4_t);
+		}
+		else
+		{
+			size_t size = sizeof_type(datatype);
+			switch (size)
+			{
+			case 1:
+				fprintf(state->out, "byte[%hhu]", *((byte_t *)state->cursor));
+				break;
+			case 2:
+				fprintf(state->out, "word[%hu]", *((word_t *)state->cursor));
+				break;
+			case 4:
+				fprintf(state->out, "dword[%u]", *((dword_t *)state->cursor));
+				break;
+			case 8:
+				fprintf(state->out, "qword[%llu]", *((qword_t *)state->cursor));
+				break;
+			default:
+				fprintf(state->out, "?");
+			}
+			state->cursor += size;
+		}
+	}
+	
+	state->lastfunc = NULL;
+}
+
+void print_valdef(disasm_state_t *state)
+{
+	const char *typeName, *valName;
+
+	typeName = type_name(*state->cursor);
+	assert(typeName != NULL);
+	state->cursor++;
+
+	valName = state->cursor;
+	state->cursor += strlen(state->cursor) + 1;
+	
+	fprintf(state->out, "%s %s", typeName, valName);
+}
+
+void print_setcmd(disasm_state_t *state)
+{
+	byte_t setcmd;
+	const char *destvar, *srcvar;
+	const char *arrtype;
+	int i, argc;
+
+	setcmd = *state->cursor;
+
+	state->cursor++;
+	destvar = state->cursor;
+	destvar += strlen(state->cursor) + 1;
+
+	switch (setcmd)
+	{
+	case lb_setb:
+		fprintf(state->out, "setb %s byte[%hhu]", destvar, *((byte_t *)state->cursor));
+		state->cursor += sizeof(byte_t);
+		break;
+	case lb_setw:
+		fprintf(state->out, "setw %s word[%hu]", destvar, *((word_t *)state->cursor));
+		state->cursor += sizeof(word_t);
+		break;
+	case lb_setd:
+		fprintf(state->out, "setd %s dword[%u]", destvar, *((dword_t *)state->cursor));
+		state->cursor += sizeof(dword_t);
+		break;
+	case lb_setq:
+		fprintf(state->out, "setq %s qword[%llu]", destvar, *((qword_t *)state->cursor));
+		state->cursor += sizeof(qword_t);
+		break;
+	case lb_setr4:
+		fprintf(state->out, "setr4 %s real4[%g]", destvar, (real8_t)*((real4_t *)state->cursor));
+		state->cursor += sizeof(real4_t);
+		break;
+	case lb_setr8:
+		fprintf(state->out, "sett8 %s real8[%g]", destvar, *((real8_t *)state->cursor));
+		state->cursor += sizeof(real8_t);
+		break;
+	case lb_seto:
+		fprintf(state->out, "seto %s ", destvar);
+		switch (*state->cursor)
+		{
+		case lb_char:
+			arrtype = "char";
+			goto handle_new_array;
+		case lb_uchar:
+			arrtype = "uchar";
+			goto handle_new_array;
+		case lb_short:
+			arrtype = "short";
+			goto handle_new_array;
+		case lb_ushort:
+			arrtype = "ushort";
+			goto handle_new_array;
+		case lb_int:
+			arrtype = "int";
+			goto handle_new_array;
+		case lb_uint:
+			arrtype = "uint";
+			goto handle_new_array;
+		case lb_long:
+			arrtype = "long";
+			goto handle_new_array;
+		case lb_ulong:
+			arrtype = "ulong";
+			goto handle_new_array;
+		case lb_bool:
+			arrtype = "bool";
+			goto handle_new_array;
+		case lb_float:
+			arrtype = "float";
+			goto handle_new_array;
+		case lb_double:
+			arrtype = "double";
+			goto handle_new_array;
+		case lb_object:
+			arrtype = "object";
+		handle_new_array:
+			state->cursor++;
+			fprintf(state->out, "%s ", arrtype);
+			switch (*state->cursor)
+			{
+			case lb_value:
+				state->cursor++;
+				fprintf(state->out, "%s", state->cursor);
+				state->cursor += strlen(state->cursor) + 1;
+				break;
+			case lb_dword:
+				state->cursor++;
+				fprintf(state->out, "dword[%u]", *((dword_t *)state->cursor));
+				state->cursor += sizeof(dword_t);
+				break;
+			default:
+				printbyte(state->out, *state->cursor);
+				state->cursor++;
+				break;
+			}
+		case lb_new:
+			state->cursor++;
+			fprintf(state->out, "new %s ", state->cursor);
+			state->cursor += strlen(state->cursor) + 1;
+
+			print_function_call_generic(state);
+			break;
+		case lb_string:
+			state->cursor++;
+			fprintf(state->out, "\"%s\"", state->cursor);
+			state->cursor += strlen(state->cursor) + 1;
+			break;
+		case lb_null:
+			fprintf(state->out, "null");
+			state->cursor++;
+			break;
+		default:
+			printbyte(state->out, *state->cursor);
+			state->cursor++;
+			break;
+		}
+		break;
+	case lb_setv:
+		srcvar = state->cursor;
+		state->cursor += strlen(state->cursor) + 1;
+		fprintf(state->out, "setv %s %s", destvar, srcvar);
+		break;
+	case lb_setr:
+		fprintf(state->out, "setr %s (%s)", destvar, state->lastfunc ? state->lastfunc : "???");
+		break;
+	}
+}
+
+void print_retcmd(disasm_state_t *state)
+{
+	byte_t retcmd;
+
+	retcmd = *state->cursor;
+	state->cursor++;
+
+	switch (retcmd)
+	{
+	case lb_setb:
+		fprintf(state->out, "retb byte[%hhu]",*((byte_t *)state->cursor));
+		state->cursor += sizeof(byte_t);
+		break;
+	case lb_setw:
+		fprintf(state->out, "retw word[%hu]", *((word_t *)state->cursor));
+		state->cursor += sizeof(word_t);
+		break;
+	case lb_setd:
+		fprintf(state->out, "retd dword[%u]", *((dword_t *)state->cursor));
+		state->cursor += sizeof(dword_t);
+		break;
+	case lb_setq:
+		fprintf(state->out, "retq qword[%llu]",  *((qword_t *)state->cursor));
+		state->cursor += sizeof(qword_t);
+		break;
+	case lb_setr4:
+		fprintf(state->out, "retr4 real4[%g]", (real8_t)*((real4_t *)state->cursor));
+		state->cursor += sizeof(real4_t);
+		break;
+	case lb_setr8:
+		fprintf(state->out, "rett8 real8[%g]", *((real8_t *)state->cursor));
+		state->cursor += sizeof(real8_t);
+		break;
+	case lb_ret:
+		fprintf(state->out, "ret");
+		break;
+	case lb_retr:
+		fprintf(state->out, "retr (%s)", state->lastfunc ? state->lastfunc : "???");
+		break;
+	}
+}
+
+void print_mathcmd(disasm_state_t *state)
+{
+	byte_t mathcmd;
+
+	mathcmd = *state->cursor;
+	switch (mathcmd)
+	{
+
+	}
+}
