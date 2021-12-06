@@ -33,6 +33,9 @@ static void print_valdef(disasm_state_t *state);
 static void print_setcmd(disasm_state_t *state);
 static void print_retcmd(disasm_state_t *state);
 static void print_mathcmd(disasm_state_t *state);
+static void print_unarymathcmd(disasm_state_t *state);
+static void handle_ifstyle(disasm_state_t *state);
+static void print_castcmd(disasm_state_t *state);
 
 int dump_file(dump_options_t *dumpOptions)
 {
@@ -41,11 +44,12 @@ int dump_file(dump_options_t *dumpOptions)
 	byte_t *data = NULL;
 	int err = dump_no_error;
 
-	in = fopen(dumpOptions->infile, "rb");
+	fopen_s(&in, dumpOptions->infile, "rb");
 	if (!in) return dump_io_error;
 
 	fseek(in, 0, SEEK_END);
 	datalen = ftell(in);
+	fseek(in, 0, SEEK_SET);
 
 	data = (byte_t *)malloc(datalen);
 	if (!data)
@@ -54,10 +58,15 @@ int dump_file(dump_options_t *dumpOptions)
 		goto finalize;
 	}
 
+	fread_s(data, datalen, sizeof(byte_t), datalen, in);
+
 	fclose(in);
 	in = NULL;
 
-	out = dumpOptions->outfile ? fopen(dumpOptions->outfile, "w") : stdout;
+	if (dumpOptions->outfile)
+		fopen_s(&out, dumpOptions->outfile, "w");
+	else
+		out = stdout;
 
 	if (dumpOptions->disasm)
 	{
@@ -82,15 +91,32 @@ finalize:
 int disasm(FILE *out, byte_t *data, long datalen)
 {
 	disasm_state_t state;
-	byte_t *end;
-	const char *cmdname;
+	byte_t *end = NULL;
+	const char *cmdname = NULL;
+	size_t off;
+	unsigned int version;
+	char compressed;
 
+	state.out = out;
 	state.cursor = data;
+	state.lastfunc = NULL;
+
 	end = data + datalen;
+
+	// compressed
+	compressed = *state.cursor;
+	state.cursor++;
+
+	// version
+	version = *state.cursor;
+	state.cursor += sizeof(unsigned int);
+
+	fprintf(out, "Bytecode version: %u\n", version);
+	fprintf(out, "Compressed: %s\n\n", compressed ? "true" : "false");
 
 	while (state.cursor < end)
 	{
-		size_t off = state.cursor - data;
+		off = state.cursor - data;
 #if defined(_WIN32)
 #if defined (_WIN64)
 		fprintf(out, "%08zX: ", off);
@@ -111,9 +137,10 @@ int disasm(FILE *out, byte_t *data, long datalen)
 			if (*state.cursor == lb_extends)
 			{
 				state.cursor++;
-				fprintf(out, "%s\n", state.cursor);
+				fprintf(out, "%s", state.cursor);
+				state.cursor += strlen(state.cursor) + 1;
 			}
-			else fprintf(out, "null\n");
+			else fprintf(out, "null");
 			break;
 		case lb_function:
 			print_function(&state);
@@ -235,6 +262,37 @@ int disasm(FILE *out, byte_t *data, long datalen)
 			state.cursor += strlen(state.cursor) + 1;
 			fprintf(state.out, "%s ", state.cursor);
 			state.cursor += strlen(state.cursor) + 1;
+			break;
+		case lb_elif:
+			state.cursor++;
+			fprintf(state.out, "elif (%llX) ", (qword_t)state.cursor);
+			state.cursor += sizeof(qword_t);
+			goto handle_if_style_cmd;
+		case lb_while:
+			cmdname = "while";
+			state.lastfunc = NULL;
+			goto handle_if_style_cmd;
+		case lb_if:
+			cmdname = "if";
+		handle_if_style_cmd:
+			state.cursor++;
+			fprintf(state.out, "%s (%llX)", cmdname, *((qword_t *)state.cursor));
+			state.cursor += sizeof(qword_t);
+			break;
+		case lb_else:
+			cmdname = "else";
+			goto handle_end_style_cmd;
+		case lb_end:
+			cmdname = "end";
+		handle_end_style_cmd:
+			state.cursor++;
+			fprintf(state.out, "%s (%llX)", cmdname, *((qword_t *)state.cursor));
+			state.cursor += sizeof(qword_t);
+			state.lastfunc = NULL;
+			break;
+		case lb_align:
+			fprintf(state.out, "align");
+			while (*state.cursor == lb_align) state.cursor++;
 			break;
 		default:
 			printbyte(out, *state.cursor);
@@ -380,12 +438,12 @@ void print_function_call_generic(disasm_state_t *state)
 			break;
 		case lb_value:
 			state->cursor++;
-			fprintf("%s", state->cursor);
+			fprintf(state->out, "%s", state->cursor);
 			state->cursor += strlen(state->cursor) + 1;
 			break;
 		case lb_string:
 			state->cursor++;
-			fprintf("\"%s\"", state->cursor);
+			fprintf(state->out, "\"%s\"", state->cursor);
 			state->cursor += strlen(state->cursor) + 1;
 			break;
 		default:
@@ -446,17 +504,17 @@ void print_function(disasm_state_t *state)
 			printbytespc(state->out, type);
 		else
 		{
-			fprintf("%s ", dataTypeName);
-			if (*state->cursor == lb_object || *state->cursor == lb_objectarray)
+			fprintf(state->out, "%s ", dataTypeName);
+			if (type == lb_object || type == lb_objectarray)
 			{
 				classname = state->cursor;
 				state->cursor += strlen(state->cursor) + 1;
-				fprintf("%s ", classname);
+				fprintf(state->out, "%s ", classname);
 			}
 		}
 
 		// arg name
-		fprintf("%s", state->cursor);
+		fprintf(state->out, "%s", state->cursor);
 		state->cursor += strlen(state->cursor) + 1;
 
 		if (i < argcount - 1)
@@ -561,13 +619,12 @@ void print_setcmd(disasm_state_t *state)
 	byte_t setcmd;
 	const char *destvar, *srcvar;
 	const char *arrtype;
-	int i, argc;
 
 	setcmd = *state->cursor;
 
 	state->cursor++;
 	destvar = state->cursor;
-	destvar += strlen(state->cursor) + 1;
+	state->cursor += strlen(state->cursor) + 1;
 
 	switch (setcmd)
 	{
@@ -696,27 +753,27 @@ void print_retcmd(disasm_state_t *state)
 
 	switch (retcmd)
 	{
-	case lb_setb:
+	case lb_retb:
 		fprintf(state->out, "retb byte[%hhu]",*((byte_t *)state->cursor));
 		state->cursor += sizeof(byte_t);
 		break;
-	case lb_setw:
+	case lb_retw:
 		fprintf(state->out, "retw word[%hu]", *((word_t *)state->cursor));
 		state->cursor += sizeof(word_t);
 		break;
-	case lb_setd:
+	case lb_retd:
 		fprintf(state->out, "retd dword[%u]", *((dword_t *)state->cursor));
 		state->cursor += sizeof(dword_t);
 		break;
-	case lb_setq:
+	case lb_retq:
 		fprintf(state->out, "retq qword[%llu]",  *((qword_t *)state->cursor));
 		state->cursor += sizeof(qword_t);
 		break;
-	case lb_setr4:
+	case lb_retr4:
 		fprintf(state->out, "retr4 real4[%g]", (real8_t)*((real4_t *)state->cursor));
 		state->cursor += sizeof(real4_t);
 		break;
-	case lb_setr8:
+	case lb_retr8:
 		fprintf(state->out, "rett8 real8[%g]", *((real8_t *)state->cursor));
 		state->cursor += sizeof(real8_t);
 		break;
@@ -726,16 +783,137 @@ void print_retcmd(disasm_state_t *state)
 	case lb_retr:
 		fprintf(state->out, "retr (%s)", state->lastfunc ? state->lastfunc : "???");
 		break;
+	case lb_retv:
+		fprintf(state->out, "retv %s", state->cursor);
+		state->cursor += strlen(state->cursor) + 1;
+		break;
 	}
+
+	state->lastfunc = NULL;
 }
 
 void print_mathcmd(disasm_state_t *state)
 {
 	byte_t mathcmd;
+	byte_t argtype;
+	const char *cmdname;
 
 	mathcmd = *state->cursor;
 	switch (mathcmd)
 	{
-
+	case lb_add:
+		cmdname = "add";
+		break;
+	case lb_sub:
+		cmdname = "sub";
+		break;
+	case lb_mul:
+		cmdname = "mul";
+		break;
+	case lb_div:
+		cmdname = "div";
+		break;
+	case lb_mod:
+		cmdname = "mod";
+		break;
+	case lb_and:
+		cmdname = "and";
+		break;
+	case lb_or:
+		cmdname = "or";
+		break;
+	case lb_xor:
+		cmdname = "xor";
+		break;
+	case lb_lsh:
+		cmdname = "lsh";
+		break;
+	case lb_rsh:
+		cmdname = "rsh";
+		break;
+	default:
+		assert(0);
+		cmdname = "?";
+		return;
 	}
+	state->cursor++;
+
+	fprintf(state->out, "%s %s", cmdname, state->cursor); // cmd dest
+	state->cursor += strlen(state->cursor) + 1;
+	fprintf(state->out, "%s ", state->cursor); // src
+	state->cursor += strlen(state->cursor) + 1;
+	
+	argtype = *state->cursor;
+	state->cursor++;
+	switch (argtype)
+	{
+	case lb_char:
+		fprintf(state->out, "char[%hhd]", *((lchar *)state->cursor));
+		state->cursor += sizeof(lchar);
+		break;
+	case lb_uchar:
+		fprintf(state->out, "uchar[%hhu]", *((luchar *)state->cursor));
+		state->cursor += sizeof(luchar);
+		break;
+	case lb_short:
+		fprintf(state->out, "uchar[%hd]", *((lshort *)state->cursor));
+		state->cursor += sizeof(lshort);
+		break;
+	case lb_ushort:
+		fprintf(state->out, "uchar[%hu]", *((lushort *)state->cursor));
+		state->cursor += sizeof(lushort);
+		break;
+	case lb_int:
+		fprintf(state->out, "int[%d]", *((lint *)state->cursor));
+		state->cursor += sizeof(lint);
+		break;
+	case lb_uint:
+		fprintf(state->out, "uint[%u]", *((luint *)state->cursor));
+		state->cursor += sizeof(luint);
+		break;
+	case lb_long:
+		fprintf(state->out, "long[%lld]", *((llong *)state->cursor));
+		state->cursor += sizeof(llong);
+		break;
+	case lb_ulong:
+		fprintf(state->out, "ulong[%llu]", *((lulong *)state->cursor));
+		state->cursor += sizeof(lulong);
+		break;
+	case lb_float:
+		fprintf(state->out, "float[%g]", (ldouble)*((lfloat *)state->cursor));
+		state->cursor += sizeof(lfloat);
+		break;
+	case lb_double:
+		fprintf(state->out, "double[%g]", *((ldouble *)state->cursor));
+		state->cursor += sizeof(ldouble);
+		break;
+	case lb_value:
+		fprintf(state->out, "%s", state->cursor);
+		state->cursor += strlen(state->cursor) + 1;
+		break;
+	}
+}
+
+void print_unarymathcmd(disasm_state_t *state)
+{
+}
+
+void handle_ifstyle(disasm_state_t *state)
+{
+	switch (*state->cursor)
+	{
+	case lb_while:
+		fprintf(state->out, "while ");
+		break;
+	case lb_if:
+		fprintf(state->out, "if ");
+		break;
+	default:
+		assert(0);
+		break;
+	}
+}
+
+void print_castcmd(disasm_state_t *state)
+{
 }
