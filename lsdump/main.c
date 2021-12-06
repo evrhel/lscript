@@ -74,7 +74,18 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	dump_file(&options);
+	int err = dump_file(&options);
+	switch (err)
+	{
+	case dump_no_error:
+		break;
+	case dump_io_error:
+		printf("IO error\n");
+		break;
+	case dump_out_of_memory:
+		printf("Out of memory\n");
+		break;
+	}
 
 	return 0;
 }
