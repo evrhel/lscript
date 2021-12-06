@@ -100,7 +100,7 @@ void display_help()
 	printf("Where [options...] include:\n");
 	printf("-help -h -?    Prints this help message.\n");
 	printf("-version -v    Displays version information.\n");
-	printf("-o [directory] Optionally specifies a file to dump to. If not specified,\n");
+	printf("-o [file]      Optionally specifies a file to dump to. If not specified,\n");
 	printf("               information will be written to stdout.\n");
 	printf("-d             Specifies to disassemble the input file.\n");
 	printf("-s             Specifies to display all public symbols in the input file.\n");

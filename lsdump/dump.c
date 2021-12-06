@@ -6,8 +6,8 @@
 #include <internal/types.h>
 #include <internal/value.h>
 
-#define printbyte(out, byte) fprintf(out, "[%02hhX]", byte)
-#define printbytespc(out, byte) fprintf(out, "[%02hhX] ", byte)
+#define printbyte(out, byte) fprintf(out, "[0x%02hhX]", byte)
+#define printbytespc(out, byte) fprintf(out, "[0x%02hhX] ", byte)
 
 typedef struct disasm_state_s
 {
@@ -417,12 +417,13 @@ int determine_arg_count(const char *funcname)
 
 void print_function_call_generic(disasm_state_t *state)
 {
+	const char *funcname;
 	int i, argc;
 	byte_t datatype;
 
-	state->lastfunc = state->cursor;
+	funcname = state->cursor;
 
-	fprintf(state->out, "%s)", state->cursor);
+	fprintf(state->out, "%s)", funcname);
 	argc = determine_arg_count(state->cursor);
 
 	state->cursor += strlen(state->cursor) + 1;
@@ -466,7 +467,7 @@ void print_function_call_generic(disasm_state_t *state)
 			state->cursor += strlen(state->cursor) + 1;
 			break;
 		case lb_ret:
-			fprintf(state->out, "[ret]");
+			fprintf(state->out, "[ret (%s)]", state->lastfunc ? state->lastfunc : "???");
 			state->cursor++;
 			break;
 		default:
@@ -475,6 +476,8 @@ void print_function_call_generic(disasm_state_t *state)
 			break;
 		}
 	}
+
+	state->lastfunc = funcname;
 }
 
 void print_absolute_value(disasm_state_t *state)
@@ -823,7 +826,7 @@ void print_setcmd(disasm_state_t *state)
 		fprintf(state->out, "setv %s %s", destvar, srcvar);
 		break;
 	case lb_setr:
-		fprintf(state->out, "setr %s (%s)", destvar, state->lastfunc ? state->lastfunc : "???");
+		fprintf(state->out, "setr %s (%s))", destvar, state->lastfunc ? state->lastfunc : "???");
 		break;
 	}
 }
@@ -865,7 +868,7 @@ void print_retcmd(disasm_state_t *state)
 		fprintf(state->out, "ret");
 		break;
 	case lb_retr:
-		fprintf(state->out, "retr (%s)", state->lastfunc ? state->lastfunc : "???");
+		fprintf(state->out, "retr (%s))", state->lastfunc ? state->lastfunc : "???");
 		break;
 	case lb_retv:
 		fprintf(state->out, "retv %s", state->cursor);
