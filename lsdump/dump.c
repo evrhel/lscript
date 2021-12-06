@@ -120,9 +120,9 @@ int disasm(FILE *out, byte_t *data, long datalen)
 		off = state.cursor - data;
 #if defined(_WIN32)
 #if defined (_WIN64)
-		fprintf(out, "%016zX: ", off);
+		fprintf(out, "0x%016zX: ", off);
 #else
-		fprintf(out, "%08zX: ", off);
+		fprintf(out, "0x%08zX: ", off);
 #endif
 #endif
 		switch (*state.cursor)
@@ -258,9 +258,11 @@ int disasm(FILE *out, byte_t *data, long datalen)
 		case lb_not:
 			cmdname = "not";
 		handle_unary_math_cmd:
+			state.cursor++;
 			fprintf(state.out, "%s %s ", cmdname, state.cursor); // cmd dest
 			state.cursor += strlen(state.cursor) + 1;
 			fprintf(state.out, "%s ", state.cursor); // src
+			state.cursor += strlen(state.cursor) + 1;
 			break;
 		case lb_elif:
 			state.cursor++;
@@ -283,7 +285,7 @@ int disasm(FILE *out, byte_t *data, long datalen)
 			cmdname = "end";
 		handle_end_style_cmd:
 			state.cursor++;
-			fprintf(state.out, "%s (%016llX)", cmdname, *((qword_t *)state.cursor));
+			fprintf(state.out, "%s (0x%016llX)", cmdname, *((qword_t *)state.cursor));
 			state.cursor += sizeof(qword_t);
 			state.lastfunc = NULL;
 			break;
@@ -318,7 +320,7 @@ int disasm(FILE *out, byte_t *data, long datalen)
 
 int expsyb(FILE *out, byte_t *data, long datalen)
 {
-	return dump_no_error;
+	return dump_not_supported;
 }
 
 const char *type_name(byte_t lb)
@@ -416,32 +418,35 @@ int determine_arg_count(const char *funcname)
 void print_function_call_generic(disasm_state_t *state)
 {
 	int i, argc;
+	byte_t datatype;
 
 	state->lastfunc = state->cursor;
 
-	fprintf(state->out, "%s", state->cursor);
+	fprintf(state->out, "%s)", state->cursor);
 	argc = determine_arg_count(state->cursor);
 
 	state->cursor += strlen(state->cursor) + 1;
 	for (i = 0; i < argc; i++)
 	{
 		fputc(' ', state->out);
-		switch (*state->cursor)
+		datatype = *state->cursor;
+		state->cursor++;
+		switch (datatype)
 		{
 		case lb_byte:
-			fprintf(state->out, "byte[% hhu]", *((byte_t *)state->cursor));
+			fprintf(state->out, "byte[0x%hhX]", *((byte_t *)state->cursor));
 			state->cursor += sizeof(byte_t);
 			break;
 		case lb_word:
-			fprintf(state->out, "word[%hu]", *((word_t *)state->cursor));
+			fprintf(state->out, "word[0x%hX]", *((word_t *)state->cursor));
 			state->cursor += sizeof(word_t);
 			break;
 		case lb_dword:
-			fprintf(state->out, "dword[%u]", *((dword_t *)state->cursor));
+			fprintf(state->out, "dword[0x%X]", *((dword_t *)state->cursor));
 			state->cursor += sizeof(dword_t);
 			break;
 		case lb_qword:
-			fprintf(state->out, "qword[%llu]", *((qword_t *)state->cursor));
+			fprintf(state->out, "qword[0x%llX]", *((qword_t *)state->cursor));
 			state->cursor += sizeof(qword_t);
 			break;
 		case lb_real4:
@@ -453,12 +458,10 @@ void print_function_call_generic(disasm_state_t *state)
 			state->cursor += sizeof(real8_t);
 			break;
 		case lb_value:
-			state->cursor++;
 			fprintf(state->out, "%s", state->cursor);
 			state->cursor += strlen(state->cursor) + 1;
 			break;
 		case lb_string:
-			state->cursor++;
 			fprintf(state->out, "\"%s\"", state->cursor);
 			state->cursor += strlen(state->cursor) + 1;
 			break;
@@ -600,42 +603,49 @@ void print_function(disasm_state_t *state)
 void print_global(disasm_state_t *state)
 {
 	const char *name, *typeName;
+	value_t *value;
+	size_t size;
 	byte_t accesstype, accessmodifier, datatype;
 
 	state->cursor++;
 
 	name = state->cursor;
-	state->cursor += strlen(state->cursor + 1);
+	state->cursor += strlen(state->cursor) + 1;
 
-	accesstype = *state->cursor; state->cursor++;
-	accessmodifier = *state->cursor; state->cursor++;
-	state->cursor += 5;
-	datatype = *state->cursor; state->cursor++;
+	value = (value_t *)state->cursor;
+	state->cursor += sizeof(flags_t); // Don't increment by sizeof(flags_t), there might not be a value stored
+
+	accesstype = value_access_type(value);
+	accessmodifier = value_access_modifier(value);
+	datatype = value_typeof(value);
 
 	fprintf(state->out, "global ");
 
 	if (accesstype == lb_dynamic)
 		fprintf(state->out, "dynamic ");
 	else if (accesstype == lb_static)
-		fprintf(state->out, "static");
+		fprintf(state->out, "static ");
 	else
 		printbytespc(state->out, accesstype);
 
 	if (accessmodifier == lb_varying)
 		fprintf(state->out, "varying ");
-	else if (accessmodifier == lb_static)
-		fprintf(state->out, "static ");
+	else if (accessmodifier == lb_const)
+		fprintf(state->out, "const ");
 	else
 		printbytespc(state->out, accessmodifier);
 
 	typeName = type_name(datatype);
 	if (typeName)
-		fprintf(state->out, "%s", typeName);
+		fprintf(state->out, "%s ", typeName);
 	else
 		printbytespc(state->out, datatype);
 
+	fprintf(state->out, "%s", name);
+
 	if (accesstype == lb_static)
 	{
+		fputc(' ', state->out);
 		if (datatype == lb_float)
 		{
 			fprintf(state->out, "real4[%g]", (real8_t)*((real4_t *)state->cursor));
@@ -648,20 +658,20 @@ void print_global(disasm_state_t *state)
 		}
 		else
 		{
-			size_t size = sizeof_type(datatype);
+			size = sizeof_type(datatype);
 			switch (size)
 			{
 			case 1:
-				fprintf(state->out, "byte[%hhu]", *((byte_t *)state->cursor));
+				fprintf(state->out, "byte[0x%hhX]", *((byte_t *)state->cursor));
 				break;
 			case 2:
-				fprintf(state->out, "word[%hu]", *((word_t *)state->cursor));
+				fprintf(state->out, "word[0x%hX]", *((word_t *)state->cursor));
 				break;
 			case 4:
-				fprintf(state->out, "dword[%u]", *((dword_t *)state->cursor));
+				fprintf(state->out, "dword[0x%X]", *((dword_t *)state->cursor));
 				break;
 			case 8:
-				fprintf(state->out, "qword[%llu]", *((qword_t *)state->cursor));
+				fprintf(state->out, "qword[0x%llX]", *((qword_t *)state->cursor));
 				break;
 			default:
 				fprintf(state->out, "?");
@@ -702,19 +712,19 @@ void print_setcmd(disasm_state_t *state)
 	switch (setcmd)
 	{
 	case lb_setb:
-		fprintf(state->out, "setb %s byte[%hhu]", destvar, *((byte_t *)state->cursor));
+		fprintf(state->out, "setb %s byte[0x%hhX]", destvar, *((byte_t *)state->cursor));
 		state->cursor += sizeof(byte_t);
 		break;
 	case lb_setw:
-		fprintf(state->out, "setw %s word[%hu]", destvar, *((word_t *)state->cursor));
+		fprintf(state->out, "setw %s word[0x%hX]", destvar, *((word_t *)state->cursor));
 		state->cursor += sizeof(word_t);
 		break;
 	case lb_setd:
-		fprintf(state->out, "setd %s dword[%u]", destvar, *((dword_t *)state->cursor));
+		fprintf(state->out, "setd %s dword[0x%X]", destvar, *((dword_t *)state->cursor));
 		state->cursor += sizeof(dword_t);
 		break;
 	case lb_setq:
-		fprintf(state->out, "setq %s qword[%llu]", destvar, *((qword_t *)state->cursor));
+		fprintf(state->out, "setq %s qword[0x%llX]", destvar, *((qword_t *)state->cursor));
 		state->cursor += sizeof(qword_t);
 		break;
 	case lb_setr4:
@@ -784,6 +794,7 @@ void print_setcmd(disasm_state_t *state)
 				state->cursor++;
 				break;
 			}
+			break;
 		case lb_new:
 			state->cursor++;
 			fprintf(state->out, "new %s ", state->cursor);
@@ -827,19 +838,19 @@ void print_retcmd(disasm_state_t *state)
 	switch (retcmd)
 	{
 	case lb_retb:
-		fprintf(state->out, "retb byte[%hhu]",*((byte_t *)state->cursor));
+		fprintf(state->out, "retb byte[0x%hhX]",*((byte_t *)state->cursor));
 		state->cursor += sizeof(byte_t);
 		break;
 	case lb_retw:
-		fprintf(state->out, "retw word[%hu]", *((word_t *)state->cursor));
+		fprintf(state->out, "retw word[0x%hX]", *((word_t *)state->cursor));
 		state->cursor += sizeof(word_t);
 		break;
 	case lb_retd:
-		fprintf(state->out, "retd dword[%u]", *((dword_t *)state->cursor));
+		fprintf(state->out, "retd dword[0x%X]", *((dword_t *)state->cursor));
 		state->cursor += sizeof(dword_t);
 		break;
 	case lb_retq:
-		fprintf(state->out, "retq qword[%llu]",  *((qword_t *)state->cursor));
+		fprintf(state->out, "retq qword[0x%llX]",  *((qword_t *)state->cursor));
 		state->cursor += sizeof(qword_t);
 		break;
 	case lb_retr4:
@@ -922,7 +933,7 @@ void handle_ifstyle(disasm_state_t *state)
 	}
 	else if (count != lb_one) return;
 
-	fprintf(state->out, " (%016llX)", *((qword_t *)state->cursor));
+	fprintf(state->out, " (0x%016llX)", *((qword_t *)state->cursor));
 	state->cursor += sizeof(qword_t);
 }
 

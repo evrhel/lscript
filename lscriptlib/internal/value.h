@@ -10,6 +10,8 @@
 #define VALUE_MANAGER_FLAGS_OFFSET 6
 #define VALUE_TYPE_OFFSET 7
 
+#define ACCESSTYPE(F) value_access_type((value_t*)&(F))
+#define ACCESSMODIFIER(F) value_access_modifier((value_t*)&(F))
 #define TYPEOF(F) value_typeof((value_t*)&(F))
 #define SET_TYPE(F, T) value_set_type((value_t*)&(F),(T))
 
@@ -52,14 +54,14 @@ struct field_s
 	void *offset;
 };
 
-inline char value_is_static(const value_t *value)
+inline byte_t value_access_type(const value_t *value)
 {
-	return *((byte_t *)(&value->flags) + VALUE_STATIC_OFFSET) == lb_static;
+	return *((byte_t *)(&value->flags) + VALUE_STATIC_OFFSET);
 }
 
-inline char value_is_const(const value_t *value)
+inline byte_t value_access_modifier(const value_t *value)
 {
-	return *((byte_t *)(&value->flags) + VALUE_CONST_OFFSET) == lb_const;
+	return *((byte_t *)(&value->flags) + VALUE_CONST_OFFSET);
 }
 
 inline byte_t *value_manager_flags(const value_t *value)

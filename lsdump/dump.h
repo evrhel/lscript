@@ -13,7 +13,8 @@ enum
 {
 	dump_no_error = 0x0,
 	dump_io_error = 0x1,
-	dump_out_of_memory = 0x2
+	dump_out_of_memory = 0x2,
+	dump_not_supported = 0x3
 };
 
 /*

@@ -85,6 +85,9 @@ int main(int argc, char *argv[])
 	case dump_out_of_memory:
 		printf("Out of memory\n");
 		break;
+	case dump_not_supported:
+		printf("Operation not supported\n");
+		break;
 	}
 
 	return 0;
