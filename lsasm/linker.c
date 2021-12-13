@@ -7,10 +7,10 @@
 
 enum
 {
-	search_end = 0x1,
-	search_else = 0x2,
-	search_no_link = 0x4,
-	search_no_level = 0x8
+	search_end = 0x1,		// We want to search for an end command
+	search_else = 0x2,		// We want to search for an else or elif command
+	search_no_link = 0x4,	// Don't link anything
+	search_no_level = 0x8	// Not used
 };
 
 static compile_error_t *link_file(const char *file, compile_error_t *back, unsigned int linkVersion);
@@ -139,7 +139,8 @@ compile_error_t *link_data(byte_t *data, size_t len, const char *srcFile, compil
 			// Skip the elif statement, it should have already been linked
 			counter++;
 			counter += sizeof(size_t);
-			counter = seek_past_if_style_cmd(counter, NULL, srcFile, &back);
+			counter = link_if_cmd(data, counter, end, search_end | search_else, srcFile, &back);
+				// seek_past_if_style_cmd(counter, NULL, srcFile, &back);
 			break;
 		case lb_end:
 			// Skip the end statement, it should have already been linked
@@ -180,7 +181,7 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 			off += strlen(off) + 1;
 			val = (value_t *)off;
 			off += 8; // flags field
-			if (value_is_static(val))
+			if (value_access_type(val) == lb_static)
 			{
 				off += value_sizeof(val);
 			}
@@ -477,12 +478,12 @@ byte_t *seek_to_next_control(byte_t *off, byte_t *end, const char *srcFile, comp
 
 byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, const char *srcFile, compile_error_t **backPtr)
 {
-	int level = 0;
-	byte_t *top = off;
-	byte_t *failLoc = NULL;
-	byte_t *exitLoc = NULL;
-	size_t *failLinkLoc = NULL;
-	size_t *exitLinkLoc = NULL;
+	int level = 0;				// The control level we are in (start with while or if, end with end)
+	byte_t *top = off;			// The top of the if command
+	byte_t *failLoc = NULL;		// The relative location in bytecode where the program will jump to on comparison fail
+	byte_t *exitLoc = NULL;		// The relative location in bytecode where the program will jump to no matter what
+	size_t *failLinkLoc = NULL;	// The location in bytecode where the relative address when comparison fails is stored
+	size_t *exitLinkLoc = NULL;	// The location in bytecode where the relative address to exit the whole control block is stored
 	while (off && off < end)
 	{
 		switch (*off)
@@ -491,9 +492,12 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, con
 			off++;
 			if (searchType & search_else)
 			{
+				// When the instructions above this statement execute, exit the whole block
 				exitLinkLoc = (size_t *)off;
 				off += sizeof(size_t);
 				failLoc = off;
+
+				// Seek to the end of the whole control block
 				exitLoc = link_if_cmd(start, off, end, search_end | search_no_link, srcFile, backPtr);
 				if (searchType & search_no_link)
 					return off;
@@ -505,13 +509,18 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, con
 			off++;
 			if (searchType & search_else)
 			{
+				// When the instructions above this statement execute, exit the whole block
 				exitLinkLoc = (size_t *)off;
 				off += sizeof(size_t);
+
+				// Next should be if statement
 				assert(*off == lb_if);
 
-				failLoc = off; // Next should be if statement
+				// The location in bytecode where the vm will jump to on fail
+				failLoc = off;
 
-				exitLoc = link_if_cmd(start, off, end, search_end | search_no_link | search_else, srcFile, backPtr);
+				// Seek to the end of the whole control block
+				exitLoc = link_if_cmd(start, off, end, search_end | search_no_link, srcFile, backPtr);
 				if (searchType & search_no_link)
 					return off;
 				goto perform_if_link;
@@ -523,34 +532,40 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, con
 			}
 		case lb_if:
 		case lb_while:
-			//if (!(searchType & search_no_level))
-				level++;
-			// Remove search_no_level
-			//searchType &= ~((int)search_no_level);
+			// Increment the control statement level we are in
+			level++;
 
+			// Seek past this if command
 			off = seek_past_if_style_cmd(off, NULL, srcFile, backPtr);
 			
+			// If we are at base level, this is where the vm will jump to on fail
 			if (level == 1)
 				failLinkLoc = (size_t *)(off - sizeof(size_t));
 			break;
 		case lb_end:
-			//if (!(searchType & search_no_level))
-				level--;
-			// Remove search_no_level
-			//searchType &= ~((int)search_no_level);
+			// Decrement the control statement level we are in
+			level--;
 
+			// If we reached the last end statement and we are searching, set vars
 			if (level <= 0 && searchType & search_end)
 			{
+				// This is where 
 				exitLoc = off;
+
+				// If we don't have a fail location, this is where we fail to
 				if (!failLoc)
 					failLoc = off;
+
 				if (searchType & search_no_link)
 					return off;
 				goto perform_if_link;
 			}
+
+			// Seek past this command
 			off += 9; // opcode + 8-byte offset
 			break;
 		default:
+			// Seek to next control statement
 			off = seek_to_next_control(off, end, srcFile, backPtr);
 			if (!off)
 				return NULL;
@@ -558,6 +573,7 @@ byte_t *link_if_cmd(byte_t *start, byte_t *off, byte_t *end, int searchType, con
 		}
 	}
 perform_if_link:
+	// Assign each location in the bytecode
 
 	if (failLinkLoc && failLoc)
 		*failLinkLoc = failLoc - start;

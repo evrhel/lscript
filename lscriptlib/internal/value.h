@@ -81,12 +81,12 @@ inline void value_set_type(const value_t *value, byte_t type)
 
 inline char field_is_static(const field_t *field)
 {
-	return value_is_static((const value_t *)field);
+	return value_access_type((const value_t *)field) == lb_static;
 }
 
 inline char field_is_const(const field_t *field)
 {
-	return value_is_const((const value_t *)field);
+	return value_access_modifier((const value_t *)field) == lb_const;
 }
 
 inline char field_typeof(const field_t *field)

@@ -266,7 +266,7 @@ int disasm(FILE *out, byte_t *data, long datalen)
 			break;
 		case lb_elif:
 			state.cursor++;
-			fprintf(state.out, "elif (%llX) ", *(qword_t *)state.cursor);
+			fprintf(state.out, "elif (0x%016llX) ", *(qword_t *)state.cursor);
 			state.cursor += sizeof(qword_t);
 			goto handle_if_style_cmd;
 		case lb_while:
