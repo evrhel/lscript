@@ -423,7 +423,7 @@ void print_function_call_generic(disasm_state_t *state)
 
 	funcname = state->cursor;
 
-	fprintf(state->out, "%s)", funcname);
+	fprintf(state->out, "%s", funcname);
 	argc = determine_arg_count(state->cursor);
 
 	state->cursor += strlen(state->cursor) + 1;
@@ -468,7 +468,6 @@ void print_function_call_generic(disasm_state_t *state)
 			break;
 		case lb_ret:
 			fprintf(state->out, "[ret (%s)]", state->lastfunc ? state->lastfunc : "???");
-			state->cursor++;
 			break;
 		default:
 			printbyte(state->out, *state->cursor);
@@ -735,7 +734,7 @@ void print_setcmd(disasm_state_t *state)
 		state->cursor += sizeof(real4_t);
 		break;
 	case lb_setr8:
-		fprintf(state->out, "sett8 %s real8[%g]", destvar, *((real8_t *)state->cursor));
+		fprintf(state->out, "setr8 %s real8[%g]", destvar, *((real8_t *)state->cursor));
 		state->cursor += sizeof(real8_t);
 		break;
 	case lb_seto:
