@@ -7,6 +7,19 @@ class FileInputStream
 	constructor()
 		ret
 
+	constructor(object String filename)
+		seto this.handle new StdFileHandle(LString;I) filename StdFileHandle.MODE_READ
+		ret
+
+	constructor(object String filename, int mode)
+		if mode != StdFileHandle.MODE_READ
+			if mode != StdFileHandle.MODE_READ_BINARY
+				ret
+			end
+		end
+		seto this.handle new StdFileHandle(LString;I) filename mode
+		ret
+
 	constructor(object StdFileHandle handle)
 		setv this.handle handle
 		ret
@@ -24,3 +37,8 @@ class FileInputStream
 		setq this.handle null
 		ret
 
+	function void finalize()
+		if this.handle != qword[0]
+			dynamic_call close()
+		end
+		ret

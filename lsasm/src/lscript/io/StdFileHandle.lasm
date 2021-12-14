@@ -25,6 +25,7 @@ class StdFileHandle
 
 	function void close()
 		static_call fclose(q) this.nativeHandle
+		setv this.nativeHandle qword[-1]
 		ret
 
 	function void putc(char c)
