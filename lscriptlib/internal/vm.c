@@ -1738,33 +1738,17 @@ int env_run(env_t *__restrict env, void *__restrict location)
 					env->rip += strlen(env->rip) + 1;
 					switch (value_typeof((value_t *)&flags))
 					{
-					case lb_char:
-						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hhd", data->ucvalue));
-					case lb_uchar:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->ucvalue);
-						break;
-					case lb_short:
-						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %hd", data->ucvalue));
-					case lb_ushort:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->usvalue);
-						break;
-					case lb_int:
-						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %d", data->ucvalue));
 					case lb_uint:
 						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->uivalue);
 						break;
-					case lb_long:
-						if (data2->ucvalue < 0)
-							EXIT_RUN(env_raise_exception(env, exception_bad_array_index, "init array size %lld", data->ucvalue));
-					case lb_ulong:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->ulvalue);
-						break;
 					case lb_bool:
-						data2->ovalue = manager_alloc_array(env->vm->manager, type, data->bvalue);
-						break;
+					case lb_char:
+					case lb_uchar:
+					case lb_short:
+					case lb_ushort:
+					case lb_int:
+					case lb_long:
+					case lb_ulong:
 					case lb_float:
 					case lb_double:
 					case lb_object:
@@ -1780,7 +1764,7 @@ int env_run(env_t *__restrict env, void *__restrict location)
 					case lb_floatarray:
 					case lb_doublearray:
 					case lb_objectarray:
-						EXIT_RUN(env_raise_exception(env, exception_illegal_state, "init array requires integral size"));
+						EXIT_RUN(env_raise_exception(env, exception_illegal_state, "init array requires 32-bit unsigned integral size"));
 						break;
 					}
 

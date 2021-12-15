@@ -1086,22 +1086,22 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *is
 	char *lBracket = strchr(mString, '[');
 	if (!lBracket)
 	{
-		*isAbsoluteType = 2;
+		*isAbsoluteType = 1;
 		if (!strcmp(mString, "true"))
 		{
-			*type = lb_byte;
+			*type = lb_bool;
 			data->ulvalue = 1;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "false"))
 		{
-			*type = lb_byte;
+			*type = lb_bool;
 			data->ulavalue = 0;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "null"))
 		{
-			*type = lb_qword;
+			*type = lb_ulong;
 			data->ovalue = NULL;
 			return sizeof(qword_t);
 		}
@@ -2051,10 +2051,10 @@ void handle_constructor_def(compile_state_t *state)
 		switch (state->tokencount)
 		{
 		case 1:
-			state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Expected \"(\"");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected \"(\"");
 			break;
 		case 2:
-			state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Expected formal arguments");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Expected formal arguments");
 			break;
 		}
 		return;
@@ -2064,7 +2064,7 @@ void handle_constructor_def(compile_state_t *state)
 
 	if (strcmp(state->tokens[1], "("))
 	{
-		state->back = add_compile_error(state->back, state->srcline, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[5]);
+		state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Unexpected token \"%s\"", state->tokens[5]);
 		return;
 	}
 
@@ -2372,25 +2372,41 @@ void handle_set_cmd(compile_state_t *state)
 				if (isAbsoluteType)
 					get_type_properties(argType, &argType);
 
-				PUT_BYTE(argBuffer, argType);
 				switch (argType)
 				{
+				case lb_bool:
+				case lb_char:
+				case lb_uchar:
 				case lb_byte:
+					PUT_BYTE(argBuffer, lb_byte);
 					PUT_CHAR(argBuffer, argData.cvalue);
 					break;
+				case lb_short:
+				case lb_ushort:
 				case lb_word:
+					PUT_BYTE(argBuffer, lb_word);
 					PUT_SHORT(argBuffer, argData.svalue);
 					break;
+				case lb_int:
+				case lb_uint:
 				case lb_dword:
+					PUT_BYTE(argBuffer, lb_dword);
 					PUT_INT(argBuffer, argData.ivalue);
 					break;
+				case lb_long:
+				case lb_ulong:
 				case lb_qword:
+					PUT_BYTE(argBuffer, lb_qword);
 					PUT_LONG(argBuffer, argData.lvalue);
 					break;
+				case lb_float:
 				case lb_real4:
+					PUT_BYTE(argBuffer, lb_real4);
 					PUT_FLOAT(argBuffer, argData.fvalue);
 					break;
+				case lb_double:
 				case lb_real8:
+					PUT_BYTE(argBuffer, lb_real8);
 					PUT_DOUBLE(argBuffer, argData.dvalue);
 					break;
 				}
@@ -2472,21 +2488,32 @@ void handle_set_cmd(compile_state_t *state)
 
 		switch (myType)
 		{
+		case lb_bool:
+		case lb_char:
+		case lb_uchar:
 		case lb_byte:
 			PUT_CHAR(state->out, setData.cvalue);
 			break;
+		case lb_short:
+		case lb_ushort:
 		case lb_word:
 			PUT_SHORT(state->out, setData.svalue);
 			break;
+		case lb_int:
+		case lb_uint:
 		case lb_dword:
 			PUT_INT(state->out, setData.ivalue);
 			break;
+		case lb_long:
+		case lb_ulong:
 		case lb_qword:
 			PUT_LONG(state->out, setData.lvalue);
 			break;
+		case lb_float:
 		case lb_real4:
 			PUT_FLOAT(state->out, setData.fvalue);
 			break;
+		case lb_double:
 		case lb_real8:
 			PUT_DOUBLE(state->out, setData.dvalue);
 			break;
@@ -2513,8 +2540,6 @@ void handle_cast_cmd(compile_state_t *state)
 	PUT_CHAR(state->out, state->cmd);
 	PUT_STRING(state->out, state->tokens[1]);
 	PUT_STRING(state->out, state->tokens[2]);
-
-	return state->back;
 }
 
 void handle_array_creation(compile_state_t *state)
@@ -2536,9 +2561,7 @@ void handle_array_creation(compile_state_t *state)
 	byte_t argType;
 	int argIsAbsolute;
 	size_t argSize = evaluate_constant(state->tokens[3], &argData, &argType, &argIsAbsolute);
-	if (argIsAbsolute)
-		return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Array initialization does not support absolute type");
-	////else if (argSize == 0)
+	
 		//return add_compile_error(back, srcFile, srcLine, error_error, "Invalid array length specifier");
 	PUT_BYTE(state->out, type);
 	if (argSize == 0)
@@ -2550,21 +2573,24 @@ void handle_array_creation(compile_state_t *state)
 	{
 		switch (argType)
 		{
-		case lb_byte:
-			argData.uivalue = (luint)argData.ucvalue;
-			break;
-		case lb_word:
-			argData.uivalue = (luint)argData.usvalue;
-			break;
+		case lb_uint:
 		case lb_dword:
 			break;
+		case lb_bool:
+		case lb_char:
+		case lb_uchar:
+		case lb_short:
+		case lb_ushort:
+		case lb_int:
+		case lb_long:
+		case lb_ulong:
+		case lb_real4:
+		case lb_double:
+		case lb_byte:
+		case lb_word:
 		case lb_qword:
 			argData.uivalue = (luint)argData.ulvalue;
-			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Arrays have maximum 32-bit unsigned length but requested length is 64-bit");
-			break;
-		case lb_real4:
-		case lb_real8:
-			return add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Array initialization requires an integral length type");
+			state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_warning, "Arrays have must be 32-bit unsigned integral length");
 			break;
 		}
 
@@ -2637,11 +2663,6 @@ void handle_ret_cmd(compile_state_t *state)
 			byte_t retType;
 			int retIsAbsoluteType;
 			size_t retSize = evaluate_constant(state->tokens[1], &retData, &retType, &retIsAbsoluteType);
-			if (retIsAbsoluteType == 1)
-			{
-				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Absolute type specifier not supported on return statement");
-				return;
-			}
 
 			if (retSize != valueRetDesSize)
 			{
@@ -2655,21 +2676,32 @@ void handle_ret_cmd(compile_state_t *state)
 			PUT_BYTE(state->out, state->cmd);
 			switch (retType)
 			{
+			case lb_bool:
+			case lb_char:
+			case lb_uchar:
 			case lb_byte:
 				PUT_CHAR(state->out, retData.cvalue);
 				break;
+			case lb_short:
+			case lb_ushort:
 			case lb_word:
 				PUT_SHORT(state->out, retData.svalue);
 				break;
+			case lb_int:
+			case lb_uint:
 			case lb_dword:
 				PUT_INT(state->out, retData.ivalue);
 				break;
+			case lb_long:
+			case lb_ulong:
 			case lb_qword:
 				PUT_LONG(state->out, retData.lvalue);
 				break;
+			case lb_float:
 			case lb_real4:
 				PUT_FLOAT(state->out, retData.fvalue);
 				break;
+			case lb_double:
 			case lb_real8:
 				PUT_DOUBLE(state->out, retData.dvalue);
 				break;
@@ -2878,25 +2910,41 @@ void handle_call_cmd(compile_state_t *state)
 		if (isAbsoluteType)
 			get_type_properties(argType, &argType);
 
-		PUT_BYTE(argBuffer, argType);
 		switch (argType)
 		{
+		case lb_bool:
+		case lb_char:
+		case lb_uchar:
 		case lb_byte:
+			PUT_BYTE(argBuffer, lb_byte);
 			PUT_CHAR(argBuffer, argData.cvalue);
 			break;
+		case lb_short:
+		case lb_ushort:
 		case lb_word:
+			PUT_BYTE(argBuffer, lb_word);
 			PUT_SHORT(argBuffer, argData.svalue);
 			break;
+		case lb_int:
+		case lb_uint:
 		case lb_dword:
+			PUT_BYTE(argBuffer, lb_dword);
 			PUT_INT(argBuffer, argData.ivalue);
 			break;
+		case lb_long:
+		case lb_ulong:
 		case lb_qword:
+			PUT_BYTE(argBuffer, lb_qword);
 			PUT_LONG(argBuffer, argData.lvalue);
 			break;
+		case lb_float:
 		case lb_real4:
+			PUT_BYTE(argBuffer, lb_real4);
 			PUT_FLOAT(argBuffer, argData.fvalue);
 			break;
+		case lb_double:
 		case lb_real8:
+			PUT_BYTE(argBuffer, lb_real8);
 			PUT_DOUBLE(argBuffer, argData.dvalue);
 			break;
 		}
@@ -2986,21 +3034,32 @@ void handle_math_cmd(compile_state_t *state)
 		get_type_properties(argType, &type);
 		switch (type)
 		{
+		case lb_bool:
+		case lb_char:
+		case lb_uchar:
 		case lb_byte:
 			PUT_CHAR(state->out, argData.cvalue);
 			break;
+		case lb_short:
+		case lb_ushort:
 		case lb_word:
 			PUT_SHORT(state->out, argData.svalue);
 			break;
+		case lb_int:
+		case lb_uint:
 		case lb_dword:
 			PUT_INT(state->out, argData.ivalue);
 			break;
+		case lb_long:
+		case lb_ulong:
 		case lb_qword:
 			PUT_LONG(state->out, argData.lvalue);
 			break;
+		case lb_float:
 		case lb_real4:
 			PUT_FLOAT(state->out, argData.fvalue);
 			break;
+		case lb_double:
 		case lb_real8:
 			PUT_DOUBLE(state->out, argData.dvalue);
 			break;
