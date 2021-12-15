@@ -8,7 +8,8 @@ class FileInputStream
 		ret
 
 	constructor(object String filename)
-		seto this.handle new StdFileHandle(LString;I) filename StdFileHandle.MODE_READ
+		seto this.handle new StdFileHandle()
+		dynamic_call this.handle.open(LString;I) filename dword[1]
 		ret
 
 	constructor(object String filename, int mode)
@@ -17,7 +18,8 @@ class FileInputStream
 				ret
 			end
 		end
-		seto this.handle new StdFileHandle(LString;I) filename mode
+		seto this.handle new StdFileHandle()
+		dynamic_call this.handle.open(LString;I) filename mode
 		ret
 
 	constructor(object StdFileHandle handle)
@@ -28,7 +30,7 @@ class FileInputStream
 		dynamic_call this.handle.read([Cii) dst off length
 		retr
 
-	function object readLine()
+	function String readLine()
 		dynamic_call this.handle.readLine()
 		retr
 
@@ -38,7 +40,7 @@ class FileInputStream
 		ret
 
 	function void finalize()
-		if this.handle != qword[0]
+		if this.handle != ulong[0]
 			dynamic_call close()
 		end
 		ret

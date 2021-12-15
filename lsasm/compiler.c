@@ -12,6 +12,13 @@
 #define SIG_STRING_CHAR ((char)0x01)
 #define SIG_CHAR_CHAR ((char)0x02)
 
+enum
+{
+	constant_not_absolute = 0,
+	constant_absolute = 1,
+	constant_both = 2
+};
+
 typedef struct line_s line_t;
 struct line_s
 {
@@ -1079,26 +1086,27 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *is
 	char *lBracket = strchr(mString, '[');
 	if (!lBracket)
 	{
-		*isAbsoluteType = 0;
+		*isAbsoluteType = 2;
 		if (!strcmp(mString, "true"))
 		{
-			data->bvalue = 1;
 			*type = lb_byte;
+			data->ulvalue = 1;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "false"))
 		{
-			data->bvalue = 0;
 			*type = lb_byte;
+			data->ulavalue = 0;
 			return sizeof(byte_t);
 		}
 		else if (!strcmp(mString, "null"))
 		{
-			data->ovalue = NULL;
 			*type = lb_qword;
+			data->ovalue = NULL;
 			return sizeof(qword_t);
 		}
 
+		*isAbsoluteType = 0;
 		return 0;
 	}
 	char *dataStart = lBracket + 1;
@@ -1108,6 +1116,8 @@ size_t evaluate_constant(const char *string, data_t *data, byte_t *type, int *is
 	*lBracket = 0;
 	*rBracket = 0;
 	int size;
+
+	*isAbsoluteType = 0;
 	if (!strcmp(mString, "byte"))
 	{
 		*isAbsoluteType = 0;
@@ -2627,7 +2637,7 @@ void handle_ret_cmd(compile_state_t *state)
 			byte_t retType;
 			int retIsAbsoluteType;
 			size_t retSize = evaluate_constant(state->tokens[1], &retData, &retType, &retIsAbsoluteType);
-			if (retIsAbsoluteType)
+			if (retIsAbsoluteType == 1)
 			{
 				state->back = add_compile_error(state->back, state->srcfile, state->srcline, error_error, "Absolute type specifier not supported on return statement");
 				return;
@@ -3047,7 +3057,7 @@ void handle_if_style_cmd(compile_state_t *state)
 	int lhsIsAbsolute;
 	size_t lhsSize = evaluate_constant(state->tokens[1], &lhsData, &lhsType, &lhsIsAbsolute);
 
-	if (lhsSize == 0)
+	if (lhsSize == 0 && !lhsIsAbsolute)
 	{
 		PUT_BYTE(temp, lb_value);
 		PUT_STRING(temp, state->tokens[1]);
@@ -3102,7 +3112,7 @@ void handle_if_style_cmd(compile_state_t *state)
 		int rhsIsAbsolute;
 		size_t rhsSize = evaluate_constant(state->tokens[3], &rhsData, &rhsType, &rhsIsAbsolute);
 
-		if (rhsSize == 0)
+		if (rhsSize == 0 && !rhsIsAbsolute)
 		{
 			PUT_BYTE(temp, lb_value);
 			PUT_STRING(temp, state->tokens[3]);

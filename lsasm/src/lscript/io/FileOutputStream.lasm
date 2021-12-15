@@ -8,7 +8,8 @@ class FileOutputStream
 		ret
 
 	constructor(object String filename)
-		seto this.handle new StdFileHandle(LString;I) filename StdFileHandle.WRITE
+		seto this.handle new StdFileHandle()
+		dynamic_call this.handle.open(LString;I) filename dword[3]
 		ret
 
 	constructor(object String filename, int mode)
@@ -17,7 +18,8 @@ class FileOutputStream
 				ret
 			end
 		end
-		seto this.handle new StdFileHandle(LString;I) filename mode
+		seto this.handle new StdFileHandle()
+		dynamic_call this.handle.open(LString;I) filename mode
 		ret
 
 	constructor(object StdFileHandle handle)
@@ -29,7 +31,11 @@ class FileOutputStream
 		retr
 
 	function void print(String str)
-		dynamic_call this.handle.write([Cii) str.chars dword[0] str.chars.length
+		if str != null
+			dynamic_call this.handle.write([Cii) str.chars dword[0] str.chars.length
+		else
+			dynamic_call print(LString;) "null"
+		end
 		ret
 
 	function void println()
@@ -47,7 +53,7 @@ class FileOutputStream
 		ret
 
 	function void finalize()
-		if this.handle != qword[0]
+		if this.handle != ulong[0]
 			dynamic_call close()
 		end
 		ret

@@ -14,22 +14,34 @@ LNIFUNC lulong LNICALL lscript_io_StdFileHandle_fopen(LEnv venv, lclass vclazz, 
 		return 0;
 	}
 
+	char pathstr[MAX_PATH];
+
 	array_t *arr = (array_t *)object_get_object((object_t *)filepath, "chars");
+	if (arr->length > MAX_PATH - 1)
+	{
+		env_raise_exception(env, exception_illegal_state, "filepath too long");
+		return 0;
+	}
+	
 	char *data = (char *)&arr->data;
+
+	memcpy(pathstr, data, arr->length);
+	pathstr[arr->length] = 0;
+
 	FILE *handle;
 	const char *modestr;
 	switch (mode)
 	{
-	case 0:
+	case 1:
 		modestr = "r";
 		break;
-	case 1:
+	case 2:
 		modestr = "rb";
 		break;
-	case 2:
+	case 3:
 		modestr = "w";
 		break;
-	case 3:
+	case 4:
 		modestr = "wb";
 		break;
 	default:
@@ -38,7 +50,7 @@ LNIFUNC lulong LNICALL lscript_io_StdFileHandle_fopen(LEnv venv, lclass vclazz, 
 		break;
 	}
 
-	fopen_s(&handle, data, modestr);
+	fopen_s(&handle, pathstr, modestr);
 
 	return (lulong)handle;
 }
@@ -151,7 +163,7 @@ LNIFUNC lchararray LNICALL lscript_io_StdFileHandle_freadline(LEnv venv, lclass 
 		}
 	}
 
-	luint len = (luint)strlen(buf) - 1; // Subtract 1 to ignore the newline character
+	luint len = (luint)strlen(buf);
 	array_t *arr = manager_alloc_array(env->vm->manager, lb_chararray, len);
 	if (!arr)
 	{

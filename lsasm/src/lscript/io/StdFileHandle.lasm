@@ -25,7 +25,7 @@ class StdFileHandle
 
 	function void close()
 		static_call fclose(q) this.nativeHandle
-		setv this.nativeHandle qword[-1]
+		setq this.nativeHandle qword[-1]
 		ret
 
 	function void putc(char c)
@@ -40,7 +40,7 @@ class StdFileHandle
 		static_call fread(q[Cii) this.nativeHandle buf off count
 		retr
 
-	function object readLine()
+	function String readLine()
 		object String result
 		static_call freadline(q) this.nativeHandle
 		seto result new String([C) result.chars
