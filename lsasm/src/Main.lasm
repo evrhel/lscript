@@ -3,7 +3,7 @@ using lscript.io
 class Main
 
 	function static interp void main(objectarray String args)
-		if args.length[0] == true
+		if args.length == true
 			ret
 		end
 

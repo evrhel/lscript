@@ -485,6 +485,10 @@ void print_absolute_value(disasm_state_t *state)
 	state->cursor++;
 	switch (argtype)
 	{
+	case lb_bool:
+		fprintf(state->out, "%s", *((lbool *)state->cursor) ? "true" : "false");
+		state->cursor += sizeof(lbool);
+		break;
 	case lb_char:
 		fprintf(state->out, "char[%hhd]", *((lchar *)state->cursor));
 		state->cursor += sizeof(lchar);
