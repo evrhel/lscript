@@ -172,7 +172,10 @@ static inline int handle_if(env_t *env)
 		//env->rip += sizeof(size_t);
 	}
 	else
+	{
+		assert(*((size_t *)(env->rip)) != (size_t)-1);
 		env->rip += sizeof(size_t);
+	}
 	return 0;
 }
 

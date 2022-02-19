@@ -710,6 +710,7 @@ byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart, const char *sr
 		off++; // comparator
 		switch (*off)
 		{
+		case lb_bool:
 		case lb_char:
 		case lb_uchar:
 			off++;
@@ -737,6 +738,7 @@ byte_t *seek_past_if_style_cmd(byte_t *start, size_t **linkStart, const char *sr
 			off += strlen(off) + 1;
 			break;
 		default:
+			assert(0);
 			break;
 		}
 
